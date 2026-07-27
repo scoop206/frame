@@ -1,16 +1,16 @@
 # Frame project config — committed project facts (like an .env.dev + hooks).
 # Personal overrides go in .frame/local/config.sh (gitignored, wins over this).
-NAME=shared-services
+NAME=standard-web
 
 # Whatever command starts this project's dev server — it runs verbatim in the
 # layout's `server` buffer (omit SERVER_CMD to skip that buffer). It inherits
 # the exported ports below, so the server should bind $PORT.
-SERVER_CMD='cargo run -p shared-services-server'
+SERVER_CMD='cargo run -p standard-web-server'
 
 # The primary checkout's normal dev ports (api / vite dev server / vite HMR
 # websocket). These are bases: each frame scans upward from them for free
 # ports (primary 3000/5173/24678 → first worktree 3001/5174/24679, …) and
-# exports the result as PORT plus SHARED_SERVICES_API_PORT / _VITE_PORT /
+# exports the result as PORT plus STANDARD_WEB_API_PORT / _VITE_PORT /
 # _HMR_PORT for the server and vite.config to read. Vite's defaults are
 # 5173/24678; pick per-project bases (e.g. 3100/5273/24778) if you run several
 # projects' primary envs side by side and want predictable ports.
@@ -26,13 +26,13 @@ BUFFERS=(local server vite ngrok claude)
 # instances.
 stack_up() {
   frame_services_up postgres minio
-  ensure_pg_db shared-services
-  ensure_minio_bucket shared-services-dev
+  ensure_pg_db standard-web
+  ensure_minio_bucket standard-web-dev
 }
 
 # Point the app at the shared services. Exported before the server launches,
 # so these win over .env (dotenvy never overrides the environment).
 app_env() {
-  export DATABASE_URL=postgres://shared-services:devpassword@localhost:5432/shared-services
+  export DATABASE_URL=postgres://standard-web:devpassword@localhost:5432/standard-web
   export S3_ENDPOINT=http://localhost:9000
 }

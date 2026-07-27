@@ -139,7 +139,7 @@ open (see Buffers below). Everything else is optional. Hooks:
   never overrides the environment).
 
 See [`examples/`](examples) for complete `.frame/` directories at three
-sizes — name-only, shared-services user, and a project running its own
+sizes — name-only, the standard web stack, and a project running its own
 container.
 
 ## Buffers

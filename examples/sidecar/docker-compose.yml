@@ -2,14 +2,14 @@
 # frame services stack (frame/services/docker-compose.yml) — multi-tenant on
 # standard ports, provisioned by .frame/config.sh's stack_up().
 services:
-  # Worker sidecar. Profile-gated so a bare `docker compose up` starts
+  # The sidecar. Profile-gated so a bare `docker compose up` starts
   # nothing; frame's stack_up() runs it with --build:
-  #   docker compose --project-directory "$MAIN_WT" --profile worker up -d --build worker
-  worker:
-    profiles: ["worker"]
+  #   docker compose --project-directory "$MAIN_WT" --profile sidecar up -d --build sidecar
+  sidecar:
+    profiles: ["sidecar"]
     build:
       context: .
-      dockerfile: Dockerfile.worker
+      dockerfile: Dockerfile.sidecar
     environment:
       PORT: 8890
     ports:
