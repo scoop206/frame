@@ -1,7 +1,9 @@
 # frame
 
-A personal dev-workflow harness: one place for the worktree/merge/dev-environment
-choreography that would otherwise be copy-pasted (and drift) across project repos.
+An opiniated AI harness based around:
+
+- neovim
+- git worktrees
 
 Run from inside any project checkout:
 
@@ -15,22 +17,56 @@ frame deploy-sans-tests    trigger the deploy workflow with skip_tests=true
 frame services [up|down|ps]            manage the shared postgres/minio stack
 ```
 
+### Framelet
+
 All work happens in topic worktrees ("framelets"). Each is a self-sufficient
 peer — `frame wt` runs the project's idempotent `stack_up()`, so whichever
-framelet boots first brings up the shared services. The primary checkout is
-just the git anchor that merges land on; it never needs a dev session.
+framelet boots first brings up the shared services.
 
-Install: put `bin/` on your PATH.
+`frame wt TOPIC` is the typical entrypoint.
+
+For example:
+This starts neovim w/ custom layout which is usually 4 buffers:
+
+- claude - starts claude-code
+- vite - cd web && npm run dev
+- server - cargo run -p $PROJECT-server
+- local - bare terminal
+
+The ghostty window will now be named $REPO/$TOPIC:PORT
+You can see vite's rendered web app at http://localhost:PORT
+
+When you are done working on the feature you (or claude) can merge to main:
+
+```
+frame merge
+```
+
+### Framelet Removal
+
+Quit the neovim instance to close all the buffer in the framelet.
+That will drop you to base ghostty terminal.
+Then you can tear down the worktree and branch:
+
+```
+frame wt -d TOPIC
+```
+
+### Install
+
+Clone this repo alongside your projects.  
+put `/path/to/frame/bin/` on your PATH.  
+add a .frame directory to the projects w/ optional components see below.
 
 ## How a project plugs in
 
 Everything project-side lives under one `.frame/` directory:
 
-| path | committed? | contents |
-|---|---|---|
-| `.frame/config.sh` | yes | project facts: NAME, ports, SERVER_CMD, `stack_up()`, `app_env()` |
-| `.frame/worktree.lua` | optional | project-level layout override |
-| `.frame/local/` | never (gitignored) | personal overrides — `config.sh`/layouts here win |
+| path                  | committed?         | contents                                                          |
+| --------------------- | ------------------ | ----------------------------------------------------------------- |
+| `.frame/config.sh`    | yes                | project facts: NAME, ports, SERVER_CMD, `stack_up()`, `app_env()` |
+| `.frame/worktree.lua` | optional           | project-level layout override                                     |
+| `.frame/local/`       | never (gitignored) | personal overrides — `config.sh`/layouts here win                 |
 
 Every setting is optional: a config of just `NAME=foo` (or none at all) still gets
 `frame wt` and `frame merge`. Hooks:
