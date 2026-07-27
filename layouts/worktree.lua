@@ -44,7 +44,25 @@ vim.api.nvim_create_user_command('FrameStatus', function(opts)
 end, { nargs = '*', desc = 'Set window-title status suffix (empty clears)' })
 
 -- Register a named socket so `frame wt -d TOPIC` can send :qa! remotely.
-vim.fn.serverstart('/tmp/' .. name .. '-' .. topic .. '.nvim')
+-- serverstart THROWS if the path already exists — unguarded, that would abort
+-- this whole layout (no terminals, no :FrameDown). Probe a conflicting socket:
+-- connectable means a live twin session owns it (leave it alone); otherwise
+-- it's stale debris from a crash — reclaim it.
+local sock = '/tmp/' .. name .. '-' .. topic .. '.nvim'
+if not pcall(vim.fn.serverstart, sock) then
+  local live, chan = pcall(vim.fn.sockconnect, 'pipe', sock, { rpc = true })
+  if live and chan > 0 then
+    pcall(vim.fn.chanclose, chan)
+    vim.notify('frame: ' .. sock .. ' belongs to another live session — '
+      .. 'frame status / frame wt -d will reach that one, not this window',
+      vim.log.levels.WARN)
+  else
+    vim.fn.delete(sock)
+    if not pcall(vim.fn.serverstart, sock) then
+      vim.notify('frame: could not register ' .. sock, vim.log.levels.WARN)
+    end
+  end
+end
 
 -- :FrameQuit — close the session only: worktree and branch stay intact, and
 -- `frame wt <topic>` boots the frame back up later. Equivalent to :qa!
@@ -70,13 +88,27 @@ if main_wt ~= '' then
       vim.fn.shellescape(topic),
       vim.fn.shellescape(log))
     vim.fn.jobstart({ 'zsh', '-c', cmd }, { cwd = main_wt, detach = true })
-    -- If teardown is refused (dirty worktree / unmerged branch), this session
-    -- survives — surface the reaper's reason after a beat.
-    vim.defer_fn(function()
-      if vim.fn.filereadable(log) == 1 then
-        vim.notify(table.concat(vim.fn.readfile(log), '\n'), vim.log.levels.WARN)
+    -- Normally the reaper's :qa! kills this session and nothing below runs.
+    -- Two ways it can't: teardown was refused (dirty worktree / unmerged
+    -- branch) — surface the reason; or teardown succeeded without reaching us
+    -- (socket missing/stale) — the worktree under our feet is gone, so finish
+    -- the job and close the window ourselves.
+    local tries = 0
+    local function watch()
+      tries = tries + 1
+      local text = vim.fn.filereadable(log) == 1
+          and table.concat(vim.fn.readfile(log), '\n') or ''
+      if text:find('removed worktree and branch', 1, true) then
+        vim.cmd('qa!')
+      elseif text:find('✗', 1, true) then
+        vim.notify(text, vim.log.levels.WARN)
+      elseif tries < 10 then
+        vim.defer_fn(watch, 1500)
+      elseif text ~= '' then
+        vim.notify(text, vim.log.levels.WARN)
       end
-    end, 2500)
+    end
+    vim.defer_fn(watch, 1500)
   end, { bang = true, desc = 'Tear down this frame (worktree + branch)' })
 end
 
