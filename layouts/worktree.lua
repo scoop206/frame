@@ -1,0 +1,69 @@
+-- Frame worktree layout — opens named terminal buffers, lands in `claude`.
+-- Sourced by `frame wt`:  nvim -S layouts/worktree.lua
+--
+-- Secondary-worktree variant of dev.lua: runs its own server and vite on the
+-- free ports commands/wt.sh exported (PORT / <PREFIX>_VITE_PORT / …, inherited
+-- by these terminal buffers). Docker services stay owned by the primary env.
+--
+-- Parameterized by env vars exported by commands/wt.sh:
+--   FRAME_NAME        project name
+--   FRAME_TOPIC       worktree topic (branch name)
+--   FRAME_SERVER_CMD  server command (buffer skipped when empty)
+--   FRAME_VITE_PORT   this worktree's vite port (title + ngrok target)
+-- A project can replace this file wholesale via .frame/worktree.lua or
+-- .frame/local/worktree.lua.
+
+vim.o.hidden = true
+
+local name = vim.env.FRAME_NAME or '?'
+local topic = vim.env.FRAME_TOPIC or '?'
+local vite_port = vim.env.FRAME_VITE_PORT or ''
+
+-- Name the terminal window "<name>/<topic> :<vite port>" so parallel Ghostty
+-- windows are tellable apart — the port shown is the one the browser connects
+-- to. nvim owns the title for the whole session, so shell integration can't
+-- overwrite it.
+vim.o.title = true
+vim.o.titlestring = name .. '/' .. topic
+    .. (vite_port ~= '' and (' :' .. vite_port) or '')
+
+-- Register a named socket so `frame wt -d TOPIC` can send :qa! remotely.
+vim.fn.serverstart('/tmp/' .. name .. '-' .. topic .. '.nvim')
+
+local function term(cmd_name, cmd)
+  vim.cmd.terminal(cmd ~= '' and cmd or nil)
+  vim.cmd('keepalt file ' .. cmd_name)
+end
+
+-- Durable variant: auto-runs `cmd`, then `exec`s an interactive zsh so the buffer
+-- stays usable after the process exits — crucially, also on Ctrl-C. A plain
+-- `zsh -c` exits on SIGINT by default (killing the buffer before `exec` runs), so
+-- `trap ':' INT` overrides that: the child still gets the interrupt and dies, but
+-- this shell survives to reach `exec`. Rerun by retyping. Assumes `cmd` has no
+-- single quotes.
+local function term_durable(cmd_name, cmd)
+  term(cmd_name, 'zsh -c "trap \':\' INT; ' .. cmd .. '; exec zsh"')
+end
+
+-- Pre-filled variant: drops the command into the prompt without running it.
+local function term_prefill(cmd_name, cmd)
+  term(cmd_name, 'zsh -c "print -z \'' .. cmd .. '\'; exec zsh"')
+end
+
+--           name       command
+term(        'local',  '')
+if (vim.env.FRAME_SERVER_CMD or '') ~= '' then
+  term_durable('server', vim.env.FRAME_SERVER_CMD)
+end
+if vim.fn.isdirectory('web') == 1 then
+  term_durable('vite', 'cd web && npm run dev')
+end
+if vite_port ~= '' then
+  -- Pre-filled, never auto-run: the primary env usually owns the ngrok tunnel.
+  term_prefill('ngrok', 'ngrok http ' .. vite_port)
+end
+term_durable('claude', 'claude --dangerously-skip-permissions')
+
+-- Land showing the claude buffer, in terminal-insert mode, ready to type.
+vim.cmd.buffer('claude')
+vim.cmd.startinsert()

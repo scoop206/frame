@@ -1,0 +1,48 @@
+# Frame shared dev services — one postgres and one minio serving every project.
+# Postgres is multi-tenant via databases/roles (ensure_pg_db), minio via
+# buckets (ensure_minio_bucket). Standard ports: projects no longer need
+# per-project offsets — everyone connects to localhost:5432 / localhost:9000.
+name: frame
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: frame
+      POSTGRES_USER: frame
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U frame -d frame"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console
+    volumes:
+      - miniodata:/data
+
+  # Tooling one-shot, not a long-running service. Used by ensure_minio_bucket:
+  #   docker compose -f this-file run --rm mc mb --ignore-existing local/BUCKET
+  # MC_HOST_local preconfigures the `local` alias so no `mc alias set` is needed.
+  mc:
+    image: minio/mc
+    profiles: ["tools"]
+    environment:
+      MC_HOST_local: http://minioadmin:minioadmin@minio:9000
+    entrypoint: ["mc"]
+
+volumes:
+  pgdata:
+  miniodata:
