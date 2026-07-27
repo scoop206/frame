@@ -26,6 +26,7 @@ NAME=$_name
 #SERVER_CMD='cargo run -p $_name-server'
 #API_PORT=3000  VITE_PORT=5173  HMR_PORT=24678   # base ports; each frame scans upward
 #WT_LINKS=(.env web/node_modules)   # gitignored assets symlinked into fresh worktrees
+#BUFFERS=(claude server vite local) # exact buffer list; default: buffers.json gates decide
 
 # Bring up everything the dev stack needs — runs on every \`frame wt\` boot, so
 # keep it idempotent. Shared postgres/minio come from frame; only

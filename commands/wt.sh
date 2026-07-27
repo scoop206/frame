@@ -193,6 +193,11 @@ export FRAME_TOPIC="$TOPIC"
 export FRAME_MAIN_WT="$MAIN_WT"
 export FRAME_SERVER_CMD="${SERVER_CMD:-}"
 export FRAME_VITE_PORT
+export FRAME_PORT_PREFIX="$PORT_PREFIX"
+# Explicit buffer pick-list from config's BUFFERS=(…); empty means "let the
+# when-gates in buffers.json decide".
+if (( ${+BUFFERS} )); then FRAME_BUFFERS="${BUFFERS[*]}"; else FRAME_BUFFERS=""; fi
+export FRAME_BUFFERS
 
 layout=$(frame_resolve worktree.lua)
 if [[ "${FRAME_NO_NVIM:-0}" == 1 ]]; then
