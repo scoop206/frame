@@ -45,6 +45,18 @@ When you are done working on the feature you (or claude) can merge to main:
 frame merge
 ```
 
+### Vim commands
+
+When frame instantiates the nvim instance it injects these user commands
+(defined in `layouts/worktree.lua`), available from any buffer in the session:
+
+| command              | action                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `:FrameStatus TEXT…` | append "- TEXT" to the window title's status suffix (no TEXT clears it)             |
+| `:FrameQuit`         | quit the session only — worktree and branch stay for a later `frame wt TOPIC`       |
+| `:FrameDown`         | tear down the whole frame: quit nvim, remove the worktree, delete the branch        |
+| `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits                   |
+
 ### Status
 
 The window title's base — `$REPO/$TOPIC :PORT` — never changes, but you can
@@ -65,14 +77,13 @@ To merely close the session — keeping the worktree and branch for a later
 
 Tear down from _inside_ the frame — either entry point works:
 
-- in nvim: `:FrameDown` (from a terminal buffer, `<C-\><C-n>` first)
+- in nvim: `:FrameDown`
 - in any terminal buffer: `frame wt -d`
 
 Both hand the teardown to a detached reaper rooted in the primary checkout.
 It sends `:qa!` to the nvim session (works from terminal-insert mode, and the
 `!` bypasses vimrc quit guards), waits for nvim to actually exit, then removes
-the worktree and deletes the branch. The ghostty window closes with nvim —
-one command and the whole frame is gone.
+the worktree and deletes the branch.
 
 From outside (base terminal or another frame): `frame wt -d TOPIC`.
 
@@ -90,12 +101,10 @@ add a .frame directory to the projects w/ optional components see below.
 
 ### Dependencies
 
-Hard requirements:
-
 - zsh
 - git ≥ 2.5
 - neovim (no plugins required)
-- claude (Claude Code CLI)
+- claude (Claude Code CLI) — WARNING: `--dangerously-skip-permissions` is always on
 - docker with the compose v2 plugin
 - macOS + OrbStack (any docker provider works if already running; auto-start is OrbStack-only)
 - curl, lsof
@@ -104,7 +113,7 @@ Needed only by specific commands or buffers:
 
 - node + npm (the `vite` buffer, when the project has `web/`)
 - ngrok (optional; prefilled, never auto-run)
-- ghostty + Raycast (optional; window titling/search)
+- ghostty + Raycast (optional; window fuzzy find)
 
 ## How a project plugs in
 
