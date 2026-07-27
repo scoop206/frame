@@ -58,6 +58,25 @@ Clone this repo alongside your projects.
 put `/path/to/frame/bin/` on your PATH.  
 add a .frame directory to the projects w/ optional components see below.
 
+### Dependencies
+
+Hard requirements:
+
+- zsh
+- git ≥ 2.5
+- neovim (no plugins required)
+- claude (Claude Code CLI)
+- docker with the compose v2 plugin
+- macOS + OrbStack (any docker provider works if already running; auto-start is OrbStack-only)
+- curl, lsof
+
+Needed only by specific commands or buffers:
+
+- gh, authenticated (`frame deploy-sans-tests`)
+- node + npm (the `vite` buffer, when the project has `web/`)
+- ngrok (optional; prefilled, never auto-run)
+- ghostty + Raycast (optional; window titling/search)
+
 ## How a project plugs in
 
 Everything project-side lives under one `.frame/` directory:
