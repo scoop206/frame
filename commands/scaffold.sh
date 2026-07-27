@@ -1,4 +1,4 @@
-# frame init — scaffold a project's .frame/ directory:
+# frame scaffold — scaffold a project's .frame/ directory:
 #   .frame/config.sh   committed project facts (template, edit to fit)
 #   .frame/local/      personal overrides + state — appended to .gitignore
 # Idempotent: existing files are left alone, the gitignore entry is added once.

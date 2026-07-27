@@ -9,7 +9,6 @@
 #                      standing in (teardown is handed to a detached reaper so
 #                      it survives its own nvim dying). Refuses if the worktree
 #                      is dirty or the branch isn't merged; -f overrides.
-#   frame wt -m [...]  merge into main (delegates to frame merge)
 #
 # Every frame is a self-sufficient peer: this runs the project's stack_up
 # (idempotent — first boot brings up the shared services, later boots no-op)
@@ -63,7 +62,7 @@ if [[ "${1:-}" == "-d" ]]; then
     MAIN_BRANCH=$(git -C "$MAIN_WT" rev-parse --abbrev-ref HEAD)
     if ! git -C "$MAIN_WT" merge-base --is-ancestor "$TOPIC" "$MAIN_BRANCH"; then
       echo "✗ branch $TOPIC has commits not on $MAIN_BRANCH — merge first" >&2
-      echo "  (frame wt -m $TOPIC), or discard with: frame wt -d -f $TOPIC" >&2
+      echo "  (frame merge $TOPIC), or discard with: frame wt -d -f $TOPIC" >&2
       exit 1
     fi
   fi
@@ -113,11 +112,13 @@ if [[ "${1:-}" == "-d" ]]; then
   exit 0
 fi
 
-# -m [TOPIC] [flags]: merge into main — same logic as `frame merge`.
-if [[ "${1:-}" == "-m" || "${1:-}" == "--merge" ]]; then
-  shift
-  source "$FRAME_ROOT/commands/merge.sh" "$@"
-  exit $?
+if [[ "${1:-}" == -* ]]; then
+  if [[ "$1" == "-m" || "$1" == "--merge" ]]; then
+    echo "✗ frame wt -m was removed — use: frame merge [TOPIC]" >&2
+  else
+    echo "✗ unknown flag: $1" >&2
+  fi
+  exit 2
 fi
 
 if (( $# >= 1 )); then

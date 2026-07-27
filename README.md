@@ -8,15 +8,16 @@ An opinionated AI harness based around:
 Run from inside any project checkout:
 
 ```
-frame init                 scaffold .frame/config.sh, gitignore .frame/local/
+frame scaffold             scaffold .frame/config.sh, gitignore .frame/local/
 frame wt TOPIC             create/reuse branch TOPIC + worktree ../_<name>-TOPIC, boot it
 frame wt                   boot the worktree you're already in
 frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
-frame deploy-sans-tests    trigger the deploy workflow with skip_tests=true
 frame services [up|down|ps]            manage the shared postgres/minio stack
 frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears)
 ```
+
+`worktree` is accepted as a synonym for `wt`.
 
 ### Frames
 
@@ -101,7 +102,6 @@ Hard requirements:
 
 Needed only by specific commands or buffers:
 
-- gh, authenticated (`frame deploy-sans-tests`)
 - node + npm (the `vite` buffer, when the project has `web/`)
 - ngrok (optional; prefilled, never auto-run)
 - ghostty + Raycast (optional; window titling/search)
