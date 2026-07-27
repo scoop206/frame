@@ -11,7 +11,7 @@ Run from inside any project checkout:
 frame init                 scaffold .frame/config.sh, gitignore .frame/local/
 frame wt TOPIC             create/reuse branch TOPIC + worktree ../_<name>-TOPIC, boot it
 frame wt                   boot the worktree you're already in
-frame wt -d TOPIC          quit its nvim, remove the worktree, delete the branch
+frame wt -d [-f] [TOPIC]   tear down a framelet (defaults to the one you're in)
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame deploy-sans-tests    trigger the deploy workflow with skip_tests=true
 frame services [up|down|ps]            manage the shared postgres/minio stack
@@ -44,13 +44,24 @@ frame merge
 
 ### Framelet Removal
 
-Quit the neovim instance to close all the buffer in the framelet.
-That will drop you to base ghostty terminal.
-Then you can tear down the worktree and branch:
+Tear down from *inside* the framelet — either entry point works:
 
-```
-frame wt -d TOPIC
-```
+- in nvim: `:FrameDown` (from a terminal buffer, `<C-\><C-n>` first)
+- in any terminal buffer: `frame wt -d`
+
+Both hand the teardown to a detached reaper rooted in the primary checkout.
+It sends `:qa!` to the nvim session (works from terminal-insert mode, and the
+`!` bypasses vimrc quit guards), waits for nvim to actually exit, then removes
+the worktree and deletes the branch. The ghostty window closes with nvim —
+one command and the whole framelet is gone.
+
+From outside (base terminal or another framelet): `frame wt -d TOPIC`.
+
+Teardown refuses if the worktree has uncommitted changes or the branch has
+commits not yet on main — merge first (`frame merge`), or force with
+`frame wt -d -f [TOPIC]` / `:FrameDown!`. These checks run *before* nvim is
+quit, so a refusal never leaves you editor-less. Reaper output lands in
+`/tmp/<name>-<topic>.teardown.log`.
 
 ### Install
 

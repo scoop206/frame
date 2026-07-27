@@ -8,6 +8,7 @@
 -- Parameterized by env vars exported by commands/wt.sh:
 --   FRAME_NAME        project name
 --   FRAME_TOPIC       worktree topic (branch name)
+--   FRAME_MAIN_WT     primary checkout (reaper cwd for :FrameDown)
 --   FRAME_SERVER_CMD  server command (buffer skipped when empty)
 --   FRAME_VITE_PORT   this worktree's vite port (title + ngrok target)
 -- A project can replace this file wholesale via .frame/worktree.lua or
@@ -29,6 +30,33 @@ vim.o.titlestring = name .. '/' .. topic
 
 -- Register a named socket so `frame wt -d TOPIC` can send :qa! remotely.
 vim.fn.serverstart('/tmp/' .. name .. '-' .. topic .. '.nvim')
+
+-- :FrameDown[!] — tear down this framelet from inside nvim. Spawns a detached
+-- `frame wt -d` rooted in the primary checkout; that reaper sends :qa! back to
+-- this session, waits for it to exit, then removes the worktree and deletes
+-- the branch. Bang = -f (discard uncommitted changes / unmerged commits).
+local main_wt = vim.env.FRAME_MAIN_WT or ''
+local frame_bin = (vim.env.FRAME_ROOT or '') .. '/bin/frame'
+if main_wt ~= '' then
+  vim.api.nvim_create_user_command('FrameDown', function(opts)
+    local log = '/tmp/' .. name .. '-' .. topic .. '.teardown.log'
+    -- Redirect to a log file: once this nvim dies, a write to an inherited
+    -- pipe would SIGPIPE the reaper mid-teardown.
+    local cmd = string.format('%s wt -d %s%s >%s 2>&1',
+      vim.fn.shellescape(frame_bin),
+      opts.bang and '-f ' or '',
+      vim.fn.shellescape(topic),
+      vim.fn.shellescape(log))
+    vim.fn.jobstart({ 'zsh', '-c', cmd }, { cwd = main_wt, detach = true })
+    -- If teardown is refused (dirty worktree / unmerged branch), this session
+    -- survives — surface the reaper's reason after a beat.
+    vim.defer_fn(function()
+      if vim.fn.filereadable(log) == 1 then
+        vim.notify(table.concat(vim.fn.readfile(log), '\n'), vim.log.levels.WARN)
+      end
+    end, 2500)
+  end, { bang = true, desc = 'Tear down this framelet (worktree + branch)' })
+end
 
 local function term(cmd_name, cmd)
   vim.cmd.terminal(cmd ~= '' and cmd or nil)

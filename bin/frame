@@ -5,7 +5,7 @@
 #   frame init                 scaffold .frame/config.sh, gitignore .frame/local/
 #   frame wt TOPIC             create/reuse branch TOPIC + worktree, boot it
 #   frame wt                   boot the worktree you're already in
-#   frame wt -d TOPIC          quit its nvim, remove worktree, delete branch
+#   frame wt -d [-f] [TOPIC]   tear down framelet (defaults to the one you're in)
 #   frame wt -m [TOPIC] [...]  merge into main (delegates to `frame merge`)
 #   frame merge [TOPIC] [--push|--ff|-n]   merge TOPIC (default: current branch)
 #   frame deploy-sans-tests    trigger the deploy workflow with skip_tests=true
