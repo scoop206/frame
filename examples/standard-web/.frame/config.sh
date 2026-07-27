@@ -35,4 +35,8 @@ stack_up() {
 app_env() {
   export DATABASE_URL=postgres://standard-web:devpassword@localhost:5432/standard-web
   export S3_ENDPOINT=http://localhost:9000
+
+  # As defined in buffers.json, frame tracks the PORT env var; if your app
+  # reads a differently named one, export it here.
+  export SERVICE_PORT="$PORT"
 }

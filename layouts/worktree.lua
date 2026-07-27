@@ -9,10 +9,10 @@
 --   FRAME_NAME        project name
 --   FRAME_TOPIC       worktree topic (branch name)
 --   FRAME_MAIN_WT     primary checkout (reaper cwd for :FrameDown)
---   FRAME_SERVER_CMD  server command (the server buffer's template)
 --   FRAME_VITE_PORT   this worktree's vite port (title + ngrok target)
---   FRAME_PORT_PREFIX project env-var prefix, interpolated in buffers.json
 --   FRAME_BUFFERS     the buffers to open (authoritative; empty → none)
+-- Config vars that buffers.json references (SERVER_CMD, PORT_PREFIX, the
+-- scanned ports) are exported by wt.sh under their own names.
 -- The buffers themselves come from the buffers.json registry (see below).
 -- A project can replace this file wholesale via .frame/worktree.lua or
 -- .frame/local/worktree.lua.
