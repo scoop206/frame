@@ -44,6 +44,9 @@ frame merge
 
 ### Framelet Removal
 
+To merely close the session — keeping the worktree and branch for a later
+`frame wt TOPIC` — use `:FrameQuit` (≡ `:qa!`).
+
 Tear down from _inside_ the framelet — either entry point works:
 
 - in nvim: `:FrameDown` (from a terminal buffer, `<C-\><C-n>` first)

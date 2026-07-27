@@ -31,6 +31,13 @@ vim.o.titlestring = name .. '/' .. topic
 -- Register a named socket so `frame wt -d TOPIC` can send :qa! remotely.
 vim.fn.serverstart('/tmp/' .. name .. '-' .. topic .. '.nvim')
 
+-- :FrameQuit — close the session only: worktree and branch stay intact, and
+-- `frame wt <topic>` boots the framelet back up later. Equivalent to :qa!
+-- (the ! sidesteps vimrc quit guards).
+vim.api.nvim_create_user_command('FrameQuit', function()
+  vim.cmd('qa!')
+end, { desc = 'Quit this framelet session (keep worktree + branch)' })
+
 -- :FrameDown[!] — tear down this framelet from inside nvim. Spawns a detached
 -- `frame wt -d` rooted in the primary checkout; that reaper sends :qa! back to
 -- this session, waits for it to exit, then removes the worktree and deletes
