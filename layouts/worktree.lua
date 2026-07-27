@@ -32,13 +32,13 @@ vim.o.titlestring = name .. '/' .. topic
 vim.fn.serverstart('/tmp/' .. name .. '-' .. topic .. '.nvim')
 
 -- :FrameQuit — close the session only: worktree and branch stay intact, and
--- `frame wt <topic>` boots the framelet back up later. Equivalent to :qa!
+-- `frame wt <topic>` boots the frame back up later. Equivalent to :qa!
 -- (the ! sidesteps vimrc quit guards).
 vim.api.nvim_create_user_command('FrameQuit', function()
   vim.cmd('qa!')
-end, { desc = 'Quit this framelet session (keep worktree + branch)' })
+end, { desc = 'Quit this frame session (keep worktree + branch)' })
 
--- :FrameDown[!] — tear down this framelet from inside nvim. Spawns a detached
+-- :FrameDown[!] — tear down this frame from inside nvim. Spawns a detached
 -- `frame wt -d` rooted in the primary checkout; that reaper sends :qa! back to
 -- this session, waits for it to exit, then removes the worktree and deletes
 -- the branch. Bang = -f (discard uncommitted changes / unmerged commits).
@@ -62,7 +62,7 @@ if main_wt ~= '' then
         vim.notify(table.concat(vim.fn.readfile(log), '\n'), vim.log.levels.WARN)
       end
     end, 2500)
-  end, { bang = true, desc = 'Tear down this framelet (worktree + branch)' })
+  end, { bang = true, desc = 'Tear down this frame (worktree + branch)' })
 end
 
 local function term(cmd_name, cmd)
