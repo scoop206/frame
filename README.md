@@ -15,6 +15,7 @@ frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame deploy-sans-tests    trigger the deploy workflow with skip_tests=true
 frame services [up|down|ps]            manage the shared postgres/minio stack
+frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears)
 ```
 
 ### Frames
@@ -42,6 +43,21 @@ When you are done working on the feature you (or claude) can merge to main:
 ```
 frame merge
 ```
+
+### Status
+
+The window title's base — `$REPO/$TOPIC :PORT` — never changes, but you can
+append a free-text status to it so parallel frames show where they're at:
+
+- in any terminal buffer (including claude): `frame status DEPLOYED. Waiting verification`
+- in nvim: `:FrameStatus DEPLOYED. Waiting verification`
+
+Either with no text clears back to the base title. Canned zero-arg variants
+exist for the common lifecycle points: `:FrameShipped`, `:FrameDeployed`,
+`:FrameReview`, `:FrameBlocked`.
+
+The CLI form works by RPC over the frame's nvim socket (nvim owns the title),
+so it also works from outside the frame while its session is up.
 
 ### Frame Removal
 

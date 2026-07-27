@@ -24,9 +24,38 @@ local vite_port = vim.env.FRAME_VITE_PORT or ''
 -- windows are tellable apart — the port shown is the one the browser connects
 -- to. nvim owns the title for the whole session, so shell integration can't
 -- overwrite it.
-vim.o.title = true
-vim.o.titlestring = name .. '/' .. topic
+local base_title = name .. '/' .. topic
     .. (vite_port ~= '' and (' :' .. vite_port) or '')
+vim.o.title = true
+vim.o.titlestring = base_title
+
+-- Status suffix: appends " - TEXT" to the base title (which never changes).
+-- Global so `frame status` can call it over the socket from any terminal
+-- buffer; returns the new title for the caller to echo.
+_G.FrameSetStatus = function(status)
+  vim.o.titlestring = base_title
+      .. (status ~= '' and (' - ' .. status) or '')
+  return vim.o.titlestring
+end
+
+-- :FrameStatus TEXT — set the status suffix; no TEXT clears it.
+vim.api.nvim_create_user_command('FrameStatus', function(opts)
+  _G.FrameSetStatus(opts.args)
+end, { nargs = '*', desc = 'Set window-title status suffix (empty clears)' })
+
+-- Canned statuses — one zero-arg command each, e.g. :FrameShipped.
+-- (:FrameStatus with no text clears any of them.)
+local canned = {
+  Shipped  = 'SHIPPED',
+  Deployed = 'DEPLOYED. Waiting verification',
+  Review   = 'NEEDS REVIEW',
+  Blocked  = 'BLOCKED',
+}
+for cmd, status in pairs(canned) do
+  vim.api.nvim_create_user_command('Frame' .. cmd, function()
+    _G.FrameSetStatus(status)
+  end, { desc = 'Set window-title status: ' .. status })
+end
 
 -- Register a named socket so `frame wt -d TOPIC` can send :qa! remotely.
 vim.fn.serverstart('/tmp/' .. name .. '-' .. topic .. '.nvim')
