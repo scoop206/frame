@@ -122,8 +122,9 @@ Everything project-side lives under one `.frame/` directory:
 | path                  | committed?         | contents                                                          |
 | --------------------- | ------------------ | ----------------------------------------------------------------- |
 | `.frame/config.sh`    | yes                | project facts: NAME, ports, SERVER_CMD, `stack_up()`, `app_env()` |
+| `.frame/buffers.json` | optional           | project-unique buffers, merged over frame's registry (see Buffers)|
 | `.frame/worktree.lua` | optional           | project-level layout override                                     |
-| `.frame/local/`       | never (gitignored) | personal overrides — `config.sh`/layouts here win                 |
+| `.frame/local/`       | never (gitignored) | personal overrides — `config.sh`/layouts/buffers here win         |
 
 Every setting is optional: a config of just `NAME=foo` (or none at all) still gets
 `frame wt` and `frame merge`. Hooks:
@@ -137,6 +138,37 @@ Every setting is optional: a config of just `NAME=foo` (or none at all) still ge
 - `app_env()` — export the vars pointing the app at the shared services
   (`DATABASE_URL`, S3 endpoint, …); exported vars win over `.env` (dotenvy
   never overrides the environment).
+
+See [`examples/`](examples) for complete `.frame/` directories at three
+sizes — name-only, shared-services user, and a project running its own
+container.
+
+## Buffers
+
+[`buffers.json`](buffers.json) (frame root) is the registry of every terminal
+buffer a frame can open — the formal superset. Per entry:
+
+| field     | meaning                                                                      |
+| --------- | ---------------------------------------------------------------------------- |
+| `name`    | buffer name (shown in `:ls`, targeted by `BUFFERS`)                          |
+| `mode`    | `durable` auto-runs and drops to a shell on exit (↑ + Enter reruns); `prefill` types the command without running it; `bare` is an empty shell |
+| `command` | template; `${VAR}` is replaced from the environment at boot                  |
+| `dir`     | subdirectory to run in                                                       |
+| `env`     | vars the command reads — a declared contract; frame warns at boot if unset   |
+| `when`    | gate: `{"env": "VAR"}` var non-empty, `{"dir": "path"}` directory exists     |
+| `focus`   | land here after boot                                                         |
+
+Which buffers a frame actually opens:
+
+- **default** — entries whose `when` gate holds: the classic
+  local/server/vite/ngrok/claude set, driven by SERVER_CMD, `web/`, and the
+  vite port.
+- **explicit** — `BUFFERS=(claude server local)` in `.frame/config.sh`:
+  exactly these, in this order, gates bypassed.
+- **project-unique** — `.frame/buffers.json` merges over the registry by
+  `name`: same name overrides the definition, new names become available
+  (and slot in before the focus buffer) — no need to fork the whole layout
+  for one extra terminal.
 
 ## Shared services
 

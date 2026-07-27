@@ -1,0 +1,5 @@
+[
+  { "name": "worker-logs",
+    "mode": "durable",
+    "command": "docker compose --project-directory ${FRAME_MAIN_WT} logs -f worker" }
+]

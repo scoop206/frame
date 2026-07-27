@@ -1,0 +1,16 @@
+# Project-unique dev containers only. Postgres and minio come from the shared
+# frame services stack (frame/services/docker-compose.yml) — multi-tenant on
+# standard ports, provisioned by .frame/config.sh's stack_up().
+services:
+  # Worker sidecar. Profile-gated so a bare `docker compose up` starts
+  # nothing; frame's stack_up() runs it with --build:
+  #   docker compose --project-directory "$MAIN_WT" --profile worker up -d --build worker
+  worker:
+    profiles: ["worker"]
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      PORT: 8890
+    ports:
+      - "8890:8890"
