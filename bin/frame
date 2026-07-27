@@ -10,6 +10,8 @@
 #   frame merge [TOPIC] [--push|--ff|-n]   merge TOPIC (default: current branch)
 #   frame deploy-sans-tests    trigger the deploy workflow with skip_tests=true
 #   frame services [up|down]   manage the shared postgres/minio stack
+#   frame status [TEXT…]       append "- TEXT" to this frame's window title
+#                              (no TEXT clears it back to name/topic)
 #
 # All work happens in topic worktrees ("frames"). Each is self-sufficient —
 # `frame wt` runs the project's stack_up, which is idempotent, so whichever
@@ -27,11 +29,11 @@ cmd="${1:-}"
 if (( $# > 0 )); then shift; fi
 
 case "$cmd" in
-  init|wt|merge|deploy-sans-tests|services)
+  init|wt|merge|deploy-sans-tests|services|status)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "✗ frame: unknown command '$cmd' (try: frame help)" >&2
