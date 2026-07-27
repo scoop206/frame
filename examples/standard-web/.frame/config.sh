@@ -1,10 +1,8 @@
-# Frame project config — committed project facts (like an .env.dev + hooks).
-# Personal overrides go in .frame/local/config.sh (gitignored, wins over this).
 NAME=standard-web
 
 # Whatever command starts this project's dev server — it runs verbatim in the
-# layout's `server` buffer (omit SERVER_CMD to skip that buffer). It inherits
-# the exported ports below, so the server should bind $PORT.
+# layout's `server` buffer.  It inherits the exported ports below, so the server 
+# should bind $PORT (see buffers.json). If it does not then cross connect in app_env() below
 SERVER_CMD='cargo run -p standard-web-server'
 
 # The primary checkout's normal dev ports (api / vite dev server / vite HMR
@@ -20,10 +18,7 @@ API_PORT=3000  VITE_PORT=5173  HMR_PORT=24678
 # buffers.json).
 BUFFERS=(local server vite ngrok claude)
 
-# Runs on every `frame wt` boot (idempotent). Shared postgres/minio come from
-# frame — no project-unique containers. ensure_pg_db / ensure_minio_bucket
-# carve out this project's tenant (role + database, bucket) on the shared
-# instances.
+# Runs on every `frame wt` boot (idempotent). 
 stack_up() {
   frame_services_up postgres minio
   ensure_pg_db standard-web
@@ -31,12 +26,11 @@ stack_up() {
 }
 
 # Point the app at the shared services. Exported before the server launches,
-# so these win over .env (dotenvy never overrides the environment).
 app_env() {
   export DATABASE_URL=postgres://standard-web:devpassword@localhost:5432/standard-web
   export S3_ENDPOINT=http://localhost:9000
 
   # As defined in buffers.json, frame tracks the PORT env var; if your app
   # reads a differently named one, export it here.
-  export SERVICE_PORT="$PORT"
+  # export SERVICE_PORT="$PORT"
 }
