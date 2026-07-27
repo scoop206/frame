@@ -8,7 +8,7 @@ integration; there is nothing else to wire up.
 | example                              | shows                                                                     |
 | ------------------------------------ | ------------------------------------------------------------------------- |
 | [`barebones/`](barebones)            | the minimum: `config.sh` with just `NAME`                                 |
-| [`shared-services/`](shared-services)| a project using the shared postgres/minio (`stack_up()` + `app_env()`)    |
+| [`standard-web/`](standard-web)      | the default web stack: a server + vite app on the shared postgres/minio   |
 | [`sidecar/`](sidecar)                | additionally running its own project-unique container from its compose file |
 
 ### barebones
@@ -17,13 +17,16 @@ Two lines that matter: the name, and the required `BUFFERS=(claude local)` —
 this project has nothing to run in server/vite/ngrok, so it doesn't list
 them. This is exactly how an infra/docs repo plugs in.
 
-### shared-services
+### standard-web
 
 A typical app: `stack_up()` boots the shared postgres/minio and carves out
 this project's tenant — a role + database via `ensure_pg_db`, a bucket via
 `ensure_minio_bucket` (both idempotent, from `lib/helpers.sh`). `app_env()`
 then exports `DATABASE_URL` etc. so the app talks to its tenant on the
-standard ports. The `.gitignore` line for `.frame/local/` is what
+standard ports. The server happens to be Rust here, but that's incidental —
+`SERVER_CMD` is any command that starts a server (Go, Node, Python, …); only
+the shape matters: claim a tenant in `stack_up()`, point the app at it in
+`app_env()`. The `.gitignore` line for `.frame/local/` is what
 `frame scaffold` adds — personal overrides live there, never committed.
 
 #### Choosing `SERVER_CMD` and the ports
@@ -61,11 +64,11 @@ buffer, and you either fill in the config or drop the buffer from `BUFFERS`.
 
 ### sidecar
 
-Everything above, plus a project-unique container (a "worker" HTTP sidecar)
-defined in the project's own `docker-compose.yml`. Two things keep it from
+Everything above, plus a project-unique container (an HTTP sidecar) defined
+in the project's own `docker-compose.yml`. Two things keep it from
 multiplying across frames:
 
-- **profile-gated** (`profiles: ["worker"]`) so a bare `docker compose up`
+- **profile-gated** (`profiles: ["sidecar"]`) so a bare `docker compose up`
   starts nothing extra;
 - **`--project-directory "$MAIN_WT"`** pins compose to the primary checkout,
   so every frame shares one instance instead of each worktree deriving its
@@ -76,13 +79,13 @@ _upstream_ — all buffer definitions live in frame's own `buffers.json`;
 there is no project-level registry:
 
 ```json
-{ "name": "worker-logs",
+{ "name": "sidecar-logs",
   "mode": "durable",
-  "command": "docker compose --project-directory ${FRAME_MAIN_WT} logs -f worker" }
+  "command": "docker compose --project-directory ${FRAME_MAIN_WT} logs -f sidecar" }
 ```
 
 …and this project adds it to its list — `BUFFERS=(local server vite ngrok
-worker-logs claude)`. No other project is affected: buffers open only where
+sidecar-logs claude)`. No other project is affected: buffers open only where
 `BUFFERS` names them.
 
 ## Setting up the shared containers

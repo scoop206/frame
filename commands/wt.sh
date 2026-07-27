@@ -200,10 +200,13 @@ if (( $+functions[app_env] )); then app_env; fi
 export FRAME_NAME="$NAME"
 export FRAME_TOPIC="$TOPIC"
 export FRAME_MAIN_WT="$MAIN_WT"
-export FRAME_SERVER_CMD="${SERVER_CMD:-}"
 export FRAME_VITE_PORT
-export FRAME_PORT_PREFIX="$PORT_PREFIX"
 export FRAME_BUFFERS="${BUFFERS[*]}"
+# Config vars referenced by buffers.json are exported under their own names,
+# so the registry reads exactly like the config. FRAME_* stays reserved for
+# frame-computed values with no config counterpart.
+export SERVER_CMD="${SERVER_CMD:-}"
+export PORT_PREFIX
 
 layout=$(frame_resolve worktree.lua)
 if [[ "${FRAME_NO_NVIM:-0}" == 1 ]]; then

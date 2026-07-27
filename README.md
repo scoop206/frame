@@ -134,12 +134,14 @@ open (see Buffers below). Everything else is optional. Hooks:
   project-unique containers belong in the project's own compose file — pin
   those with `--project-directory "$MAIN_WT"` so every frame shares one
   instance instead of spawning a per-worktree compose project.
-- `app_env()` — export the vars pointing the app at the shared services
-  (`DATABASE_URL`, S3 endpoint, …); exported vars win over `.env` (dotenvy
-  never overrides the environment).
+- `app_env()` — export the vars pointing the app at what frame set up: the
+  shared services (`DATABASE_URL`, S3 endpoint, …) and, if your app reads its
+  port under a name other than the `PORT` frame tracks (see `buffers.json`),
+  a re-export of it here (e.g. `export SERVICE_PORT="$PORT"`). Exported vars
+  win over `.env` (dotenvy never overrides the environment).
 
 See [`examples/`](examples) for complete `.frame/` directories at three
-sizes — name-only, shared-services user, and a project running its own
+sizes — name-only, the standard web stack, and a project running its own
 container.
 
 ## Buffers
