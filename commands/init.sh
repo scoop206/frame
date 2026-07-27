@@ -24,12 +24,13 @@ NAME=$_name
 # Uncomment what applies; a project defining none of these still gets
 # \`frame wt\` and \`frame merge\` with sensible defaults.
 #SERVER_CMD='cargo run -p $_name-server'
-#API_PORT=3000  VITE_PORT=5173  HMR_PORT=24678   # primary-env ports; worktrees scan upward
-#NGROK_AUTO=1          # auto-run ngrok in the primary layout (default: pre-filled prompt)
+#API_PORT=3000  VITE_PORT=5173  HMR_PORT=24678   # base ports; each framelet scans upward
 #WT_LINKS=(.env web/node_modules)   # gitignored assets symlinked into fresh worktrees
 
-# Bring up everything the dev stack needs. Shared postgres/minio come from
-# frame; only project-unique containers belong in this repo's compose file.
+# Bring up everything the dev stack needs — runs on every \`frame wt\` boot, so
+# keep it idempotent. Shared postgres/minio come from frame; only
+# project-unique containers belong in this repo's compose file (pin those with
+# --project-directory "\$MAIN_WT" so every framelet shares one instance).
 #stack_up() {
 #  frame_services_up postgres minio
 #  ensure_pg_db $_name

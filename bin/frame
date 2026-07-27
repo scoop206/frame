@@ -3,7 +3,6 @@
 #
 # Usage:
 #   frame init                 scaffold .frame/config.sh, gitignore .frame/local/
-#   frame dev                  boot the project's dev environment (stack + nvim)
 #   frame wt TOPIC             create/reuse branch TOPIC + worktree, boot it
 #   frame wt                   boot the worktree you're already in
 #   frame wt -d TOPIC          quit its nvim, remove worktree, delete branch
@@ -11,6 +10,11 @@
 #   frame merge [TOPIC] [--push|--ff|-n]   merge TOPIC (default: current branch)
 #   frame deploy-sans-tests    trigger the deploy workflow with skip_tests=true
 #   frame services [up|down]   manage the shared postgres/minio stack
+#
+# All work happens in topic worktrees ("framelets"). Each is self-sufficient —
+# `frame wt` runs the project's stack_up, which is idempotent, so whichever
+# framelet boots first brings up the world. The primary checkout is just the
+# git anchor that topic branches merge back into; it never needs a dev session.
 #
 # Project config: .frame/config.sh (committed) / .frame/local/config.sh
 # (gitignored, wins). See `frame init` for a starter template.
@@ -23,11 +27,11 @@ cmd="${1:-}"
 if (( $# > 0 )); then shift; fi
 
 case "$cmd" in
-  init|dev|wt|merge|deploy-sans-tests|services)
+  init|wt|merge|deploy-sans-tests|services)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "✗ frame: unknown command '$cmd' (try: frame help)" >&2

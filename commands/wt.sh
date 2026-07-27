@@ -6,10 +6,12 @@
 #   frame wt -d TOPIC  quit the nvim session, remove worktree, delete branch
 #   frame wt -m [...]  merge into main (delegates to frame merge)
 #
-# The primary checkout's `frame dev` owns the docker stack — shared singletons.
-# This gives the worktree its OWN server and vite on free ports, scanned upward
+# Every framelet is a self-sufficient peer: this runs the project's stack_up
+# (idempotent — first boot brings up the shared services, later boots no-op)
+# and gives the worktree its OWN server and vite on free ports, scanned upward
 # from the project's defaults, exported with the project's PORT_PREFIX so its
-# code (e.g. web/vite.config.ts) picks them up.
+# code (e.g. web/vite.config.ts) picks them up. The primary checkout is just
+# the git anchor merges land on; it never needs a dev session.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 frame_load_config
@@ -59,11 +61,22 @@ if (( $# >= 1 )); then
   PROJECT_DIR="$WT_DIR"
 else
   PROJECT_DIR="$PROJECT_ROOT"
-  TOPIC="${${PROJECT_DIR:t}#_$NAME-}"
+  if [[ "$PROJECT_DIR" == "$MAIN_WT" ]]; then
+    # Booting the primary checkout itself — no worktree dir to derive a topic
+    # from, so use the branch name (usually `main`).
+    TOPIC=$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD)
+  else
+    TOPIC="${${PROJECT_DIR:t}#_$NAME-}"
+  fi
 fi
 cd "$PROJECT_DIR"
 
 set_title "$NAME/$TOPIC"
+
+# Framelets are self-sufficient: whichever boots first brings up the world.
+# stack_up is idempotent (compose up -d no-ops, ensure_* helpers no-op), so
+# this is cheap when the stack is already running.
+if (( $+functions[stack_up] )); then stack_up; fi
 
 # Gitignored assets a fresh worktree lacks — symlink from the primary checkout
 # so it boots instantly. Default covers .env (shared server config; exported
