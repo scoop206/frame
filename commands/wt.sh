@@ -3,7 +3,12 @@
 #   frame wt TOPIC     create (or reuse) branch TOPIC and worktree
 #                      ../_<NAME>-TOPIC beside the primary checkout, boot it
 #   frame wt           boot the worktree you're already in
-#   frame wt -d TOPIC  quit the nvim session, remove worktree, delete branch
+#   frame wt -d [-f] [TOPIC]
+#                      tear down: quit the nvim session, remove worktree,
+#                      delete branch. TOPIC defaults to the framelet you're
+#                      standing in (teardown is handed to a detached reaper so
+#                      it survives its own nvim dying). Refuses if the worktree
+#                      is dirty or the branch isn't merged; -f overrides.
 #   frame wt -m [...]  merge into main (delegates to frame merge)
 #
 # Every framelet is a self-sufficient peer: this runs the project's stack_up
@@ -16,22 +21,93 @@
 
 frame_load_config
 
-# -d TOPIC: gracefully quit the nvim session, then remove the worktree + branch.
+# -d [-f] [TOPIC]: gracefully quit the nvim session, then remove the
+# worktree + branch. Works from inside the target framelet too — see below.
 if [[ "${1:-}" == "-d" ]]; then
-  if (( $# < 2 )); then
-    echo "Usage: frame wt -d TOPIC" >&2; exit 1
+  shift
+  FORCE=0 TOPIC=""
+  for _arg in "$@"; do
+    case "$_arg" in
+      -f|--force) FORCE=1 ;;
+      -*) echo "✗ unknown flag: $_arg" >&2; exit 2 ;;
+      *)
+        if [[ -n "$TOPIC" ]]; then
+          echo "✗ more than one topic given ($TOPIC, $_arg)" >&2; exit 2
+        fi
+        TOPIC=$_arg ;;
+    esac
+  done
+  if [[ -z "$TOPIC" ]]; then
+    if [[ "${PROJECT_ROOT:t}" == _$NAME-* ]]; then
+      TOPIC="${${PROJECT_ROOT:t}#_$NAME-}"
+    else
+      echo "Usage: frame wt -d [-f] [TOPIC]  (TOPIC only optional inside a framelet)" >&2
+      exit 1
+    fi
   fi
-  TOPIC=$2
+
   WT_DIR="${MAIN_WT:h}/_$NAME-$TOPIC"
   SOCKET="/tmp/$NAME-$TOPIC.nvim"
+  if [[ ! -d "$WT_DIR" ]]; then
+    echo "✗ no worktree at $WT_DIR" >&2; exit 1
+  fi
+
+  # Safety rails run BEFORE touching nvim — failing after the editor is gone
+  # would leave a half-torn-down framelet with no session to fix it from.
+  if (( ! FORCE )); then
+    if [[ -n "$(git -C "$WT_DIR" status --porcelain)" ]]; then
+      echo "✗ $WT_DIR has uncommitted/untracked files — commit or stash them," >&2
+      echo "  or discard with: frame wt -d -f $TOPIC" >&2
+      exit 1
+    fi
+    MAIN_BRANCH=$(git -C "$MAIN_WT" rev-parse --abbrev-ref HEAD)
+    if ! git -C "$MAIN_WT" merge-base --is-ancestor "$TOPIC" "$MAIN_BRANCH"; then
+      echo "✗ branch $TOPIC has commits not on $MAIN_BRANCH — merge first" >&2
+      echo "  (frame wt -m $TOPIC), or discard with: frame wt -d -f $TOPIC" >&2
+      exit 1
+    fi
+  fi
+
+  # Standing inside the target framelet: this shell is a terminal buffer of the
+  # nvim about to die, and its cwd is inside the worktree about to be removed —
+  # an inline teardown would kill itself halfway. Hand off to a detached
+  # re-invocation rooted in MAIN_WT; nohup shields it from the SIGHUP that
+  # nvim's exit sends this terminal.
+  if [[ "${PROJECT_ROOT:A}" == "${WT_DIR:A}" ]]; then
+    _log="/tmp/$NAME-$TOPIC.teardown.log"
+    _flags=(); if (( FORCE )); then _flags=(-f); fi
+    echo "▶ tearing down $TOPIC from inside — handing off to a detached reaper"
+    echo "  (log: $_log). nvim will quit and this window will close; if no nvim"
+    echo "  is running, cd out of the removed directory afterwards."
+    cd "$MAIN_WT"
+    nohup "$FRAME_ROOT/bin/frame" wt -d "${_flags[@]}" "$TOPIC" >"$_log" 2>&1 &
+    exit 0
+  fi
+
   if [[ -S "$SOCKET" ]]; then
     echo "▶ sending :qa! to nvim ($SOCKET)…"
-    nvim --server "$SOCKET" --remote-send ':qa!<CR>' 2>/dev/null || true
-    sleep 0.5  # give nvim a moment to release the worktree files
+    # <Cmd>qa!<CR> executes from ANY mode — the session normally sits in
+    # terminal-insert mode, where raw ':qa!' keys would just be typed into the
+    # foreground program. The ! also bypasses :qa guards in a user's vimrc.
+    if nvim --server "$SOCKET" --remote-send '<Cmd>qa!<CR>' 2>/dev/null; then
+      # nvim unlinks its socket on exit — poll for that instead of blind sleep.
+      for _i in {1..50}; do
+        [[ -e "$SOCKET" ]] || break
+        sleep 0.2
+      done
+      if [[ -e "$SOCKET" ]]; then
+        echo "✗ nvim still running after 10s — aborting teardown" >&2
+        exit 1
+      fi
+    else
+      echo "⚠ socket is stale (no nvim listening) — removing it"
+      rm -f "$SOCKET"
+    fi
   else
     echo "⚠ no nvim socket at $SOCKET — session may already be closed"
   fi
-  git -C "$MAIN_WT" worktree remove "$WT_DIR"
+  _rm_flags=(); if (( FORCE )); then _rm_flags=(--force); fi
+  git -C "$MAIN_WT" worktree remove "${_rm_flags[@]}" "$WT_DIR"
   git -C "$MAIN_WT" branch -D "$TOPIC"
   echo "✓ removed worktree and branch $TOPIC"
   exit 0
@@ -111,6 +187,7 @@ if (( $+functions[app_env] )); then app_env; fi
 # Layout parameters — read by layouts/worktree.lua (or a project override).
 export FRAME_NAME="$NAME"
 export FRAME_TOPIC="$TOPIC"
+export FRAME_MAIN_WT="$MAIN_WT"
 export FRAME_SERVER_CMD="${SERVER_CMD:-}"
 export FRAME_VITE_PORT
 
