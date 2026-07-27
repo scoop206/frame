@@ -1,6 +1,6 @@
 # frame
 
-An opiniated AI harness based around:
+An opinionated AI harness based around:
 
 - neovim
 - git worktrees
@@ -44,7 +44,7 @@ frame merge
 
 ### Framelet Removal
 
-Tear down from *inside* the framelet — either entry point works:
+Tear down from _inside_ the framelet — either entry point works:
 
 - in nvim: `:FrameDown` (from a terminal buffer, `<C-\><C-n>` first)
 - in any terminal buffer: `frame wt -d`
@@ -59,7 +59,7 @@ From outside (base terminal or another framelet): `frame wt -d TOPIC`.
 
 Teardown refuses if the worktree has uncommitted changes or the branch has
 commits not yet on main — merge first (`frame merge`), or force with
-`frame wt -d -f [TOPIC]` / `:FrameDown!`. These checks run *before* nvim is
+`frame wt -d -f [TOPIC]` / `:FrameDown!`. These checks run _before_ nvim is
 quit, so a refusal never leaves you editor-less. Reaper output lands in
 `/tmp/<name>-<topic>.teardown.log`.
 
