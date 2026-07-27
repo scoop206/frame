@@ -74,10 +74,20 @@ end
 -- stays usable after the process exits — crucially, also on Ctrl-C. A plain
 -- `zsh -c` exits on SIGINT by default (killing the buffer before `exec` runs), so
 -- `trap ':' INT` overrides that: the child still gets the interrupt and dies, but
--- this shell survives to reach `exec`. Rerun by retyping. Assumes `cmd` has no
--- single quotes.
-local function term_durable(cmd_name, cmd)
-  term(cmd_name, 'zsh -c "trap \':\' INT; ' .. cmd .. '; exec zsh"')
+-- this shell survives to reach `exec`. Assumes `cmd` has no single quotes.
+--
+-- Once `cmd` dies, it's appended to the zsh history file so the replacement
+-- shell boots with it as the LAST entry — ↑ + Enter reruns it. Appending must
+-- happen here (post-exit, pre-exec): the wrapper is non-interactive so the
+-- command never enters history on its own, and seeding any earlier would let
+-- other exiting shells bury it. `dir`, when given, is entered before `cmd`
+-- runs but kept out of the seeded entry, which must rerun from the cwd the
+-- replacement shell actually lands in.
+local function term_durable(cmd_name, cmd, dir)
+  term(cmd_name, 'zsh -c "' .. (dir and ('cd ' .. dir .. '; ') or '')
+    .. 'trap \':\' INT; ' .. cmd
+    .. '; print -r -- \'' .. cmd .. '\' >> ${HISTFILE:-$HOME/.zsh_history}'
+    .. '; exec zsh"')
 end
 
 -- Pre-filled variant: drops the command into the prompt without running it.
@@ -91,7 +101,7 @@ if (vim.env.FRAME_SERVER_CMD or '') ~= '' then
   term_durable('server', vim.env.FRAME_SERVER_CMD)
 end
 if vim.fn.isdirectory('web') == 1 then
-  term_durable('vite', 'cd web && npm run dev')
+  term_durable('vite', 'npm run dev', 'web')
 end
 if vite_port ~= '' then
   -- Pre-filled, never auto-run: the primary env usually owns the ngrok tunnel.
