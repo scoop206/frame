@@ -1,6 +1,7 @@
 # Frame project config — committed project facts (like an .env.dev + hooks).
 # Personal overrides go in .frame/local/config.sh (gitignored, wins over this).
 NAME=sidecar
+BUFFERS=(local server vite ngrok claude)
 SERVER_CMD='cargo run -p sidecar-server'
 API_PORT=3200  VITE_PORT=5373  HMR_PORT=24878   # base ports; each frame scans upward
 

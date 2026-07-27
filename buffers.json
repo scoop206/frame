@@ -5,20 +5,17 @@
   { "name": "server",
     "mode": "durable",
     "command": "${FRAME_SERVER_CMD}",
-    "env": ["PORT"],
-    "when": { "env": "FRAME_SERVER_CMD" } },
+    "env": ["PORT"] },
 
   { "name": "vite",
     "mode": "durable",
     "command": "npm run dev",
     "dir": "web",
-    "env": ["${FRAME_PORT_PREFIX}_VITE_PORT", "${FRAME_PORT_PREFIX}_HMR_PORT"],
-    "when": { "dir": "web" } },
+    "env": ["${FRAME_PORT_PREFIX}_VITE_PORT", "${FRAME_PORT_PREFIX}_HMR_PORT"] },
 
   { "name": "ngrok",
     "mode": "prefill",
-    "command": "ngrok http ${FRAME_VITE_PORT}",
-    "when": { "env": "FRAME_VITE_PORT" } },
+    "command": "ngrok http ${FRAME_VITE_PORT}" },
 
   { "name": "claude",
     "mode": "durable",

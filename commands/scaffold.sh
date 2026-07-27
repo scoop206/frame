@@ -21,12 +21,14 @@ else
 # Personal overrides go in .frame/local/config.sh (gitignored, wins over this).
 NAME=$_name
 
-# Uncomment what applies; a project defining none of these still gets
-# \`frame wt\` and \`frame merge\` with sensible defaults.
+# Required: which buffers each frame opens (definitions live in frame's
+# buffers.json). Authoritative even when empty — BUFFERS=() opens none.
+BUFFERS=(claude local)
+
+# Uncomment what applies; everything below is optional.
 #SERVER_CMD='cargo run -p $_name-server'
 #API_PORT=3000  VITE_PORT=5173  HMR_PORT=24678   # base ports; each frame scans upward
 #WT_LINKS=(.env web/node_modules)   # gitignored assets symlinked into fresh worktrees
-#BUFFERS=(claude server vite local) # exact buffer list; default: buffers.json gates decide
 
 # Bring up everything the dev stack needs — runs on every \`frame wt\` boot, so
 # keep it idempotent. Shared postgres/minio come from frame; only

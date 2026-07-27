@@ -123,6 +123,15 @@ if [[ "${1:-}" == -* ]]; then
   exit 2
 fi
 
+# BUFFERS is required to boot a frame, and authoritative even when empty:
+# BUFFERS=() opens no buffers. Definitions live in $FRAME_ROOT/buffers.json;
+# BUFFERS says which of them this project's frames open.
+if (( ! ${+BUFFERS} )); then
+  echo "✗ frame: .frame/config.sh must define BUFFERS=(…) — the buffers to open" >&2
+  echo "  (definitions: $FRAME_ROOT/buffers.json; e.g. BUFFERS=(claude local))" >&2
+  exit 1
+fi
+
 if (( $# >= 1 )); then
   TOPIC=$1
   WT_DIR="${MAIN_WT:h}/_$NAME-$TOPIC"
@@ -194,10 +203,7 @@ export FRAME_MAIN_WT="$MAIN_WT"
 export FRAME_SERVER_CMD="${SERVER_CMD:-}"
 export FRAME_VITE_PORT
 export FRAME_PORT_PREFIX="$PORT_PREFIX"
-# Explicit buffer pick-list from config's BUFFERS=(…); empty means "let the
-# when-gates in buffers.json decide".
-if (( ${+BUFFERS} )); then FRAME_BUFFERS="${BUFFERS[*]}"; else FRAME_BUFFERS=""; fi
-export FRAME_BUFFERS
+export FRAME_BUFFERS="${BUFFERS[*]}"
 
 layout=$(frame_resolve worktree.lua)
 if [[ "${FRAME_NO_NVIM:-0}" == 1 ]]; then
