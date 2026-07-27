@@ -142,3 +142,7 @@ Every frame titles its ghostty window — `name/topic :port` — so Raycast's
 window search can fuzzy-find
 any of them. The title is set from the shell before nvim launches, then owned
 by nvim (`title` + `titlestring`) for the session.
+
+## License
+
+[MIT](LICENSE)
