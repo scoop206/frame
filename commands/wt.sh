@@ -109,6 +109,8 @@ if [[ "${1:-}" == "-d" ]]; then
   _rm_flags=(); if (( FORCE )); then _rm_flags=(--force); fi
   git -C "$MAIN_WT" worktree remove "${_rm_flags[@]}" "$WT_DIR"
   git -C "$MAIN_WT" branch -D "$TOPIC"
+  # :FrameDown's watcher matches this line to know teardown finished without
+  # reaching the session — keep the wording in sync with layouts/worktree.lua.
   echo "✓ removed worktree and branch $TOPIC"
   exit 0
 fi
