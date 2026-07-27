@@ -11,17 +11,18 @@ Run from inside any project checkout:
 frame init                 scaffold .frame/config.sh, gitignore .frame/local/
 frame wt TOPIC             create/reuse branch TOPIC + worktree ../_<name>-TOPIC, boot it
 frame wt                   boot the worktree you're already in
-frame wt -d [-f] [TOPIC]   tear down a framelet (defaults to the one you're in)
+frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame deploy-sans-tests    trigger the deploy workflow with skip_tests=true
 frame services [up|down|ps]            manage the shared postgres/minio stack
 ```
 
-### Framelet
+### Frames
 
-All work happens in topic worktrees ("framelets"). Each is a self-sufficient
-peer — `frame wt` runs the project's idempotent `stack_up()`, so whichever
-framelet boots first brings up the shared services.
+All work happens in topic worktrees, each called a "frame" — the same name as
+the framework itself. Each is a self-sufficient peer — `frame wt` runs the
+project's idempotent `stack_up()`, so whichever frame boots first brings up
+the shared services.
 
 `frame wt TOPIC` is the typical entrypoint.
 
@@ -42,12 +43,12 @@ When you are done working on the feature you (or claude) can merge to main:
 frame merge
 ```
 
-### Framelet Removal
+### Frame Removal
 
 To merely close the session — keeping the worktree and branch for a later
 `frame wt TOPIC` — use `:FrameQuit` (≡ `:qa!`).
 
-Tear down from _inside_ the framelet — either entry point works:
+Tear down from _inside_ the frame — either entry point works:
 
 - in nvim: `:FrameDown` (from a terminal buffer, `<C-\><C-n>` first)
 - in any terminal buffer: `frame wt -d`
@@ -56,9 +57,9 @@ Both hand the teardown to a detached reaper rooted in the primary checkout.
 It sends `:qa!` to the nvim session (works from terminal-insert mode, and the
 `!` bypasses vimrc quit guards), waits for nvim to actually exit, then removes
 the worktree and deletes the branch. The ghostty window closes with nvim —
-one command and the whole framelet is gone.
+one command and the whole frame is gone.
 
-From outside (base terminal or another framelet): `frame wt -d TOPIC`.
+From outside (base terminal or another frame): `frame wt -d TOPIC`.
 
 Teardown refuses if the worktree has uncommitted changes or the branch has
 commits not yet on main — merge first (`frame merge`), or force with
@@ -108,7 +109,7 @@ Every setting is optional: a config of just `NAME=foo` (or none at all) still ge
   boot, so keep it idempotent. Shared postgres/minio come from
   `frame_services_up` / `ensure_pg_db` / `ensure_minio_bucket`; only
   project-unique containers belong in the project's own compose file — pin
-  those with `--project-directory "$MAIN_WT"` so every framelet shares one
+  those with `--project-directory "$MAIN_WT"` so every frame shares one
   instance instead of spawning a per-worktree compose project.
 - `app_env()` — export the vars pointing the app at the shared services
   (`DATABASE_URL`, S3 endpoint, …); exported vars win over `.env` (dotenvy
@@ -123,7 +124,7 @@ buckets, standard ports, no per-project offsets. Helper functions in
 
 ## Windows
 
-Every framelet titles its ghostty window — `name/topic :port` — so Raycast's
+Every frame titles its ghostty window — `name/topic :port` — so Raycast's
 window search can fuzzy-find
 any of them. The title is set from the shell before nvim launches, then owned
 by nvim (`title` + `titlestring`) for the session.

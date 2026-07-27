@@ -5,15 +5,15 @@
 #   frame init                 scaffold .frame/config.sh, gitignore .frame/local/
 #   frame wt TOPIC             create/reuse branch TOPIC + worktree, boot it
 #   frame wt                   boot the worktree you're already in
-#   frame wt -d [-f] [TOPIC]   tear down framelet (defaults to the one you're in)
+#   frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
 #   frame wt -m [TOPIC] [...]  merge into main (delegates to `frame merge`)
 #   frame merge [TOPIC] [--push|--ff|-n]   merge TOPIC (default: current branch)
 #   frame deploy-sans-tests    trigger the deploy workflow with skip_tests=true
 #   frame services [up|down]   manage the shared postgres/minio stack
 #
-# All work happens in topic worktrees ("framelets"). Each is self-sufficient —
+# All work happens in topic worktrees ("frames"). Each is self-sufficient —
 # `frame wt` runs the project's stack_up, which is idempotent, so whichever
-# framelet boots first brings up the world. The primary checkout is just the
+# frame boots first brings up the world. The primary checkout is just the
 # git anchor that topic branches merge back into; it never needs a dev session.
 #
 # Project config: .frame/config.sh (committed) / .frame/local/config.sh

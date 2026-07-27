@@ -5,13 +5,13 @@
 #   frame wt           boot the worktree you're already in
 #   frame wt -d [-f] [TOPIC]
 #                      tear down: quit the nvim session, remove worktree,
-#                      delete branch. TOPIC defaults to the framelet you're
+#                      delete branch. TOPIC defaults to the frame you're
 #                      standing in (teardown is handed to a detached reaper so
 #                      it survives its own nvim dying). Refuses if the worktree
 #                      is dirty or the branch isn't merged; -f overrides.
 #   frame wt -m [...]  merge into main (delegates to frame merge)
 #
-# Every framelet is a self-sufficient peer: this runs the project's stack_up
+# Every frame is a self-sufficient peer: this runs the project's stack_up
 # (idempotent — first boot brings up the shared services, later boots no-op)
 # and gives the worktree its OWN server and vite on free ports, scanned upward
 # from the project's defaults, exported with the project's PORT_PREFIX so its
@@ -22,7 +22,7 @@
 frame_load_config
 
 # -d [-f] [TOPIC]: gracefully quit the nvim session, then remove the
-# worktree + branch. Works from inside the target framelet too — see below.
+# worktree + branch. Works from inside the target frame too — see below.
 if [[ "${1:-}" == "-d" ]]; then
   shift
   FORCE=0 TOPIC=""
@@ -41,7 +41,7 @@ if [[ "${1:-}" == "-d" ]]; then
     if [[ "${PROJECT_ROOT:t}" == _$NAME-* ]]; then
       TOPIC="${${PROJECT_ROOT:t}#_$NAME-}"
     else
-      echo "Usage: frame wt -d [-f] [TOPIC]  (TOPIC only optional inside a framelet)" >&2
+      echo "Usage: frame wt -d [-f] [TOPIC]  (TOPIC only optional inside a frame)" >&2
       exit 1
     fi
   fi
@@ -53,7 +53,7 @@ if [[ "${1:-}" == "-d" ]]; then
   fi
 
   # Safety rails run BEFORE touching nvim — failing after the editor is gone
-  # would leave a half-torn-down framelet with no session to fix it from.
+  # would leave a half-torn-down frame with no session to fix it from.
   if (( ! FORCE )); then
     if [[ -n "$(git -C "$WT_DIR" status --porcelain)" ]]; then
       echo "✗ $WT_DIR has uncommitted/untracked files — commit or stash them," >&2
@@ -68,7 +68,7 @@ if [[ "${1:-}" == "-d" ]]; then
     fi
   fi
 
-  # Standing inside the target framelet: this shell is a terminal buffer of the
+  # Standing inside the target frame: this shell is a terminal buffer of the
   # nvim about to die, and its cwd is inside the worktree about to be removed —
   # an inline teardown would kill itself halfway. Hand off to a detached
   # re-invocation rooted in MAIN_WT; nohup shields it from the SIGHUP that
@@ -149,7 +149,7 @@ cd "$PROJECT_DIR"
 
 set_title "$NAME/$TOPIC"
 
-# Framelets are self-sufficient: whichever boots first brings up the world.
+# Frames are self-sufficient: whichever boots first brings up the world.
 # stack_up is idempotent (compose up -d no-ops, ensure_* helpers no-op), so
 # this is cheap when the stack is already running.
 if (( $+functions[stack_up] )); then stack_up; fi

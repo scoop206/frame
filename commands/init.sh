@@ -24,13 +24,13 @@ NAME=$_name
 # Uncomment what applies; a project defining none of these still gets
 # \`frame wt\` and \`frame merge\` with sensible defaults.
 #SERVER_CMD='cargo run -p $_name-server'
-#API_PORT=3000  VITE_PORT=5173  HMR_PORT=24678   # base ports; each framelet scans upward
+#API_PORT=3000  VITE_PORT=5173  HMR_PORT=24678   # base ports; each frame scans upward
 #WT_LINKS=(.env web/node_modules)   # gitignored assets symlinked into fresh worktrees
 
 # Bring up everything the dev stack needs — runs on every \`frame wt\` boot, so
 # keep it idempotent. Shared postgres/minio come from frame; only
 # project-unique containers belong in this repo's compose file (pin those with
-# --project-directory "\$MAIN_WT" so every framelet shares one instance).
+# --project-directory "\$MAIN_WT" so every frame shares one instance).
 #stack_up() {
 #  frame_services_up postgres minio
 #  ensure_pg_db $_name
