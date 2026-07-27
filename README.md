@@ -50,12 +50,12 @@ frame merge
 When frame instantiates the nvim instance it injects these user commands
 (defined in `layouts/worktree.lua`), available from any buffer in the session:
 
-| command              | action                                                                              |
-| -------------------- | ----------------------------------------------------------------------------------- |
-| `:FrameStatus TEXT…` | append "- TEXT" to the window title's status suffix (no TEXT clears it)             |
-| `:FrameQuit`         | quit the session only — worktree and branch stay for a later `frame wt TOPIC`       |
-| `:FrameDown`         | tear down the whole frame: quit nvim, remove the worktree, delete the branch        |
-| `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits                   |
+| command              | action                                                                        |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `:FrameStatus TEXT…` | append "- TEXT" to the window title's status suffix (no TEXT clears it)       |
+| `:FrameQuit`         | quit the session only — worktree and branch stay for a later `frame wt TOPIC` |
+| `:FrameDown`         | tear down the whole frame: quit nvim, remove the worktree, delete the branch  |
+| `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits             |
 
 ### Status
 
@@ -119,15 +119,14 @@ Needed only by specific commands or buffers:
 
 Everything project-side lives under one `.frame/` directory:
 
-| path                  | committed?         | contents                                                          |
-| --------------------- | ------------------ | ----------------------------------------------------------------- |
-| `.frame/config.sh`    | yes                | project facts: NAME, ports, SERVER_CMD, `stack_up()`, `app_env()` |
-| `.frame/buffers.json` | optional           | project-unique buffers, merged over frame's registry (see Buffers)|
-| `.frame/worktree.lua` | optional           | project-level layout override                                     |
-| `.frame/local/`       | never (gitignored) | personal overrides — `config.sh`/layouts/buffers here win         |
+| path                  | committed?         | contents                                                           |
+| --------------------- | ------------------ | ------------------------------------------------------------------ |
+| `.frame/config.sh`    | yes                | project facts: NAME, ports, SERVER_CMD, BUFFERS, `stack_up()`, `app_env()` |
+| `.frame/worktree.lua` | optional           | project-level layout override                                      |
+| `.frame/local/`       | never (gitignored) | personal overrides — `config.sh`/layouts here win                  |
 
-Every setting is optional: a config of just `NAME=foo` (or none at all) still gets
-`frame wt` and `frame merge`. Hooks:
+One setting is required: `BUFFERS=(…)` — which buffers this project's frames
+open (see Buffers below). Everything else is optional. Hooks:
 
 - `stack_up()` — bring up whatever the dev stack needs. Runs on every `frame wt`
   boot, so keep it idempotent. Shared postgres/minio come from
@@ -148,27 +147,34 @@ container.
 [`buffers.json`](buffers.json) (frame root) is the registry of every terminal
 buffer a frame can open — the formal superset. Per entry:
 
-| field     | meaning                                                                      |
-| --------- | ---------------------------------------------------------------------------- |
-| `name`    | buffer name (shown in `:ls`, targeted by `BUFFERS`)                          |
+| field     | meaning                                                                                                                                       |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`    | buffer name (shown in `:ls`, targeted by `BUFFERS`)                                                                                           |
 | `mode`    | `durable` auto-runs and drops to a shell on exit (↑ + Enter reruns); `prefill` types the command without running it; `bare` is an empty shell |
-| `command` | template; `${VAR}` is replaced from the environment at boot                  |
-| `dir`     | subdirectory to run in                                                       |
-| `env`     | vars the command reads — a declared contract; frame warns at boot if unset   |
-| `when`    | gate: `{"env": "VAR"}` var non-empty, `{"dir": "path"}` directory exists     |
-| `focus`   | land here after boot                                                         |
+| `command` | the command the buffer runs                                                                                                                   |
+| `dir`     | subdirectory to run in                                                                                                                        |
+| `env`     | vars the command reads — a declared contract; frame warns at boot if unset                                                                    |
+| `focus`   | land here after boot                                                                                                                          |
 
-Which buffers a frame actually opens:
+`BUFFERS=(…)` in `$PROJECT/.frame/config.sh` is required, and authoritative
+even when empty:
 
-- **default** — entries whose `when` gate holds: the classic
-  local/server/vite/ngrok/claude set, driven by SERVER_CMD, `web/`, and the
-  vite port.
-- **explicit** — `BUFFERS=(claude server local)` in `.frame/config.sh`:
-  exactly these, in this order, gates bypassed.
-- **project-unique** — `.frame/buffers.json` merges over the registry by
-  `name`: same name overrides the definition, new names become available
-  (and slot in before the focus buffer) — no need to fork the whole layout
-  for one extra terminal.
+| `BUFFERS` in `$PROJECT/.frame/config.sh` ? | result                                       |
+| ------------------------------------------ | -------------------------------------------- |
+| not set                                    | `frame wt` refuses to boot                   |
+| `BUFFERS=(claude server local)`            | those buffers, as defined in the registry    |
+| `BUFFERS=()`                               | no buffers                                   |
+
+A buffer whose command can't run (no `web/`, unset env var) fails inside
+that buffer, visibly — fix the config or drop it from `BUFFERS`. One
+exception: a buffer whose command comes up empty (say `server` with no
+`SERVER_CMD`) opens as a bare shell.
+
+All definitions live in frame's `buffers.json` — there is no project-level
+registry. A project needing a one-off buffer (say a sidecar's log tail) gets
+its definition added there and lists it in its `BUFFERS`; no other project
+is affected. Names in `BUFFERS` must match registry entries; unknown names
+are skipped with a boot warning.
 
 ## Shared services
 

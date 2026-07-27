@@ -9,10 +9,10 @@
 --   FRAME_NAME        project name
 --   FRAME_TOPIC       worktree topic (branch name)
 --   FRAME_MAIN_WT     primary checkout (reaper cwd for :FrameDown)
---   FRAME_SERVER_CMD  server command (gates the server buffer)
---   FRAME_VITE_PORT   this worktree's vite port (title + ngrok gate/target)
+--   FRAME_SERVER_CMD  server command (the server buffer's template)
+--   FRAME_VITE_PORT   this worktree's vite port (title + ngrok target)
 --   FRAME_PORT_PREFIX project env-var prefix, interpolated in buffers.json
---   FRAME_BUFFERS     explicit buffer pick-list (empty → when-gates decide)
+--   FRAME_BUFFERS     the buffers to open (authoritative; empty → none)
 -- The buffers themselves come from the buffers.json registry (see below).
 -- A project can replace this file wholesale via .frame/worktree.lua or
 -- .frame/local/worktree.lua.
@@ -147,18 +147,20 @@ end
 
 -- ── buffers ──────────────────────────────────────────────────────────────────
 -- Which terminals open is data, not code: $FRAME_ROOT/buffers.json is the
--- ordered registry of every buffer frame supports. Per entry: name; mode
--- (bare | durable | prefill, default durable); command — a template, ${VAR}
+-- single registry of every buffer frame supports — project-unique buffers
+-- are defined there too; there is no project-level registry. Per entry:
+-- name; mode (bare | durable | prefill, default durable); command — ${VAR}
 -- replaced from the environment at boot; optional dir to run in; env — vars
 -- the command reads (a declared contract: unset ones are warned about, never
--- set here); when — gate, {"env": V} var non-empty and/or {"dir": D}
--- directory exists; focus — land here after boot.
+-- set here); focus — land here after boot.
 --
--- A project extends/overrides via .frame/buffers.json (first found wins:
--- .frame/local/ → .frame/ → same chain under the primary checkout). Entries
--- merge by name; new names slot in before the focus buffer. BUFFERS=(…) in
--- config.sh — FRAME_BUFFERS here — picks an exact list instead: its order
--- wins and the when-gates are bypassed.
+-- BUFFERS=(…) in config.sh — FRAME_BUFFERS here, required by frame wt — is
+-- authoritative even when empty: exactly those buffers open, and an empty
+-- list opens none. No conditional gating beyond that: a command
+-- missing its env or dir fails inside its own buffer, visibly. The one
+-- softening: a command that resolves to '' opens as a bare shell (an empty
+-- durable command would be a zsh parse error — a broken buffer, not an
+-- instructive failure).
 
 local function read_json(path)
   if vim.fn.filereadable(path) ~= 1 then return nil end
@@ -175,47 +177,13 @@ end
 
 local buffers = read_json((vim.env.FRAME_ROOT or '') .. '/buffers.json') or {}
 
-local overrides
-for _, dir in ipairs({ '.frame/local', '.frame',
-  main_wt .. '/.frame/local', main_wt .. '/.frame' }) do
-  overrides = read_json(dir .. '/buffers.json')
-  if overrides then break end
-end
-if overrides then
-  -- Replacements first: inserting first would shift indexes under the map.
-  local index = {}
-  for i, b in ipairs(buffers) do index[b.name] = i end
-  local fresh = {}
-  for _, b in ipairs(overrides) do
-    if index[b.name] then buffers[index[b.name]] = b
-    else table.insert(fresh, b) end
-  end
-  -- New names land before the focus buffer so the session still ends there.
-  local at = #buffers + 1
-  for i, b in ipairs(buffers) do
-    if b.focus then at = i; break end
-  end
-  for n, b in ipairs(fresh) do table.insert(buffers, at + n - 1, b) end
-end
-
-local picked = {}
-if (vim.env.FRAME_BUFFERS or '') ~= '' then
-  local index = {}
-  for _, b in ipairs(buffers) do index[b.name] = b end
-  for bname in vim.env.FRAME_BUFFERS:gmatch('[^%s,]+') do
-    if index[bname] then table.insert(picked, index[bname])
-    else
-      vim.notify('frame: BUFFERS names unknown buffer "' .. bname .. '"',
-        vim.log.levels.WARN)
-    end
-  end
-else
-  for _, b in ipairs(buffers) do
-    local gate = b.when or {}
-    if (not gate.env or (vim.env[gate.env] or '') ~= '')
-        and (not gate.dir or vim.fn.isdirectory(gate.dir) == 1) then
-      table.insert(picked, b)
-    end
+local picked, index = {}, {}
+for _, b in ipairs(buffers) do index[b.name] = b end
+for bname in (vim.env.FRAME_BUFFERS or ''):gmatch('[^%s,]+') do
+  if index[bname] then table.insert(picked, index[bname])
+  else
+    vim.notify('frame: BUFFERS names unknown buffer "' .. bname .. '"',
+      vim.log.levels.WARN)
   end
 end
 
@@ -223,22 +191,16 @@ local focus, launched, missing = nil, 0, {}
 for _, b in ipairs(picked) do
   local mode = b.mode or 'durable'
   local cmd = interpolate(b.command or '')
-  if mode ~= 'bare' and cmd == '' then
-    -- Reachable only via an explicit BUFFERS pick of a buffer whose gate env
-    -- is empty (default gating filters these out).
-    vim.notify('frame: buffer "' .. b.name .. '" resolved to an empty command'
-      .. ' — skipped', vim.log.levels.WARN)
-  else
-    if mode == 'durable' then term_durable(b.name, cmd, b.dir)
-    elseif mode == 'prefill' then term_prefill(b.name, cmd)
-    else term(b.name, '') end
-    launched = launched + 1
-    if b.focus then focus = b.name end
-    for _, e in ipairs(b.env or {}) do
-      local var = interpolate(e)
-      if (vim.env[var] or '') == '' then
-        table.insert(missing, b.name .. ' reads $' .. var)
-      end
+  if cmd == '' then mode = 'bare' end
+  if mode == 'durable' then term_durable(b.name, cmd, b.dir)
+  elseif mode == 'prefill' then term_prefill(b.name, cmd)
+  else term(b.name, '') end
+  launched = launched + 1
+  if b.focus then focus = b.name end
+  for _, e in ipairs(b.env or {}) do
+    local var = interpolate(e)
+    if (vim.env[var] or '') == '' then
+      table.insert(missing, b.name .. ' reads $' .. var)
     end
   end
 end

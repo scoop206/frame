@@ -16,10 +16,9 @@ SERVER_CMD='cargo run -p shared-services-server'
 # projects' primary envs side by side and want predictable ports.
 API_PORT=3000  VITE_PORT=5173  HMR_PORT=24678
 
-# Buffers: left unset, the when-gates in frame's buffers.json decide — this
-# config yields local/server/vite/ngrok/claude. Uncomment to pin an exact
-# list (order preserved, gates bypassed):
-#BUFFERS=(claude server vite local)
+# Required: which buffers each frame opens (definitions live in frame's
+# buffers.json).
+BUFFERS=(local server vite ngrok claude)
 
 # Runs on every `frame wt` boot (idempotent). Shared postgres/minio come from
 # frame — no project-unique containers. ensure_pg_db / ensure_minio_bucket

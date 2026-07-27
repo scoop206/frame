@@ -9,15 +9,13 @@ integration; there is nothing else to wire up.
 | ------------------------------------ | ------------------------------------------------------------------------- |
 | [`barebones/`](barebones)            | the minimum: `config.sh` with just `NAME`                                 |
 | [`shared-services/`](shared-services)| a project using the shared postgres/minio (`stack_up()` + `app_env()`)    |
-| [`sidecar/`](sidecar)                | additionally running its own project-unique container, plus a custom buffer for its logs |
+| [`sidecar/`](sidecar)                | additionally running its own project-unique container from its compose file |
 
 ### barebones
 
-One file, one line that matters. `frame wt` and `frame merge` work with just
-a name; with no `SERVER_CMD`, no `web/`, and no ports, the when-gates in
-frame's `buffers.json` skip the server/vite/ngrok buffers automatically —
-every frame gets just `local` and `claude`. This is exactly how an infra/docs
-repo plugs in.
+Two lines that matter: the name, and the required `BUFFERS=(claude local)` —
+this project has nothing to run in server/vite/ngrok, so it doesn't list
+them. This is exactly how an infra/docs repo plugs in.
 
 ### shared-services
 
@@ -53,12 +51,13 @@ These aren't frame-assigned values — they come from your project:
 - A project with no web app or server just omits all of these (see
   `barebones`) — no ports are scanned or exported.
 
-The same values drive which buffers each frame opens: `SERVER_CMD` gates the
-`server` buffer, a `web/` directory gates `vite`, and the port config gates
-`ngrok` — the `when` clauses in frame's [`buffers.json`](../buffers.json)
-registry (see the main README's Buffers section). To pin an exact list
-instead, set `BUFFERS=(…)` in `config.sh` — the commented line in this
-example shows how.
+Buffer selection is separate from these values and fully explicit: the
+required `BUFFERS=(…)` in `config.sh` lists exactly the buffers each frame
+opens, chosen from the definitions in frame's
+[`buffers.json`](../buffers.json) (see the main README's Buffers section).
+Nothing is gated on the values above; a `server` buffer with no `SERVER_CMD`
+opens as a bare shell, a `vite` buffer without `web/` fails visibly in its
+buffer, and you either fill in the config or drop the buffer from `BUFFERS`.
 
 ### sidecar
 
@@ -72,11 +71,19 @@ multiplying across frames:
   so every frame shares one instance instead of each worktree deriving its
   own compose project and fighting over the port.
 
-It also ships a `.frame/buffers.json`: a project-unique `worker-logs` buffer
-tailing the sidecar's logs. Project entries merge over frame's registry by
-name, so this buffer appears in every frame (slotted before `claude`) without
-forking the whole `worktree.lua` layout — and `${FRAME_MAIN_WT}` in its
-command is interpolated at boot, pointing compose at the shared instance.
+If you wanted a buffer tailing the sidecar's logs, its definition goes
+_upstream_ — all buffer definitions live in frame's own `buffers.json`;
+there is no project-level registry:
+
+```json
+{ "name": "worker-logs",
+  "mode": "durable",
+  "command": "docker compose --project-directory ${FRAME_MAIN_WT} logs -f worker" }
+```
+
+…and this project adds it to its list — `BUFFERS=(local server vite ngrok
+worker-logs claude)`. No other project is affected: buffers open only where
+`BUFFERS` names them.
 
 ## Setting up the shared containers
 
