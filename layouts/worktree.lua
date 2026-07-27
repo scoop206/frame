@@ -43,20 +43,6 @@ vim.api.nvim_create_user_command('FrameStatus', function(opts)
   _G.FrameSetStatus(opts.args)
 end, { nargs = '*', desc = 'Set window-title status suffix (empty clears)' })
 
--- Canned statuses — one zero-arg command each, e.g. :FrameShipped.
--- (:FrameStatus with no text clears any of them.)
-local canned = {
-  Shipped  = 'SHIPPED',
-  Deployed = 'DEPLOYED. Waiting verification',
-  Review   = 'NEEDS REVIEW',
-  Blocked  = 'BLOCKED',
-}
-for cmd, status in pairs(canned) do
-  vim.api.nvim_create_user_command('Frame' .. cmd, function()
-    _G.FrameSetStatus(status)
-  end, { desc = 'Set window-title status: ' .. status })
-end
-
 -- Register a named socket so `frame wt -d TOPIC` can send :qa! remotely.
 vim.fn.serverstart('/tmp/' .. name .. '-' .. topic .. '.nvim')
 

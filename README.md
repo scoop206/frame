@@ -52,9 +52,7 @@ append a free-text status to it so parallel frames show where they're at:
 - in any terminal buffer (including claude): `frame status DEPLOYED. Waiting verification`
 - in nvim: `:FrameStatus DEPLOYED. Waiting verification`
 
-Either with no text clears back to the base title. Canned zero-arg variants
-exist for the common lifecycle points: `:FrameShipped`, `:FrameDeployed`,
-`:FrameReview`, `:FrameBlocked`.
+Either with no text clears back to the base title.
 
 The CLI form works by RPC over the frame's nvim socket (nvim owns the title),
 so it also works from outside the frame while its session is up.
