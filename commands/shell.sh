@@ -15,16 +15,16 @@ if (( $# != 1 )) || [[ "$1" == -* ]]; then
 fi
 TOPIC=$1
 if [[ "$TOPIC" == */* ]]; then
-  echo "✗ frame shell: TOPIC becomes a directory name — no slashes" >&2
+  echo "$X_MARK frame shell: TOPIC becomes a directory name — no slashes" >&2
   exit 2
 fi
 
 NAME=shell
 DIR="${FRAME_SHELL_HOME:-$HOME/frames}/$TOPIC"
 if [[ -d "$DIR" ]]; then
-  echo "✓ directory $DIR already exists — reusing"
+  echo "$OK_MARK directory $DIR already exists — reusing"
 else
-  echo "▶ creating $DIR…"
+  echo "$RUN_MARK creating $DIR…"
   mkdir -p "$DIR"
 fi
 cd "$DIR"
@@ -35,7 +35,7 @@ cd "$DIR"
 # file (however it got there) is left alone.
 if [[ ! -f .claude/settings.json ]]; then
   frame_write_claude_hooks
-  echo "✓ wired claude hooks (.claude/settings.json) — Stop → frame notify"
+  echo "$OK_MARK wired claude hooks (.claude/settings.json) — Stop → frame notify"
 fi
 
 set_title "$NAME/$TOPIC"

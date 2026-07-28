@@ -4,6 +4,23 @@
 
 FRAME_SERVICES_COMPOSE="$FRAME_ROOT/services/docker-compose.yml"
 
+# ── status markers ────────────────────────────────────────────────────────────
+# Colored only when the stream is a terminal (✗ prints to stderr, ✓/▶ to
+# stdout) and NO_COLOR is unset — piped output, logs, and the worktree.lua
+# teardown watcher keep seeing the bare characters.
+if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then
+  X_MARK=$'\e[1;31m✗\e[0m'
+else
+  X_MARK='✗'
+fi
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  OK_MARK=$'\e[32m✓\e[0m'
+  RUN_MARK=$'\e[36m▶\e[0m'
+else
+  OK_MARK='✓'
+  RUN_MARK='▶'
+fi
+
 # ── project discovery ─────────────────────────────────────────────────────────
 
 frame_project_root() {
@@ -25,7 +42,7 @@ frame_load_config() {
   #   <primary checkout>/.frame/…              (fallback: a worktree created
   #                                             before .frame was committed)
   PROJECT_ROOT=$(frame_project_root) || {
-    echo "✗ frame: not inside a git repository" >&2
+    echo "$X_MARK frame: not inside a git repository" >&2
     return 1
   }
   MAIN_WT=$(frame_main_wt "$PROJECT_ROOT")
@@ -57,7 +74,7 @@ frame_resolve() {
   if [[ -f "$FRAME_ROOT/layouts/$_f" ]]; then
     echo "$FRAME_ROOT/layouts/$_f"; return 0
   fi
-  echo "✗ frame: no $_f found (project override or $FRAME_ROOT/layouts)" >&2
+  echo "$X_MARK frame: no $_f found (project override or $FRAME_ROOT/layouts)" >&2
   return 1
 }
 
@@ -109,7 +126,7 @@ set_title() {
 
 ensure_docker() {
   if ! docker info >/dev/null 2>&1; then
-    echo "▶ starting OrbStack…"
+    echo "$RUN_MARK starting OrbStack…"
     open -a OrbStack
     until docker info >/dev/null 2>&1; do sleep 0.5; done
   fi
@@ -119,9 +136,9 @@ frame_services_up() {
   # frame_services_up [postgres] [minio] — start (default: both) and wait ready.
   ensure_docker
   if (( $# == 0 )); then set -- postgres minio; fi
-  echo "▶ starting shared services: $*…"
+  echo "$RUN_MARK starting shared services: $*…"
   if ! docker compose -f "$FRAME_SERVICES_COMPOSE" up -d "$@"; then
-    echo "✗ frame services failed to start. If a port is taken, an old" >&2
+    echo "$X_MARK frame services failed to start. If a port is taken, an old" >&2
     echo "  per-project stack may still be running (its minio binds :9000):" >&2
     docker ps --format '  {{.Names}}  {{.Ports}}' | grep -E '5432|9000|9001' >&2 || true
     return 1
@@ -136,20 +153,20 @@ frame_services_up() {
 }
 
 wait_for_pg() {
-  echo "▶ waiting for postgres…"
+  echo "$RUN_MARK waiting for postgres…"
   until docker compose -f "$FRAME_SERVICES_COMPOSE" exec -T postgres \
         pg_isready -U frame -d frame >/dev/null 2>&1; do
     sleep 0.5
   done
-  echo "✓ postgres ready"
+  echo "$OK_MARK postgres ready"
 }
 
 wait_for_url() {
   # wait_for_url URL [LABEL]
   local _url=$1 _label=${2:-$1}
-  echo "▶ waiting for $_label…"
+  echo "$RUN_MARK waiting for $_label…"
   until curl -sf "$_url" >/dev/null 2>&1; do sleep 0.5; done
-  echo "✓ $_label ready"
+  echo "$OK_MARK $_label ready"
 }
 
 ensure_pg_db() {
@@ -162,11 +179,11 @@ ensure_pg_db() {
          psql -U frame -d frame -v ON_ERROR_STOP=1 -qAt)
   if [[ "$("${_psql[@]}" -c "SELECT 1 FROM pg_roles WHERE rolname='$_db'")" != 1 ]]; then
     "${_psql[@]}" -c "CREATE ROLE \"$_db\" LOGIN PASSWORD '$_pass'" >/dev/null
-    echo "✓ created role $_db"
+    echo "$OK_MARK created role $_db"
   fi
   if [[ "$("${_psql[@]}" -c "SELECT 1 FROM pg_database WHERE datname='$_db'")" != 1 ]]; then
     "${_psql[@]}" -c "CREATE DATABASE \"$_db\" OWNER \"$_db\"" >/dev/null
-    echo "✓ created database $_db"
+    echo "$OK_MARK created database $_db"
   fi
 }
 
@@ -175,7 +192,7 @@ ensure_minio_bucket() {
   local _b=$1
   docker compose -f "$FRAME_SERVICES_COMPOSE" run --rm mc \
     mb --ignore-existing "local/$_b" >/dev/null 2>&1
-  echo "✓ bucket $_b"
+  echo "$OK_MARK bucket $_b"
 }
 
 # ── misc ──────────────────────────────────────────────────────────────────────

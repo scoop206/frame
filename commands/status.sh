@@ -31,7 +31,7 @@ fi
 
 SOCKET="/tmp/$NAME-$TOPIC.nvim"
 if [[ ! -S "$SOCKET" ]]; then
-  echo "✗ no frame session for $NAME/$TOPIC (no socket at $SOCKET)" >&2
+  echo "$X_MARK no frame session for $NAME/$TOPIC (no socket at $SOCKET)" >&2
   exit 1
 fi
 
@@ -39,9 +39,9 @@ fi
 TEXT="$*"
 _esc=${TEXT//\'/\'\'}
 if _title=$(nvim --server "$SOCKET" --remote-expr "v:lua.FrameSetStatus('$_esc')"); then
-  echo "✓ title: $_title"
+  echo "$OK_MARK title: $_title"
 else
-  echo "✗ session at $SOCKET didn't accept the update — layout predates" >&2
+  echo "$X_MARK session at $SOCKET didn't accept the update — layout predates" >&2
   echo "  FrameSetStatus? Reboot the frame (:FrameQuit, then frame wt $TOPIC)" >&2
   exit 1
 fi
