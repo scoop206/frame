@@ -1,6 +1,8 @@
 # frame scaffold — scaffold a project's .frame/ directory:
-#   .frame/config.sh   committed project facts (template, edit to fit)
-#   .frame/local/      personal overrides + state — appended to .gitignore
+#   .frame/config.sh        committed project facts (template, edit to fit)
+#   .frame/local/           personal overrides + state — appended to .gitignore
+#   .claude/settings.json   claude-code hooks: `frame notify` when a turn ends,
+#                           clear the title status when the next prompt lands
 # Idempotent: existing files are left alone, the gitignore entry is added once.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
@@ -47,6 +49,41 @@ BUFFERS=(claude local)
 #}
 EOF
   echo "✓ scaffolded .frame/config.sh — edit it to fit the project"
+fi
+
+if [[ -f .claude/settings.json ]]; then
+  echo "✓ .claude/settings.json already exists — leaving it alone"
+  echo "  (for notifications, add hooks yourself: Stop → 'frame notify',"
+  echo "   UserPromptSubmit → 'frame status')"
+else
+  mkdir -p .claude
+  cat > .claude/settings.json <<'EOF'
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "frame notify >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "frame status >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+  echo "✓ scaffolded .claude/settings.json — claude notifies via 'frame notify'"
 fi
 
 if [[ -f .gitignore ]] && grep -qxF '.frame/local/' .gitignore; then
