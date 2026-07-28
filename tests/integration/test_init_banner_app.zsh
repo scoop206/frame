@@ -5,7 +5,8 @@
 # the grant. A fake brew ahead of the suite's failing stub supplies a
 # skeletal-but-buildable source app; the real sips/iconutil/PlistBuddy/
 # codesign toolchain runs against it (killall is stubbed, and the bundle's
-# fake binary makes the post-build self-test a guarded no-op).
+# fake binary makes the post-build self-test a guarded no-op). That toolchain
+# only exists on macOS, so the build tests skip elsewhere.
 source "${${(%):-%x}:A:h:h}/helpers/harness.zsh"
 
 APP_DIR() { print -r -- "$HOME/.local/share/frame/Frame.app"; }
@@ -34,6 +35,7 @@ EOF
 }
 
 test_first_init_builds_then_reinit_skips() {
+  [[ $OSTYPE == darwin* ]] || { skip "banner-app build needs the macOS toolchain"; return }
   make_repo
   plant_brew_and_source
   run_frame init
@@ -48,6 +50,7 @@ test_first_init_builds_then_reinit_skips() {
 }
 
 test_changed_input_rebuilds_on_next_init() {
+  [[ $OSTYPE == darwin* ]] || { skip "banner-app build needs the macOS toolchain"; return }
   make_repo
   plant_brew_and_source
   run_frame init
