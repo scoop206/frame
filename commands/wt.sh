@@ -209,8 +209,4 @@ export SERVER_CMD="${SERVER_CMD:-}"
 export PORT_PREFIX
 
 layout=$(frame_resolve worktree.lua)
-if [[ "${FRAME_NO_NVIM:-0}" == 1 ]]; then
-  echo "✓ worktree ready (nvim skipped) — layout: $layout"
-else
-  exec nvim -S "$layout"
-fi
+exec nvim -S "$layout"

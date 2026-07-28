@@ -1,0 +1,17 @@
+#!/usr/bin/env zsh
+# Test stub for nvim. `frame wt` ends in `exec nvim -S <layout>`, so in tests
+# this stub BECOMES the frame process — its exit code is what frame returns.
+#
+# With FAKE_NVIM_LOG set: record how nvim was invoked (argv, cwd, the env
+# frame exported) and exit 0.
+# Without it: tripwire — no test should reach an editor launch unannounced.
+if [[ -n "${FAKE_NVIM_LOG:-}" ]]; then
+  {
+    print -r -- "argv: $*"
+    print -r -- "cwd: $PWD"
+    env | grep -E '^(FRAME_|PORT=|PORT_PREFIX=|SERVER_CMD=|[A-Z0-9_]+_(API|VITE|HMR)_PORT=)' | sort
+  } > "$FAKE_NVIM_LOG"
+  exit 0
+fi
+print -r -- "✗ test stub: unexpected nvim invocation: nvim $*" >&2
+exit 97

@@ -1,0 +1,4 @@
+#!/usr/bin/env zsh
+# Test stub tripwire — ensure_docker's `open -a OrbStack` must never fire.
+print -r -- "✗ test stub: unexpected open invocation: open $*" >&2
+exit 97
