@@ -12,7 +12,9 @@ An opinionated AI harness based around:
 Run from inside any project checkout:
 
 ```
-frame init                 scaffold .frame/config.sh, gitignore .frame/local/
+frame init                 scaffold .frame/config.sh, gitignore .frame/local/;
+                           first init also builds the banner app (frame icon +
+                           click-to-focus banners)
 frame wt TOPIC             create/reuse branch TOPIC + worktree ../_<name>-TOPIC, boot it
 frame wt                   boot the worktree you're already in
 frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
@@ -24,7 +26,6 @@ frame status [TEXT…]       append "- TEXT" to this frame's window title (no TE
 frame notify [TEXT…]       macOS banner + the same title status (default "⏸ waiting")
 frame notify on|off        global banner switch: off silences every frame's banners
 frame focus [NAME/TOPIC]   raise that frame's ghostty window (default: the one you're in)
-frame notifier             build the banner app: frame icon + click-to-focus banners
 ```
 
 `worktree` is accepted as a synonym for `wt`.
@@ -131,8 +132,9 @@ Needed only by specific commands or buffers:
 - node + npm (the `vite` buffer, when the project has `web/`)
 - ngrok (optional; prefilled, never auto-run)
 - ghostty + Raycast (optional; window fuzzy find)
-- homebrew + terminal-notifier (optional; auto-installed by `frame notifier`
-  for frame-icon, click-to-focus banners)
+- homebrew + terminal-notifier (optional; `brew install terminal-notifier`,
+  then `frame init` builds the frame-icon, click-to-focus banner app —
+  without them, plain osascript banners still fire)
 
 ## How a project plugs in
 

@@ -1,0 +1,4 @@
+#!/usr/bin/env zsh
+# Test stub for killall — the suite must never kill the user's real
+# processes (notifier.sh restarts NotificationCenter after a rebuild).
+exit 0
