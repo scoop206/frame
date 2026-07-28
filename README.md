@@ -22,6 +22,8 @@ frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame services [up|down|ps]            manage the shared postgres/minio stack
 frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears)
 frame notify [TEXT…]       macOS banner + the same title status (default "⏸ waiting")
+frame focus [NAME/TOPIC]   raise that frame's ghostty window (default: the one you're in)
+frame notifier             build the banner app: frame icon + click-to-focus banners
 ```
 
 `worktree` is accepted as a synonym for `wt`.
@@ -98,6 +100,18 @@ exits 0, so it's safe as a hook target.
 - **UserPromptSubmit** → `frame status` — sending the next prompt clears the
   status back to the base title
 
+Out of the box the banner goes through `osascript`, which means Script
+Editor's icon and a click that opens Script Editor. `frame notifier` fixes
+both: it builds `~/.local/share/frame/Frame.app` — a rebranded copy of
+[terminal-notifier](https://github.com/julienXX/terminal-notifier) (fetched
+via brew) wearing the frame vortex as its icon — and `frame notify` prefers
+it automatically once built. Banners then show the frame icon, and clicking
+one runs `frame focus` on the emitting frame, raising its ghostty window
+(that's also `frame focus [NAME/TOPIC]` from any terminal). Two one-time
+grants, both prompted on first use: allow notifications for "Frame", and
+Accessibility for the exact-window raise — without the latter a click still
+surfaces ghostty, just not the specific window.
+
 When a frame gets too chatty — a long conversational session, say — mute it
 with `:FrameNotify off` (`on` unmutes; bare `:FrameNotify` shows the state).
 The switch lives in that session's nvim and dies with it, so each parallel
@@ -157,6 +171,8 @@ Needed only by specific commands or buffers:
 - node + npm (the `vite` buffer, when the project has `web/`)
 - ngrok (optional; prefilled, never auto-run)
 - ghostty + Raycast (optional; window fuzzy find)
+- homebrew + terminal-notifier (optional; auto-installed by `frame notifier`
+  for frame-icon, click-to-focus banners)
 
 ## How a project plugs in
 
