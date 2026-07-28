@@ -65,8 +65,8 @@ frame_load_config() {
 
 # ── machine-global config ─────────────────────────────────────────────────────
 # ~/.local/share/frame/config — key=value settings that apply to every
-# project's frames on this machine (today just notify=on|off, the global
-# banner switch; future machine-wide settings belong here too). Under $HOME
+# project's frames on this machine (notify=on|off, the global banner switch;
+# yolo=on|off, the claude permissions switch). Under $HOME
 # rather than FRAME_ROOT because, like the notifier app, machine state must
 # not shift between frame worktrees. Plain key=value rather than sourced
 # shell so hook-path reads never execute anything.
@@ -102,6 +102,19 @@ frame_global_set() {
   done
   (( _found )) || _lines+=("$_k=$_v")
   print -rl -- "${_lines[@]}" > "$FRAME_GLOBAL_CONFIG"
+}
+
+frame_export_claude_flags() {
+  # The claude buffer's command (buffers.json) reads ${FRAME_CLAUDE_FLAGS}.
+  # Empty — plain `claude`, normal permission prompts — unless the machine's
+  # yolo switch is on (`frame yolo on`), which adds
+  # --dangerously-skip-permissions to every frame's claude. Called by each
+  # boot path (wt.sh, shell.sh) just before exec'ing the layout.
+  if [[ "$(frame_global_get yolo)" == on ]]; then
+    export FRAME_CLAUDE_FLAGS="--dangerously-skip-permissions"
+  else
+    export FRAME_CLAUDE_FLAGS=""
+  fi
 }
 
 # ── claude-code hooks ─────────────────────────────────────────────────────────

@@ -27,6 +27,8 @@ frame services [up|down|ps]            manage the shared postgres/minio stack
 frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears)
 frame notify [TEXT…]       macOS banner + the same title status (default "⏸ waiting")
 frame notify on|off        global banner switch: off silences every frame's banners
+frame yolo on|off          master switch: claude in every frame launches with
+                           --dangerously-skip-permissions (default off)
 frame focus [NAME/TOPIC]   raise that frame's ghostty window (default: the one you're in)
 ```
 
@@ -175,7 +177,7 @@ add a .frame directory to the projects w/ optional components see below.
 - zsh
 - git ≥ 2.5
 - neovim (no plugins required)
-- claude (Claude Code CLI) — WARNING: `--dangerously-skip-permissions` is always on
+- claude (Claude Code CLI) — permission prompts stay on unless you opt in with `frame yolo on`
 - docker with the compose v2 plugin
 - macOS + OrbStack (any docker provider works if already running; auto-start is OrbStack-only)
 - curl, lsof

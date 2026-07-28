@@ -19,6 +19,6 @@
 
   { "name": "claude",
     "mode": "durable",
-    "command": "claude --dangerously-skip-permissions",
+    "command": "claude ${FRAME_CLAUDE_FLAGS}",
     "focus": true }
 ]
