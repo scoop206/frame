@@ -12,7 +12,7 @@ An opinionated AI harness based around:
 Run from inside any project checkout:
 
 ```
-frame scaffold             scaffold .frame/config.sh, gitignore .frame/local/
+frame init                 scaffold .frame/config.sh, gitignore .frame/local/
 frame wt TOPIC             create/reuse branch TOPIC + worktree ../_<name>-TOPIC, boot it
 frame wt                   boot the worktree you're already in
 frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
@@ -93,7 +93,7 @@ so it also works from outside the frame while its session is up.
 window-title status as `frame status`. Both are best-effort and it always
 exits 0, so it's safe as a hook target.
 
-`frame scaffold` wires it into a project's `.claude/settings.json`:
+`frame init` wires it into a project's `.claude/settings.json`:
 
 - **Stop** → `frame notify` — every time claude ends a turn you get a banner
   and the title gains "- ⏸ waiting"

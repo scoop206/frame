@@ -2,7 +2,7 @@
 
 Three fictional projects showing what a committed `.frame/` directory looks
 like, from nothing to a project with its own container. Copy the closest one
-into your repo (or run `frame scaffold` and edit) — the config is the whole
+into your repo (or run `frame init` and edit) — the config is the whole
 integration; there is nothing else to wire up.
 
 | example                              | shows                                                                     |
@@ -27,7 +27,7 @@ standard ports. The server happens to be Rust here, but that's incidental —
 `SERVER_CMD` is any command that starts a server (Go, Node, Python, …); only
 the shape matters: claim a tenant in `stack_up()`, point the app at it in
 `app_env()`. The `.gitignore` line for `.frame/local/` is what
-`frame scaffold` adds — personal overrides live there, never committed.
+`frame init` adds — personal overrides live there, never committed.
 
 #### Choosing `SERVER_CMD` and the ports
 

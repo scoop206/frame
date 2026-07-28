@@ -29,7 +29,7 @@ else
 fi
 cd "$DIR"
 
-# No repo → no `frame scaffold` — wire the claude-code notification hooks
+# No repo → no `frame init` — wire the claude-code notification hooks
 # here instead, or a casual claude never fires Stop → frame notify. Runs on
 # reuse boots too, so dirs created before this existed get it; an existing
 # file (however it got there) is left alone.

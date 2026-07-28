@@ -1,4 +1,4 @@
-# frame scaffold — scaffold a project's .frame/ directory:
+# frame init — scaffold a project's .frame/ directory:
 #   .frame/config.sh        committed project facts (template, edit to fit)
 #   .frame/local/           personal overrides + state — appended to .gitignore
 #   .claude/settings.json   claude-code hooks: `frame notify` when a turn ends,
