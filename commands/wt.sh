@@ -196,7 +196,7 @@ fi
 
 if (( $+functions[app_env] )); then app_env; fi
 
-# Layout parameters — read by layouts/worktree.lua (or a project override).
+# Layout parameters — read by layouts/worktree.lua.
 export FRAME_NAME="$NAME"
 export FRAME_TOPIC="$TOPIC"
 export FRAME_MAIN_WT="$MAIN_WT"
@@ -208,5 +208,4 @@ export FRAME_BUFFERS="${BUFFERS[*]}"
 export SERVER_CMD="${SERVER_CMD:-}"
 export PORT_PREFIX
 
-layout=$(frame_resolve worktree.lua)
-exec nvim -S "$layout"
+exec nvim -S "$FRAME_ROOT/layouts/worktree.lua"

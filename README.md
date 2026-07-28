@@ -9,7 +9,7 @@ An opinionated AI harness based around:
 
 ![A frame session: a vortex of frames (many ghostty windows with neovim buffer list in them ](assets/frame_vortex3.png)
 
-Run from inside any project checkout:
+Run from a project:
 
 ```
 frame scaffold             scaffold .frame/config.sh, gitignore .frame/local/
@@ -26,6 +26,23 @@ frame notify [TEXT…]       macOS banner + the same title status (default "⏸ 
 
 `worktree` is accepted as a synonym for `wt`.
 
+### Features
+
+- **A frame per feature** — every topic gets its own branch, worktree, port, and
+  window; `frame wt TOPIC` initiates.
+- **Parallel sessions you can tell apart** — `repo/topic :port` window titles,
+  free-text status suffixes, Raycast fuzzy-find.
+- **Claude notifications** — banner + title status when a turn ends,
+  cleared on your next prompt, mutable per session.
+- **Shared postgres + minio** — one multi-tenant stack on standard ports for
+  all projects; whichever frame boots first brings it up.
+- **Whole lifecycle in three commands** — `frame wt` to open, `frame merge` to
+  land, `frame wt -d` to tear down, guarded against losing unmerged work.
+- **One tiny integration surface** — a project plugs in with a single
+  `.frame/config.sh`; local overrides stay out of the repo.
+- **Plain tools** — stock neovim (no plugins), zsh, git worktrees. Clone, add
+  to PATH, go.
+
 ### Frames
 
 A frame is a terminal window running neovim as it's buffer management layer.
@@ -35,6 +52,11 @@ Frames assumes a 1:1:1 mapping between a frame:worktree:branch.
 All work happens in topic worktrees, each are self-sufficient peer — `frame wt` runs the
 project's idempotent `stack_up()`, so whichever frame boots first brings up
 the shared services.
+
+Worktrees are created beside the primary checkout as `../_<name>-<topic>`.
+The leading underscore marks them as frame-managed and keeps them sorted
+together in the parent directory; frame also parses the name to infer the
+topic when you run `frame wt` (or `frame wt -d`) from inside one.
 
 `frame wt TOPIC` is the typical entrypoint.
 
@@ -48,12 +70,6 @@ This starts neovim w/ custom layout which is usually 4 buffers:
 
 The ghostty window will now be named $REPO/$TOPIC:PORT
 You can see vite's rendered web app at http://localhost:PORT
-
-When you are done working on the feature you (or claude) can merge to main:
-
-```
-frame merge
-```
 
 ### Vim commands
 
@@ -69,20 +85,6 @@ When frame instantiates the nvim instance it injects these user commands
 | `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits             |
 
 In a casual frame (`frame shell`) `:FrameDown!` quits and deletes the topic
-directory; plain `:FrameDown` always refuses, since nothing there is under git.
-
-### Status
-
-The window title's base — `$REPO/$TOPIC :PORT` — never changes, but you can
-append a free-text status to it so parallel frames show where they're at:
-
-- in any terminal buffer (including claude): `frame status DEPLOYED. Waiting verification`
-- in nvim: `:FrameStatus DEPLOYED. Waiting verification`
-
-Either with no text clears back to the base title.
-
-The CLI form works by RPC over the frame's nvim socket (nvim owns the title),
-so it also works from outside the frame while its session is up.
 
 ### Notifications
 
@@ -112,22 +114,50 @@ even with muting, the intended fix is a duration gate in `frame notify`
 (stamp turn start on UserPromptSubmit, skip the banner for turns under a
 couple of minutes) — one place, all projects.
 
-### Frame Removal
+### Frame Merge
 
-To merely close the session — keeping the worktree and branch for a later
-`frame wt TOPIC` — use `:FrameQuit` (≡ `:qa!`).
+When you are done working on the feature you (or claude) can merge to main —
+from wherever you are:
+
+```
+frame merge                merge the current worktree's branch
+frame merge TOPIC          merge branch TOPIC
+frame merge TOPIC --push   …and push main to origin afterward
+frame merge --ff           fast-forward instead of a merge commit
+frame merge -n             dry run: print the plan, change nothing
+```
+
+The worktrees share one object store, so the primary checkout already sees
+every topic branch. `frame merge` drives that primary worktree via `git -C`:
+fast-forward main to origin, merge the topic branch, and (only when asked)
+push — all without leaving whichever worktree you're in.
+
+Safeguards, in the order they run:
+
+- **Primary must be clean** — refuses if the primary worktree has uncommitted
+  tracked changes on main.
+- **Uncommitted topic work is flagged** — only the committed branch tip gets
+  merged, so a warning calls out anything uncommitted in the topic worktree
+  that would be silently left out.
+- **No guessing on divergence** — main is brought level with origin first
+  (fast-forward only); if main and origin have diverged, it stops and leaves
+  the reconciliation to you.
+- **Conflicts stop cleanly** — on a merge conflict it halts and prints the
+  exact `merge --abort` to back out.
+- **Push is opt-in** — nothing touches origin unless you pass `--push`.
+
+Worktree and branch cleanup stays with `frame wt -d` (below).
+
+### Frame Removal
 
 Tear down from _inside_ the frame — either entry point works:
 
 - in nvim: `:FrameDown`
 - in any terminal buffer: `frame wt -d`
 
-Both hand the teardown to a detached reaper rooted in the primary checkout.
-It sends `:qa!` to the nvim session (works from terminal-insert mode, and the
-`!` bypasses vimrc quit guards), waits for nvim to actually exit, then removes
-the worktree and deletes the branch.
-
 From outside (base terminal or another frame): `frame wt -d TOPIC`.
+
+#### Teardown Safeguards
 
 Teardown refuses if the worktree has uncommitted changes or the branch has
 commits not yet on main — merge first (`frame merge`), or force with
@@ -137,7 +167,8 @@ quit, so a refusal never leaves you editor-less. Reaper output lands in
 
 ### Install
 
-Clone this repo alongside your projects.  
+Clone this repo (location does not matter)  
+Check the dependcies (see below).  
 put `/path/to/frame/bin/` on your PATH.  
 add a .frame directory to the projects w/ optional components see below.
 
@@ -151,24 +182,31 @@ add a .frame directory to the projects w/ optional components see below.
 - macOS + OrbStack (any docker provider works if already running; auto-start is OrbStack-only)
 - curl, lsof
 
-Needed only by specific commands or buffers:
+### Recommended
 
-- node + npm (the `vite` buffer, when the project has `web/`)
-- ngrok (optional; prefilled, never auto-run)
-- ghostty + Raycast (optional; window fuzzy find)
+- Ghostty - was the terminal Frame was built with so for others your MMV
+- Raycast - window fuzzy find allows you to leverage the WAITING and TOPIC name of your frames
 
 ## How a project plugs in
 
 Everything project-side lives under one `.frame/` directory:
 
-| path                  | committed?         | contents                                                                   |
-| --------------------- | ------------------ | -------------------------------------------------------------------------- |
-| `.frame/config.sh`    | yes                | project facts: NAME, ports, SERVER_CMD, BUFFERS, `stack_up()`, `app_env()` |
-| `.frame/worktree.lua` | optional           | project-level layout override                                              |
-| `.frame/local/`       | never (gitignored) | personal overrides — `config.sh`/layouts here win                          |
+| path               | committed?         | contents                                                                                                                           |
+| ------------------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `.frame/config.sh` | yes                | project facts:<br>`NAME=`<br>`SERVER_CMD=`<br>`API_PORT=` `VITE_PORT=` `HMR_PORT=`<br>`BUFFERS=(…)`<br>`stack_up()`<br>`app_env()` |
+| `.frame/local/`    | never (gitignored) | personal overrides — a `config.sh` here wins                                                                                       |
 
-One setting is required: `BUFFERS=(…)` — which buffers this project's frames
-open (see Buffers below). Everything else is optional. Hooks:
+### config.sh
+
+config: `NAME`
+required: yes  
+value: the project name; window titles, worktree dirs, and PORT_PREFIX derive from it
+
+config: `BUFFERS(...)`
+required: yes
+value: which buffers this project's frames open, e.g. BUFFERS=(claude local) — see Buffers below
+
+Hooks:
 
 - `stack_up()` — bring up whatever the dev stack needs. Runs on every `frame wt`
   boot, so keep it idempotent. Shared postgres/minio come from
@@ -176,20 +214,25 @@ open (see Buffers below). Everything else is optional. Hooks:
   project-unique containers belong in the project's own compose file — pin
   those with `--project-directory "$MAIN_WT"` so every frame shares one
   instance instead of spawning a per-worktree compose project.
-- `app_env()` — export the vars pointing the app at what frame set up: the
+- `app_env()` — export the vars pointing the app at what Frame set up: the
   shared services (`DATABASE_URL`, S3 endpoint, …) and, if your app reads its
   port under a name other than the `PORT` frame tracks (see `buffers.json`),
   a re-export of it here (e.g. `export SERVICE_PORT="$PORT"`). Exported vars
   win over `.env` (dotenvy never overrides the environment).
 
+### Example
+
 See [`examples/`](examples) for complete `.frame/` directories at three
 sizes — name-only, the standard web stack, and a project running its own
 container.
 
-## Buffers
+## Buffer Definitions
 
 [`buffers.json`](buffers.json) (frame root) is the registry of every terminal
-buffer a frame can open — the formal superset. Per entry:
+buffer a frame can open — the formal superset.
+Every buffer type a project can instantiate needs to be in Frame registry.
+
+Per entry:
 
 | field     | meaning                                                                                                                                       |
 | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -200,39 +243,12 @@ buffer a frame can open — the formal superset. Per entry:
 | `env`     | vars the command reads — a declared contract; frame warns at boot if unset                                                                    |
 | `focus`   | land here after boot                                                                                                                          |
 
-`BUFFERS=(…)` in `$PROJECT/.frame/config.sh` is required, and authoritative
-even when empty:
-
-| `BUFFERS` in `$PROJECT/.frame/config.sh` ? | result                                    |
-| ------------------------------------------ | ----------------------------------------- |
-| not set                                    | `frame wt` refuses to boot                |
-| `BUFFERS=(claude server local)`            | those buffers, as defined in the registry |
-| `BUFFERS=()`                               | no buffers                                |
-
-A buffer whose command can't run (no `web/`, unset env var) fails inside
-that buffer, visibly — fix the config or drop it from `BUFFERS`. One
-exception: a buffer whose command comes up empty (say `server` with no
-`SERVER_CMD`) opens as a bare shell.
-
-All definitions live in frame's `buffers.json` — there is no project-level
-registry. A project needing a one-off buffer (say a sidecar's log tail) gets
-its definition added there and lists it in its `BUFFERS`; no other project
-is affected. Names in `BUFFERS` must match registry entries; unknown names
-are skipped with a boot warning.
-
 ## Shared services
 
-`services/docker-compose.yml` runs one postgres (`:5432`) and one minio
-(`:9000`/`:9001`) for all projects — multi-tenant via databases/roles and
-buckets, standard ports, no per-project offsets. Helper functions in
+Within Frame repo is services/docker-compose.yml
+This will support your shared services.
+Helper functions in
 `lib/helpers.sh` create roles/databases/buckets idempotently.
-
-## Windows
-
-Every frame titles its ghostty window — `name/topic :port` — so Raycast's
-window search can fuzzy-find
-any of them. The title is set from the shell before nvim launches, then owned
-by nvim (`title` + `titlestring`) for the session.
 
 ## License
 

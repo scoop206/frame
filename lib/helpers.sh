@@ -63,21 +63,6 @@ frame_load_config() {
   : "${PORT_PREFIX:=${(U)NAME//-/_}}"
 }
 
-frame_resolve() {
-  # frame_resolve dev.lua → first existing of:
-  #   .frame/local/<f> → .frame/<f> (this checkout, then primary) → frame default
-  local _f=$1 _dir
-  for _dir in "$PROJECT_ROOT/.frame/local" "$PROJECT_ROOT/.frame" \
-              "$MAIN_WT/.frame/local"     "$MAIN_WT/.frame"; do
-    if [[ -f "$_dir/$_f" ]]; then echo "$_dir/$_f"; return 0; fi
-  done
-  if [[ -f "$FRAME_ROOT/layouts/$_f" ]]; then
-    echo "$FRAME_ROOT/layouts/$_f"; return 0
-  fi
-  echo "$X_MARK frame: no $_f found (project override or $FRAME_ROOT/layouts)" >&2
-  return 1
-}
-
 # ── claude-code hooks ─────────────────────────────────────────────────────────
 
 frame_write_claude_hooks() {
