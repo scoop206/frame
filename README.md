@@ -7,7 +7,7 @@ An opinionated AI harness based around:
 - neovim
 - git worktrees
 
-![A frame session: the buffer list (claude, vite, server, ngrok, local) alongside the project file tree, in a ghostty window titled with the repo, topic, and port.](assets/frame-demo.png)
+![A frame session: a vortex of frames (many ghostty windows with neovim buffer list in them ](assets/frame_vortex2.png)
 
 Run from inside any project checkout:
 
