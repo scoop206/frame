@@ -1,5 +1,7 @@
 # frame
 
+[![tests](https://github.com/scoop206/frame/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/scoop206/frame/actions/workflows/test.yml)
+
 An opinionated AI harness based around:
 
 - neovim
