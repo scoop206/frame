@@ -10,7 +10,7 @@
 # but forfeits the callback; the rebranded copy keeps both.
 #
 # Idempotent — re-run to rebuild from the current brew copy and
-# assets/frame_vortex3.png. Lives under $HOME (not FRAME_ROOT) because
+# assets/frame_badge.png. Lives under $HOME (not FRAME_ROOT) because
 # notification + Accessibility grants stick to the bundle path, which must
 # not shift between frame worktrees.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
@@ -36,10 +36,12 @@ mkdir -p "${APP:h}"
 rm -rf "$APP"
 cp -R "$_apps[1]" "$APP"
 
-# Icon: iconset rendered from the vortex art (sips stretches the few px off
-# square), written over the bundle's own Terminal.icns so the plist's icon
-# reference stays untouched.
-ICON_SRC="$FRAME_ROOT/assets/frame_vortex3.png"
+# Icon: iconset rendered from the badge art, written over the bundle's own
+# Terminal.icns so the plist's icon reference stays untouched. The PNG is
+# pre-rendered from assets/frame_badge.svg (the editable source):
+#   qlmanage -t -s 1024 -o assets assets/frame_badge.svg
+#   mv assets/frame_badge.svg.png assets/frame_badge.png
+ICON_SRC="$FRAME_ROOT/assets/frame_badge.png"
 _tmp=$(mktemp -d)
 mkdir "$_tmp/frame.iconset"
 for _s in 16 32 64 128 256 512; do
