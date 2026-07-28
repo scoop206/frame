@@ -13,7 +13,7 @@
 # but forfeits the callback; the rebranded copy keeps both.
 #
 # Later inits rebuild only when an input — the brew copy or
-# assets/frame_vortex3.png — has changed; otherwise they skip. The skip is
+# assets/frame_badge.png — has changed; otherwise they skip. The skip is
 # load-bearing: macOS keys the notification grant to the bundle's code
 # signature, and the ad-hoc signing below mints a fresh signature every
 # build — so a no-op rebuild would silently revoke the grant until
@@ -48,7 +48,7 @@ if (( ! $#_apps )); then
 fi
 
 APP="$HOME/.local/share/frame/Frame.app"
-ICON_SRC="$FRAME_ROOT/assets/frame_vortex3.png"
+ICON_SRC="$FRAME_ROOT/assets/frame_badge.png"
 
 # Fingerprint of the two build inputs — content only, no paths: paths would
 # drag the brew version dir and this worktree's FRAME_ROOT in and force
@@ -66,9 +66,11 @@ mkdir -p "${APP:h}"
 rm -rf "$APP"
 cp -R "$_apps[1]" "$APP"
 
-# Icon: iconset rendered from the vortex art (sips stretches the few px off
-# square), written over the bundle's own Terminal.icns so the plist's icon
-# reference stays untouched.
+# Icon: iconset rendered from the badge art, written over the bundle's own
+# Terminal.icns so the plist's icon reference stays untouched. The PNG is
+# pre-rendered from assets/frame_badge.svg (the editable source):
+#   qlmanage -t -s 1024 -o assets assets/frame_badge.svg
+#   mv assets/frame_badge.svg.png assets/frame_badge.png
 _tmp=$(mktemp -d)
 mkdir "$_tmp/frame.iconset"
 for _s in 16 32 64 128 256 512; do
