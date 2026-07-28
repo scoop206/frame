@@ -78,6 +78,47 @@ frame_resolve() {
   return 1
 }
 
+# ── machine-global config ─────────────────────────────────────────────────────
+# ~/.local/share/frame/config — key=value settings that apply to every
+# project's frames on this machine (today just notify=on|off, the global
+# banner switch; future machine-wide settings belong here too). Under $HOME
+# rather than FRAME_ROOT because, like the notifier app, machine state must
+# not shift between frame worktrees. Plain key=value rather than sourced
+# shell so hook-path reads never execute anything.
+
+FRAME_GLOBAL_CONFIG="$HOME/.local/share/frame/config"
+
+frame_global_get() {
+  # frame_global_get KEY — print KEY's value, empty if the file or key is
+  # absent (callers treat empty as the default). Last occurrence wins.
+  local -a _hits
+  [[ -f "$FRAME_GLOBAL_CONFIG" ]] || return 0
+  _hits=(${(M)${(@f)"$(<$FRAME_GLOBAL_CONFIG)"}:#$1=*})
+  (( $#_hits )) && print -r -- "${_hits[-1]#*=}"
+  return 0
+}
+
+frame_global_set() {
+  # frame_global_set KEY VALUE — update KEY in place (comments, blank lines,
+  # and other keys survive) or append it; the first write creates the file.
+  local _k=$1 _v=$2 _i _found=0
+  local -a _lines
+  mkdir -p "${FRAME_GLOBAL_CONFIG:h}"
+  if [[ ! -f "$FRAME_GLOBAL_CONFIG" ]]; then
+    print -r -- "# frame settings for every project on this machine (key=value)." \
+      > "$FRAME_GLOBAL_CONFIG"
+  fi
+  _lines=("${(@f)$(<$FRAME_GLOBAL_CONFIG)}")
+  for (( _i=1; _i <= $#_lines; _i++ )); do
+    if [[ "$_lines[_i]" == $_k=* ]]; then
+      _lines[_i]="$_k=$_v"
+      _found=1
+    fi
+  done
+  (( _found )) || _lines+=("$_k=$_v")
+  print -rl -- "${_lines[@]}" > "$FRAME_GLOBAL_CONFIG"
+}
+
 # ── claude-code hooks ─────────────────────────────────────────────────────────
 
 frame_write_claude_hooks() {

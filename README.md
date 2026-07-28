@@ -22,6 +22,7 @@ frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame services [up|down|ps]            manage the shared postgres/minio stack
 frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears)
 frame notify [TEXT…]       macOS banner + the same title status (default "⏸ waiting")
+frame notify on|off        global banner switch: off silences every frame's banners
 frame focus [NAME/TOPIC]   raise that frame's ghostty window (default: the one you're in)
 frame notifier             build the banner app: frame icon + click-to-focus banners
 ```
@@ -85,47 +86,6 @@ Either with no text clears back to the base title.
 
 The CLI form works by RPC over the frame's nvim socket (nvim owns the title),
 so it also works from outside the frame while its session is up.
-
-### Notifications
-
-`frame notify [TEXT…]` pings you on both channels at once: a macOS banner
-(titled `$NAME/$TOPIC`, so parallel frames are tellable apart) plus the same
-window-title status as `frame status`. Both are best-effort and it always
-exits 0, so it's safe as a hook target.
-
-`frame init` wires it into a project's `.claude/settings.json`:
-
-- **Stop** → `frame notify` — every time claude ends a turn you get a banner
-  and the title gains "- ⏸ waiting"
-- **UserPromptSubmit** → `frame status` — sending the next prompt clears the
-  status back to the base title
-
-Out of the box the banner goes through `osascript`, which means Script
-Editor's icon and a click that opens Script Editor. `frame notifier` fixes
-both: it builds `~/.local/share/frame/Frame.app` — a rebranded copy of
-[terminal-notifier](https://github.com/julienXX/terminal-notifier) (fetched
-via brew) wearing the frame vortex as its icon — and `frame notify` prefers
-it automatically once built. Banners then show the frame icon, and clicking
-one runs `frame focus` on the emitting frame, raising its ghostty window
-(that's also `frame focus [NAME/TOPIC]` from any terminal). Two one-time
-grants, both prompted on first use: allow notifications for "Frame", and
-Accessibility for the exact-window raise — without the latter a click still
-surfaces ghostty, just not the specific window.
-
-When a frame gets too chatty — a long conversational session, say — mute it
-with `:FrameNotify off` (`on` unmutes; bare `:FrameNotify` shows the state).
-The switch lives in that session's nvim and dies with it, so each parallel
-frame mutes independently and every frame boots unmuted. `frame notify` asks
-the session over its socket before popping the banner; only the banner+sound
-is muted — the window-title status still updates, so a muted frame still
-shows "- ⏸ waiting" when claude finishes.
-
-Beyond the mute switch there's one automatic filter: quick conversational
-turns don't banner. Sending a prompt stamps the turn start (the
-UserPromptSubmit hook above), and `frame notify` skips the banner when the
-prompt was 10 seconds ago or less — you just asked, you're still looking at
-the frame. Turns long enough to have walked away from banner as before, and
-the "- ⏸ waiting" title status updates either way.
 
 ### Frame Removal
 

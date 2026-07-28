@@ -14,6 +14,8 @@
 #                              (no TEXT clears it back to name/topic)
 #   frame notify [TEXT…]       macOS banner + the same title status
 #                              (default "⏸ waiting"; never fails — hook-safe)
+#   frame notify on|off        global banner switch: off silences every
+#                              frame's banners until back on
 #   frame focus [NAME/TOPIC]   raise that frame's ghostty window (default:
 #                              the frame you're in)
 #   frame notifier             build the banner app — frame icon on banners,
@@ -43,7 +45,7 @@ case "$cmd" in
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "$X_MARK frame: unknown command '$cmd' (try: frame help)" >&2
