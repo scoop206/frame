@@ -3,7 +3,8 @@
 #   ~/.local/share/frame/Frame.app
 #
 # Run by `frame init` (best-effort, in a subshell): the first init on a
-# machine builds it, so banners wear the frame icon out of the box.
+# machine builds it, so banners wear the frame icon out of the box. Also
+# user-facing as `frame notify init` — the badge setup/repair command.
 #
 # A rebranded copy of terminal-notifier (brew). Being a real app bundle is
 # the whole point: macOS banners wear the *sender's* icon, so the copy shows
@@ -18,7 +19,7 @@
 # signature, and the ad-hoc signing below mints a fresh signature every
 # build — so a no-op rebuild would silently revoke the grant until
 # re-allowed in System Settings. (To force a rebuild anyway, delete the
-# bundle and re-run frame init.)
+# bundle and run frame notify init.)
 # Lives under $HOME (not FRAME_ROOT) because notification + Accessibility
 # grants stick to the bundle path, which must not shift between frame
 # worktrees.
@@ -35,7 +36,7 @@ fi
 # hitting the network mid-init.
 if ! SRC=$(brew --prefix terminal-notifier 2>/dev/null) || [[ ! -d "$SRC" ]]; then
   echo "$X_MARK banner app skipped — for frame-icon, click-to-focus banners:" >&2
-  echo "    brew install terminal-notifier   # then re-run frame init" >&2
+  echo "    brew install terminal-notifier   # then: frame notify init" >&2
   exit 1
 fi
 # -d guard before the glob: with $SRC empty, "$SRC"/** would recursively
