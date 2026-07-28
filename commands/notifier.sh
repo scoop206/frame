@@ -96,14 +96,17 @@ rm -rf "$_tmp"
 print -r -- "$FINGERPRINT" > "$FP_FILE"
 codesign --force --deep --sign - "$APP" 2>/dev/null
 
-# Notification Center caches sender icons; restarting it (it respawns
-# instantly) makes rebuilds with new art actually show up.
-killall NotificationCenter 2>/dev/null || true
-
 "$APP/Contents/MacOS/terminal-notifier" -title "frame" -sound Glass \
   -message "notifier installed — banners now look like this" >/dev/null 2>&1 || true
 
+# The daemons cache the old bundle: usernoted can keep accepting banners
+# into Notification Center without ever drawing them, and NotificationCenter
+# holds the stale icon. A restart (both respawn instantly) clears both — but
+# killing services is the user's call, so it's a printed hint, not code.
 echo "$OK_MARK built $APP"
 echo "  No banner? Allow it: System Settings → Notifications → Frame — the"
 echo "  fresh signature dropped any earlier grant."
+echo "  Allowed but still no banner (or stale icon)? The notification daemons"
+echo "  cached the old bundle — run: killall usernoted NotificationCenter"
+echo "  (both respawn instantly)."
 echo "  Click-to-focus asks for Accessibility on first click — grant that too."
