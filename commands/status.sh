@@ -29,6 +29,15 @@ else
   fi
 fi
 
+# Turn-start stamp for notify's quick-turn gate: the UserPromptSubmit hook
+# calls the bare clear form, so "cleared just now" ≡ "the human prompted just
+# now". notify.sh reads the stamp's age to skip banners for fast turns.
+# Before the socket check on purpose — the stamp must land even when the
+# session is down and the RPC can't.
+if (( $# == 0 )); then
+  touch "/tmp/$NAME-$TOPIC.prompt" 2>/dev/null || true
+fi
+
 SOCKET="/tmp/$NAME-$TOPIC.nvim"
 if [[ ! -S "$SOCKET" ]]; then
   echo "$X_MARK no frame session for $NAME/$TOPIC (no socket at $SOCKET)" >&2

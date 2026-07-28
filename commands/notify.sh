@@ -9,8 +9,10 @@
 # needs the session's nvim socket) and a macOS banner (osascript). Built to
 # be the target of Claude Code hooks (Stop → `frame notify`), so a channel
 # failing must never fail the hook: every step is guarded and the command
-# always exits 0. A session can mute its banner channel with :FrameNotify
-# off (asked over the socket below); the title status still updates.
+# always exits 0. The banner (never the title status) is skipped in two
+# cases: the session muted it with :FrameNotify off (asked over the socket
+# below), or the turn was quick — the human prompted within the last 10
+# seconds (the stamp check below).
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 TEXT="${*:-⏸ waiting}"
@@ -32,6 +34,17 @@ elif frame_load_config 2>/dev/null; then
   fi
 else
   NAME='?' TOPIC='?'
+fi
+
+# Quick-turn gate: sending a prompt stamps /tmp/<name>-<topic>.prompt (the
+# UserPromptSubmit hook runs the bare `frame status` clear — see status.sh).
+# A stamp this fresh means the human prompted seconds ago and is still
+# looking at the frame — only turns long enough to have walked away from are
+# banner-worthy. No stamp, or an old one → the banner fires. ms-11 = mtime
+# within the last 10 seconds.
+_recent=( "/tmp/$NAME-$TOPIC.prompt"(N.ms-11) )
+if (( $#_recent )); then
+  exit 0
 fi
 
 # The session holds the banner mute switch (:FrameNotify off) — ask it over
