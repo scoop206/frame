@@ -46,6 +46,28 @@ vim.api.nvim_create_user_command('FrameStatus', function(opts)
   _G.FrameSetStatus(opts.args)
 end, { nargs = '*', desc = 'Set window-title status suffix (empty clears)' })
 
+-- Banner mute switch, session-scoped: before popping a macOS banner,
+-- `frame notify` asks this session over the socket — get(g:, 'frame_notify_muted', 0)
+-- — so muting lives with the frame and dies with it. Only the banner+sound
+-- is suppressed; the window-title status still updates.
+-- :FrameNotify off | on — mute/unmute; bare :FrameNotify reports state.
+vim.g.frame_notify_muted = 0
+vim.api.nvim_create_user_command('FrameNotify', function(opts)
+  if opts.args == 'off' then vim.g.frame_notify_muted = 1
+  elseif opts.args == 'on' then vim.g.frame_notify_muted = 0
+  elseif opts.args ~= '' then
+    vim.notify('usage: :FrameNotify [on|off]', vim.log.levels.ERROR)
+    return
+  end
+  vim.notify('frame: notify banners '
+    .. (vim.g.frame_notify_muted == 1 and 'muted' or 'on')
+    .. ' for ' .. base_title)
+end, {
+  nargs = '?',
+  complete = function() return { 'on', 'off' } end,
+  desc = 'Mute/unmute frame notify banners (bare: show state)',
+})
+
 -- Register a named socket so `frame wt -d TOPIC` can send :qa! remotely.
 -- serverstart THROWS if the path already exists — unguarded, that would abort
 -- this whole layout (no terminals, no :FrameDown). Probe a conflicting socket:

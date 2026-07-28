@@ -6,6 +6,8 @@
 #   frame wt TOPIC             create/reuse branch TOPIC + worktree, boot it
 #   frame wt                   boot the worktree you're already in
 #   frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
+#   frame shell TOPIC          casual frame in ~/frames/TOPIC — no repo, no
+#                              branch, just the claude + local buffers
 #   frame merge [TOPIC] [--push|--ff|-n]   merge TOPIC (default: current branch)
 #   frame services [up|down]   manage the shared postgres/minio stack
 #   frame status [TEXT…]       append "- TEXT" to this frame's window title
@@ -33,11 +35,11 @@ case "$cmd" in
   wt|worktree)
     source "$FRAME_ROOT/commands/wt.sh" "$@"
     ;;
-  scaffold|merge|services|status|notify)
+  scaffold|shell|merge|services|status|notify)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "✗ frame: unknown command '$cmd' (try: frame help)" >&2

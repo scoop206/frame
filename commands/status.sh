@@ -12,14 +12,21 @@
 # milestone — or from outside the frame while its session is up.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
-frame_load_config
-
-# Same topic derivation as wt.sh: worktree dir name, or branch name in the
-# primary checkout.
-if [[ "${PROJECT_ROOT:t}" == _$NAME-* ]]; then
-  TOPIC="${${PROJECT_ROOT:t}#_$NAME-}"
+# A shell frame (frame shell) has no git repo to derive identity from — its
+# buffers inherit FRAME_NAME/FRAME_TOPIC from the session instead. Inside a
+# checkout the usual config + worktree/branch derivation still wins.
+if ! frame_project_root >/dev/null \
+    && [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
+  NAME=$FRAME_NAME TOPIC=$FRAME_TOPIC
 else
-  TOPIC=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD)
+  frame_load_config
+  # Same topic derivation as wt.sh: worktree dir name, or branch name in the
+  # primary checkout.
+  if [[ "${PROJECT_ROOT:t}" == _$NAME-* ]]; then
+    TOPIC="${${PROJECT_ROOT:t}#_$NAME-}"
+  else
+    TOPIC=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD)
+  fi
 fi
 
 SOCKET="/tmp/$NAME-$TOPIC.nvim"
