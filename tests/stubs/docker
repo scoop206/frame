@@ -1,0 +1,4 @@
+#!/usr/bin/env zsh
+# Test stub tripwire — the fast test tiers must never touch docker.
+print -r -- "✗ test stub: unexpected docker invocation: docker $*" >&2
+exit 97

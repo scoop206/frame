@@ -1,0 +1,14 @@
+#!/usr/bin/env zsh
+# Test stub for lsof. find_free_port calls `lsof -nP -iTCP:<port> -sTCP:LISTEN`
+# and only checks the exit code. A port is "busy" iff it appears in the
+# space-separated $FAKE_BUSY_PORTS.
+for arg in "$@"; do
+  if [[ "$arg" == -iTCP:* ]]; then
+    port=${arg#-iTCP:}
+    for p in ${=FAKE_BUSY_PORTS:-}; do
+      if [[ "$p" == "$port" ]]; then exit 0; fi
+    done
+    exit 1
+  fi
+done
+exit 1
