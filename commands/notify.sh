@@ -69,7 +69,10 @@ fi
 # firing, and sessions predating the switch just don't have g:frame_notify_muted.
 SOCKET="/tmp/$NAME-$TOPIC.nvim"
 if [[ -S "$SOCKET" ]]; then
-  _muted=$(nvim --server "$SOCKET" \
+  # --headless: without it a piped-stdout nvim client (0.10+) sends the
+  # result to /dev/tty instead of stdout and leaks terminal-probe replies
+  # onto the prompt — see the note in status.sh. Headless captures cleanly.
+  _muted=$(nvim --headless --server "$SOCKET" \
     --remote-expr "get(g:, 'frame_notify_muted', 0)" 2>/dev/null) || _muted=0
   if [[ "$_muted" == 1 ]]; then
     exit 0
