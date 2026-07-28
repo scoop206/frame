@@ -14,8 +14,6 @@
 -- Config vars that buffers.json references (SERVER_CMD, PORT_PREFIX, the
 -- scanned ports) are exported by wt.sh under their own names.
 -- The buffers themselves come from the buffers.json registry (see below).
--- A project can replace this file wholesale via .frame/worktree.lua or
--- .frame/local/worktree.lua.
 
 vim.o.hidden = true
 

@@ -51,9 +51,4 @@ export FRAME_MAIN_WT=""
 export FRAME_VITE_PORT=""
 export FRAME_BUFFERS="claude local"
 
-# frame_resolve still consults .frame/ dirs, so a topic dir can override the
-# layout like a checkout can; with none present it falls through to the
-# frame default.
-PROJECT_ROOT="$DIR" MAIN_WT="$DIR"
-layout=$(frame_resolve worktree.lua)
-exec nvim -S "$layout"
+exec nvim -S "$FRAME_ROOT/layouts/worktree.lua"
