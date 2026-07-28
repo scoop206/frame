@@ -42,7 +42,7 @@ case "$cmd" in
     sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
-    echo "✗ frame: unknown command '$cmd' (try: frame help)" >&2
+    echo "$X_MARK frame: unknown command '$cmd' (try: frame help)" >&2
     exit 2
     ;;
 esac

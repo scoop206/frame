@@ -7,7 +7,7 @@
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 PROJECT_ROOT=$(frame_project_root) || {
-  echo "✗ frame: not inside a git repository" >&2
+  echo "$X_MARK frame: not inside a git repository" >&2
   exit 1
 }
 cd "$PROJECT_ROOT"
@@ -15,7 +15,7 @@ cd "$PROJECT_ROOT"
 mkdir -p .frame/local
 
 if [[ -f .frame/config.sh ]]; then
-  echo "✓ .frame/config.sh already exists — leaving it alone"
+  echo "$OK_MARK .frame/config.sh already exists — leaving it alone"
 else
   _name="${$(frame_main_wt "$PROJECT_ROOT"):t}"
   cat > .frame/config.sh <<EOF
@@ -48,21 +48,21 @@ BUFFERS=(claude local)
 #  export DATABASE_URL=postgres://$_name:devpassword@localhost:5432/$_name
 #}
 EOF
-  echo "✓ scaffolded .frame/config.sh — edit it to fit the project"
+  echo "$OK_MARK scaffolded .frame/config.sh — edit it to fit the project"
 fi
 
 if [[ -f .claude/settings.json ]]; then
-  echo "✓ .claude/settings.json already exists — leaving it alone"
+  echo "$OK_MARK .claude/settings.json already exists — leaving it alone"
   echo "  (for notifications, add hooks yourself: Stop → 'frame notify',"
   echo "   UserPromptSubmit → 'frame status')"
 else
   frame_write_claude_hooks
-  echo "✓ scaffolded .claude/settings.json — claude notifies via 'frame notify'"
+  echo "$OK_MARK scaffolded .claude/settings.json — claude notifies via 'frame notify'"
 fi
 
 if [[ -f .gitignore ]] && grep -qxF '.frame/local/' .gitignore; then
-  echo "✓ .gitignore already covers .frame/local/"
+  echo "$OK_MARK .gitignore already covers .frame/local/"
 else
   printf '\n# frame — personal/local harness overrides, never committed\n.frame/local/\n' >> .gitignore
-  echo "✓ added .frame/local/ to .gitignore"
+  echo "$OK_MARK added .frame/local/ to .gitignore"
 fi

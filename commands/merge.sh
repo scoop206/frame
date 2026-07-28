@@ -30,10 +30,10 @@ for arg in "$@"; do
     --push)        PUSH=true ;;
     --ff)          FF=true ;;
     -n|--dry-run)  DRY=true ;;
-    -*)            echo "✗ unknown flag: $arg" >&2; exit 2 ;;
+    -*)            echo "$X_MARK unknown flag: $arg" >&2; exit 2 ;;
     *)
       if [[ -n "$TOPIC" ]]; then
-        echo "✗ more than one branch given ($TOPIC, $arg)" >&2; exit 2
+        echo "$X_MARK more than one branch given ($TOPIC, $arg)" >&2; exit 2
       fi
       TOPIC=$arg ;;
   esac
@@ -45,11 +45,11 @@ if [[ -z "$TOPIC" ]]; then
 fi
 
 if [[ "$TOPIC" == "$MAIN_BRANCH" ]]; then
-  echo "✗ topic branch is '$MAIN_BRANCH' — nothing to merge into itself" >&2
+  echo "$X_MARK topic branch is '$MAIN_BRANCH' — nothing to merge into itself" >&2
   exit 1
 fi
 if ! git -C "$MAIN_WT" show-ref --verify --quiet "refs/heads/$TOPIC"; then
-  echo "✗ no local branch '$TOPIC'" >&2
+  echo "$X_MARK no local branch '$TOPIC'" >&2
   exit 1
 fi
 
@@ -58,13 +58,13 @@ run() {
   $DRY || "$@"
 }
 
-echo "▶ merging '$TOPIC' → '$MAIN_BRANCH' in $MAIN_WT"
+echo "$RUN_MARK merging '$TOPIC' → '$MAIN_BRANCH' in $MAIN_WT"
 $DRY && echo "  (dry run — no changes will be made)"
 
 # 1. Primary worktree must be clean of tracked changes. Untracked files are
 #    fine — a merge won't touch them.
 if ! git -C "$MAIN_WT" diff --quiet || ! git -C "$MAIN_WT" diff --cached --quiet; then
-  echo "✗ $MAIN_WT has uncommitted changes on $MAIN_BRANCH — commit or stash first" >&2
+  echo "$X_MARK $MAIN_WT has uncommitted changes on $MAIN_BRANCH — commit or stash first" >&2
   exit 1
 fi
 
@@ -81,7 +81,7 @@ fi
 run git -C "$MAIN_WT" fetch origin "$MAIN_BRANCH"
 if ! $DRY && ! git -C "$MAIN_WT" merge-base --is-ancestor "$MAIN_BRANCH" "origin/$MAIN_BRANCH" \
      && ! git -C "$MAIN_WT" merge-base --is-ancestor "origin/$MAIN_BRANCH" "$MAIN_BRANCH"; then
-  echo "✗ $MAIN_BRANCH has diverged from origin/$MAIN_BRANCH — reconcile manually first" >&2
+  echo "$X_MARK $MAIN_BRANCH has diverged from origin/$MAIN_BRANCH — reconcile manually first" >&2
   exit 1
 fi
 run git -C "$MAIN_WT" merge --ff-only "origin/$MAIN_BRANCH"
@@ -91,17 +91,17 @@ if $FF; then
   run git -C "$MAIN_WT" merge --ff "$TOPIC"
 else
   if ! run git -C "$MAIN_WT" merge --no-ff -m "Merge branch '$TOPIC'" "$TOPIC"; then
-    echo "✗ merge hit conflicts. Resolve in $MAIN_WT, or back out with:" >&2
+    echo "$X_MARK merge hit conflicts. Resolve in $MAIN_WT, or back out with:" >&2
     echo "    git -C $MAIN_WT merge --abort" >&2
     exit 1
   fi
 fi
-echo "✓ merged '$TOPIC' into $MAIN_BRANCH"
+echo "$OK_MARK merged '$TOPIC' into $MAIN_BRANCH"
 
 # 5. Push only on request.
 if $PUSH; then
   run git -C "$MAIN_WT" push origin "$MAIN_BRANCH"
-  echo "✓ pushed $MAIN_BRANCH to origin"
+  echo "$OK_MARK pushed $MAIN_BRANCH to origin"
 else
   echo "→ not pushed. To push:  git -C $MAIN_WT push origin $MAIN_BRANCH"
   echo "  (or re-run with --push)"
