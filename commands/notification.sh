@@ -24,7 +24,8 @@ if (( $# == 1 )) && [[ "$1" == (on|off) ]]; then
     echo "$OK_MARK banners off everywhere — frame notification on re-enables"
   else
     echo "$OK_MARK banners on everywhere"
-    echo "  macOS keeps its own switch: if banners still don't show, check"
+    echo "  No frame badge yet? Build the notifier app: frame notification init"
+    echo "  macOS keeps its own switch too: if banners still don't show, check"
     echo "  System Settings → Notifications → Frame (Allow, style Banners)."
   fi
   exit 0
