@@ -2,11 +2,9 @@
 #
 #   frame notify
 #     → banner "⏸ waiting", title "<name>/<topic> :<port> - ⏸ waiting"
-#   frame notify off | on
-#     → the global banner switch: off silences every frame's banners
-#       until on
-#   frame notify init
-#     → (re)build the banner app — badge setup/repair (notifier.sh)
+#
+# The controls live under `frame notification` (notification.sh): on|off is
+# the global banner switch, init the banner-app build/repair.
 #
 # Two channels, both best-effort: the window-title status (frame status —
 # needs the session's nvim socket) and a macOS banner (the Frame notifier
@@ -20,26 +18,11 @@
 # (the stamp check below).
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
-# The global switch is the `notify` key of the machine-global config
-# (frame_global_get/set — helpers.sh). Only bare, on|off, or init are valid;
-# the usage error is fine hook-wise — hooks always call the bare form.
+# Hook target only — no arguments. Pointing stray args (including the old
+# on|off|init spellings) at frame notification beats guessing; the usage
+# error is fine hook-wise — hooks always call the bare form.
 if (( $# )); then
-  # init = the banner-app build/repair, exposed where a user hunting for it
-  # looks. exec: notifier.sh runs as its own process (as init.sh runs it)
-  # and its exit code and hints pass through untouched.
-  if (( $# == 1 )) && [[ "$1" == init ]]; then
-    exec "$FRAME_ROOT/bin/frame" notifier
-  fi
-  if (( $# == 1 )) && [[ "$1" == (on|off) ]]; then
-    frame_global_set notify "$1"
-    if [[ "$1" == off ]]; then
-      echo "$OK_MARK banners off everywhere — frame notify on re-enables"
-    else
-      echo "$OK_MARK banners on everywhere"
-    fi
-    exit 0
-  fi
-  echo "$X_MARK usage: frame notify [on|off|init]" >&2
+  echo "$X_MARK frame notify takes no arguments (controls: frame notification on|off|init)" >&2
   exit 2
 fi
 

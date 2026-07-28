@@ -25,8 +25,9 @@ frame shell TOPIC          casual frame in ~/frames/TOPIC — no repo, no branch
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame services [up|down|ps]            manage the shared postgres/minio stack
 frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears)
-frame notify               macOS banner + "⏸ waiting" title status
-frame notify on|off        global banner switch: off silences every frame's banners
+frame notify               frame will send waiting notification
+frame notification on|off|init   on|off: global switch
+                           init: build/repair the banner app (needs `brew install terminal-notifier`)
 frame yolo on|off          master switch: claude in every frame launches with
                            --dangerously-skip-permissions (default off)
 frame focus [NAME/TOPIC]   raise that frame's ghostty window (default: the one you're in)
@@ -118,7 +119,7 @@ couple of minutes) — one place, all projects.
 
 The frame badge on banners comes from `~/.local/share/frame/Frame.app`, a
 rebranded terminal-notifier built by the first `frame init` (needs
-homebrew + terminal-notifier — see Recommended below). `frame notify init`
+homebrew + terminal-notifier — see Recommended below). `frame notification init`
 builds or repairs it directly, without re-running a project init.
 
 **After the first install** — macOS won't show the app's banners until you
@@ -132,7 +133,7 @@ frame vortex):
 1. `killall NotificationCenter` — it caches sender icons and respawns
    instantly; a stale cache is the usual culprit.
 2. Still wrong? Force a rebuild: `rm -rf ~/.local/share/frame/Frame.app`,
-   then `frame notify init`. The rebuild mints a fresh code signature, and
+   then `frame notification init`. The rebuild mints a fresh code signature, and
    macOS keys the notification grant to the signature — so re-allow the
    banners in System Settings → Notifications → Frame afterwards.
 
@@ -209,7 +210,7 @@ add a .frame directory to the projects w/ optional components see below.
 - Ghostty - was the terminal Frame was built with so for others your MMV
 - Raycast - window fuzzy find allows you to leverage the WAITING and TOPIC name of your frames
 - homebrew + terminal-notifier - optional; `brew install terminal-notifier`,
-  then `frame notify init` (or the first `frame init`) builds the frame-icon,
+  then `frame notification init` (or the first `frame init`) builds the frame-icon,
   click-to-focus banner app (without them, plain osascript banners still fire)
 
 ## How a project plugs in
