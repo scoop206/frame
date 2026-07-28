@@ -7,7 +7,9 @@ An opinionated AI harness based around:
 - neovim
 - git worktrees
 
-![A frame session: a vortex of frames (many ghostty windows with neovim buffer list in them ](assets/frame_vortex3.png)
+<p align="center">
+  <img src="assets/frame-icon.png" alt="frame icon: a stack of overlapping windows" width="216">
+</p>
 
 Run from a project:
 
@@ -31,20 +33,11 @@ frame notifier             build the banner app: frame icon + click-to-focus ban
 
 ### Features
 
-- **A frame per feature** — every topic gets its own branch, worktree, port, and
-  window; `frame wt TOPIC` initiates.
-- **Parallel sessions you can tell apart** — `repo/topic :port` window titles,
-  free-text status suffixes, Raycast fuzzy-find.
-- **Claude notifications** — banner + title status when a turn ends,
-  cleared on your next prompt, mutable per session.
-- **Shared postgres + minio** — one multi-tenant stack on standard ports for
-  all projects; whichever frame boots first brings it up.
-- **Whole lifecycle in three commands** — `frame wt` to open, `frame merge` to
-  land, `frame wt -d` to tear down, guarded against losing unmerged work.
-- **One tiny integration surface** — a project plugs in with a single
-  `.frame/config.sh`; local overrides stay out of the repo.
-- **Plain tools** — stock neovim (no plugins), zsh, git worktrees. Clone, add
-  to PATH, go.
+- A frame per feature
+- Parallel sessions you can tell apart
+- Claude notifications
+- Shared postgres + minio (or whatver) across all your projects
+- stock neovim (no plugins), zsh, git worktrees
 
 ### Frames
 
@@ -204,12 +197,12 @@ Everything project-side lives under one `.frame/` directory:
 
 ### config.sh
 
-config: `NAME`
+config: `NAME`  
 required: yes  
 value: the project name; window titles, worktree dirs, and PORT_PREFIX derive from it
 
-config: `BUFFERS(...)`
-required: yes
+config: `BUFFERS(...)`  
+required: yes  
 value: which buffers this project's frames open, e.g. BUFFERS=(claude local) — see Buffers below
 
 Hooks:
@@ -226,33 +219,24 @@ Hooks:
   a re-export of it here (e.g. `export SERVICE_PORT="$PORT"`). Exported vars
   win over `.env` (dotenvy never overrides the environment).
 
-### Example
-
-See [`examples/`](examples) for complete `.frame/` directories at three
-sizes — name-only, the standard web stack, and a project running its own
-container.
-
 ## Buffer Definitions
 
-[`buffers.json`](buffers.json) (frame root) is the registry of every terminal
-buffer a frame can open — the formal superset.
-Every buffer type a project can instantiate needs to be in Frame registry.
+Every buffer type a project can instantiate needs to be in the `buffers.json` Frame registry.
 
 Per entry:
 
-| field     | meaning                                                                                                                                       |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`    | buffer name (shown in `:ls`, targeted by `BUFFERS`)                                                                                           |
-| `mode`    | `durable` auto-runs and drops to a shell on exit (↑ + Enter reruns); `prefill` types the command without running it; `bare` is an empty shell |
-| `command` | the command the buffer runs                                                                                                                   |
-| `dir`     | subdirectory to run in                                                                                                                        |
-| `env`     | vars the command reads — a declared contract; frame warns at boot if unset                                                                    |
-| `focus`   | land here after boot                                                                                                                          |
+| field   | meaning                                                                    |
+| ------- | -------------------------------------------------------------------------- |
+| name    | buffer name (targeted by `BUFFERS`)                                        |
+| mode    | `durable` auto-runs and drops to a shell on exit; `bare` is an empty shell |
+| command | the command the buffer runs                                                |
+| dir     | subdirectory to run in                                                     |
+| env     | vars the command reads — a declared contract; frame warns at boot if unset |
+| focus   | land here after boot                                                       |
 
-## Shared services
+## Shared (Centralized) Services
 
-Within Frame repo is services/docker-compose.yml
-This will support your shared services.
+Within Frame repo is services/docker-compose.yml  
 Helper functions in
 `lib/helpers.sh` create roles/databases/buckets idempotently.
 

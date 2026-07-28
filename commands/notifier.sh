@@ -4,13 +4,13 @@
 #
 # A rebranded copy of terminal-notifier (brew). Being a real app bundle is
 # the whole point: macOS banners wear the *sender's* icon, so the copy shows
-# the frame vortex instead of Script Editor, and only the sending bundle
+# the frame icon instead of Script Editor, and only the sending bundle
 # gets the click callback — which is what lets notify.sh hang `frame focus`
 # off the banner (-execute). Plain terminal-notifier -sender spoofs the icon
 # but forfeits the callback; the rebranded copy keeps both.
 #
 # Idempotent — re-run to rebuild from the current brew copy and
-# assets/frame_vortex3.png. Lives under $HOME (not FRAME_ROOT) because
+# assets/frame-icon.png. Lives under $HOME (not FRAME_ROOT) because
 # notification + Accessibility grants stick to the bundle path, which must
 # not shift between frame worktrees.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
@@ -36,10 +36,9 @@ mkdir -p "${APP:h}"
 rm -rf "$APP"
 cp -R "$_apps[1]" "$APP"
 
-# Icon: iconset rendered from the vortex art (sips stretches the few px off
-# square), written over the bundle's own Terminal.icns so the plist's icon
-# reference stays untouched.
-ICON_SRC="$FRAME_ROOT/assets/frame_vortex3.png"
+# Icon: iconset rendered from the icon art, written over the bundle's own
+# Terminal.icns so the plist's icon reference stays untouched.
+ICON_SRC="$FRAME_ROOT/assets/frame-icon.png"
 _tmp=$(mktemp -d)
 mkdir "$_tmp/frame.iconset"
 for _s in 16 32 64 128 256 512; do
