@@ -5,8 +5,8 @@
 # non-git about a frame still works — window title shell/TOPIC, frame
 # status / frame notify (and the claude Stop hook), :FrameQuit — for
 # scratch work that deserves its own claude instance and directory but has
-# no project behind it. There is no teardown command: the directory is
-# plain filesystem, delete it whenever.
+# no project behind it. :FrameDown! quits and deletes the topic dir (the
+# bang is always required — nothing here is under git).
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 if (( $# != 1 )) || [[ "$1" == -* ]]; then
@@ -41,8 +41,9 @@ fi
 set_title "$NAME/$TOPIC"
 
 # Same layout as worktree frames — it's parameterized entirely by env, and
-# an empty FRAME_MAIN_WT is the existing "no primary checkout" signal that
-# skips :FrameDown. FRAME_NAME/FRAME_TOPIC double as the session's identity
+# an empty FRAME_MAIN_WT is the "no primary checkout" signal that selects
+# the shell-frame :FrameDown (bang-only dir delete) over the worktree one.
+# FRAME_NAME/FRAME_TOPIC double as the session's identity
 # for status/notify run from its buffers, where no git repo can answer.
 export FRAME_NAME="$NAME"
 export FRAME_TOPIC="$TOPIC"
