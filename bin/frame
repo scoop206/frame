@@ -17,8 +17,9 @@
 #                              (no TEXT clears it back to name/topic)
 #   frame notify               macOS banner + "⏸ waiting" title status
 #                              (never fails — hook-safe)
-#   frame notify on|off        global banner switch: off silences every
-#                              frame's banners until back on
+#   frame notify on|off|init   on|off: global banner switch, off silences
+#                              every frame; init: build/repair the banner
+#                              app (needs `brew install terminal-notifier`)
 #   frame yolo on|off          master switch: claude in every frame launches
 #                              with --dangerously-skip-permissions (default
 #                              off; bare `frame yolo` shows the state)
@@ -49,12 +50,12 @@ case "$cmd" in
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   notifier)
-    # internal — the banner-app build, run by `frame init` as its own process
-    # (kept callable for debugging; not in the usage text above)
+    # internal spelling of `frame notify init` — the banner-app build, run
+    # by `frame init` as its own process (not in the usage text above)
     source "$FRAME_ROOT/commands/notifier.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "$X_MARK frame: unknown command '$cmd' (try: frame help)" >&2

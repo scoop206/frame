@@ -118,7 +118,8 @@ couple of minutes) — one place, all projects.
 
 The frame badge on banners comes from `~/.local/share/frame/Frame.app`, a
 rebranded terminal-notifier built by the first `frame init` (needs
-homebrew + terminal-notifier — see Recommended below).
+homebrew + terminal-notifier — see Recommended below). `frame notify init`
+builds or repairs it directly, without re-running a project init.
 
 **After the first install** — macOS won't show the app's banners until you
 allow them: System Settings → Notifications → Frame → Allow. Click-to-focus
@@ -131,7 +132,7 @@ frame vortex):
 1. `killall NotificationCenter` — it caches sender icons and respawns
    instantly; a stale cache is the usual culprit.
 2. Still wrong? Force a rebuild: `rm -rf ~/.local/share/frame/Frame.app`,
-   then re-run `frame init`. The rebuild mints a fresh code signature, and
+   then `frame notify init`. The rebuild mints a fresh code signature, and
    macOS keys the notification grant to the signature — so re-allow the
    banners in System Settings → Notifications → Frame afterwards.
 
@@ -208,8 +209,8 @@ add a .frame directory to the projects w/ optional components see below.
 - Ghostty - was the terminal Frame was built with so for others your MMV
 - Raycast - window fuzzy find allows you to leverage the WAITING and TOPIC name of your frames
 - homebrew + terminal-notifier - optional; `brew install terminal-notifier`,
-  then `frame init` builds the frame-icon, click-to-focus banner app
-  (without them, plain osascript banners still fire)
+  then `frame notify init` (or the first `frame init`) builds the frame-icon,
+  click-to-focus banner app (without them, plain osascript banners still fire)
 
 ## How a project plugs in
 
