@@ -5,6 +5,12 @@
 # With FAKE_NVIM_LOG set: record how nvim was invoked (argv, cwd, the env
 # frame exported) and exit 0.
 # Without it: tripwire — no test should reach an editor launch unannounced.
+# frame's remote-expr clients run `nvim --headless --server …` (headless so
+# a piped-stdout nvim writes to stdout instead of /dev/tty and skips the
+# terminal-capability probe). Peel a leading --headless so the RPC check
+# below still sees --server as $1; the wt editor launch (`nvim -S …`) never
+# passes it, so this is a no-op there.
+[[ "${1:-}" == "--headless" ]] && shift
 # RPC mode (frame status / notify use `nvim --server … --remote-expr`): a
 # test opts in by setting FAKE_NVIM_EXPR_RESULT, which becomes the answer to
 # ANY expression query. Without it, --server calls fall through to the
