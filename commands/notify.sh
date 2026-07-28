@@ -4,21 +4,44 @@
 #     → banner "⏸ waiting", title "<name>/<topic> :<port> - ⏸ waiting"
 #   frame notify needs guidance: schema change
 #     → the same, carrying that text
+#   frame notify off | on
+#     → the global banner switch: off silences every frame's banners
+#       until on
 #
 # Two channels, both best-effort: the window-title status (frame status —
 # needs the session's nvim socket) and a macOS banner (the Frame notifier
 # app when `frame notifier` has built it, else osascript). Built to
 # be the target of Claude Code hooks (Stop → `frame notify`), so a channel
 # failing must never fail the hook: every step is guarded and the command
-# always exits 0. The banner (never the title status) is skipped in two
-# cases: the session muted it with :FrameNotify off (asked over the socket
-# below), or the turn was quick — the human prompted within the last 10
-# seconds (the stamp check below).
+# always exits 0. The banner (never the title status) is skipped in three
+# cases: the global switch is off (the machine-global config, read below),
+# the session muted it with :FrameNotify off (asked over the socket below),
+# or the turn was quick — the human prompted within the last 10 seconds
+# (the stamp check below).
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
+
+# The global switch is the `notify` key of the machine-global config
+# (frame_global_get/set — helpers.sh). Bare `on`/`off` are reserved words;
+# the cost is a banner that literally says one of them, which nothing sends.
+if (( $# == 1 )) && [[ "$1" == (on|off) ]]; then
+  frame_global_set notify "$1"
+  if [[ "$1" == off ]]; then
+    echo "$OK_MARK banners off everywhere — frame notify on re-enables"
+  else
+    echo "$OK_MARK banners on everywhere"
+  fi
+  exit 0
+fi
 
 TEXT="${*:-⏸ waiting}"
 
 "$FRAME_ROOT/bin/frame" status "$TEXT" 2>/dev/null || true
+
+# Globally off → no banner from any frame. The title status above still
+# ran — same contract as the session mute.
+if [[ "$(frame_global_get notify)" == off ]]; then
+  exit 0
+fi
 
 # Identity for the banner's title, best-effort like everything here: a shell
 # frame (frame shell — no git repo) carries it in the session env; a checkout
