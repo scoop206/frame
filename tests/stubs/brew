@@ -1,0 +1,7 @@
+#!/usr/bin/env zsh
+# Test stub for brew: pretends homebrew is present but has nothing
+# installed, so frame init's banner-app step bows out with its install hint
+# instead of touching the real system. Tests that exercise the build plant
+# their own working brew ahead of this one on PATH
+# (test_init_banner_app.zsh).
+exit 1
