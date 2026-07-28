@@ -106,11 +106,12 @@ the session over its socket before popping the banner; only the banner+sound
 is muted — the window-title status still updates, so a muted frame still
 shows "- ⏸ waiting" when claude finishes.
 
-Beyond that, notifications are deliberately unfiltered for now: every turn
-end notifies, including quick conversational ones. If that proves too chatty
-even with muting, the intended fix is a duration gate in `frame notify`
-(stamp turn start on UserPromptSubmit, skip the banner for turns under a
-couple of minutes) — one place, all projects.
+Beyond the mute switch there's one automatic filter: quick conversational
+turns don't banner. Sending a prompt stamps the turn start (the
+UserPromptSubmit hook above), and `frame notify` skips the banner when the
+prompt was 10 seconds ago or less — you just asked, you're still looking at
+the frame. Turns long enough to have walked away from banner as before, and
+the "- ⏸ waiting" title status updates either way.
 
 ### Frame Removal
 
