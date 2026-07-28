@@ -46,7 +46,7 @@ test_status_with_text_does_not_stamp() {
 test_fresh_prompt_suppresses_banner() {
   setup_frame_env
   touch "/tmp/shell-$TNAME.prompt"
-  run_frame notify pssst
+  run_frame notify
   assert_status 0
   assert_file_absent "$FAKE_OSASCRIPT_LOG"
 }
@@ -54,16 +54,16 @@ test_fresh_prompt_suppresses_banner() {
 test_stale_prompt_still_banners() {
   setup_frame_env
   touch -t 202601010000 "/tmp/shell-$TNAME.prompt"
-  run_frame notify pssst
+  run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - pssst shell/$TNAME"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - ⏸ waiting shell/$TNAME"
 }
 
 test_no_stamp_still_banners() {
   setup_frame_env
-  run_frame notify pssst
+  run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - pssst shell/$TNAME"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - ⏸ waiting shell/$TNAME"
 }
 
 run_tests "$0"

@@ -26,10 +26,10 @@ EOF
 test_notifier_app_preferred_over_osascript() {
   setup_frame_env
   plant_notifier
-  run_frame notify pssst
+  run_frame notify
   assert_status 0
   assert_contains "$(<$SANDBOX/notifier.log)" "-title shell/$TNAME"
-  assert_contains "$(<$SANDBOX/notifier.log)" "-message pssst"
+  assert_contains "$(<$SANDBOX/notifier.log)" "-message ⏸ waiting"
   assert_file_absent "$FAKE_OSASCRIPT_LOG"
 }
 
@@ -45,7 +45,7 @@ test_quick_turn_gate_still_applies() {
   setup_frame_env
   plant_notifier
   touch "/tmp/shell-$TNAME.prompt"
-  run_frame notify pssst
+  run_frame notify
   assert_status 0
   assert_file_absent "$SANDBOX/notifier.log"
 }

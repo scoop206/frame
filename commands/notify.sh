@@ -1,9 +1,7 @@
-# frame notify [TEXT…] — ping the human that this frame wants attention:
+# frame notify — ping the human that this frame wants attention:
 #
 #   frame notify
 #     → banner "⏸ waiting", title "<name>/<topic> :<port> - ⏸ waiting"
-#   frame notify needs guidance: schema change
-#     → the same, carrying that text
 #   frame notify off | on
 #     → the global banner switch: off silences every frame's banners
 #       until on
@@ -21,19 +19,23 @@
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 # The global switch is the `notify` key of the machine-global config
-# (frame_global_get/set — helpers.sh). Bare `on`/`off` are reserved words;
-# the cost is a banner that literally says one of them, which nothing sends.
-if (( $# == 1 )) && [[ "$1" == (on|off) ]]; then
-  frame_global_set notify "$1"
-  if [[ "$1" == off ]]; then
-    echo "$OK_MARK banners off everywhere — frame notify on re-enables"
-  else
-    echo "$OK_MARK banners on everywhere"
+# (frame_global_get/set — helpers.sh). Only bare or on|off are valid; the
+# usage error is fine hook-wise — hooks always call the bare form.
+if (( $# )); then
+  if (( $# == 1 )) && [[ "$1" == (on|off) ]]; then
+    frame_global_set notify "$1"
+    if [[ "$1" == off ]]; then
+      echo "$OK_MARK banners off everywhere — frame notify on re-enables"
+    else
+      echo "$OK_MARK banners on everywhere"
+    fi
+    exit 0
   fi
-  exit 0
+  echo "$X_MARK usage: frame notify [on|off]" >&2
+  exit 2
 fi
 
-TEXT="${*:-⏸ waiting}"
+TEXT="⏸ waiting"
 
 "$FRAME_ROOT/bin/frame" status "$TEXT" 2>/dev/null || true
 
@@ -96,7 +98,6 @@ if [[ -x "$NOTIFIER" ]]; then
     -execute "${(q)FRAME_ROOT}/bin/frame focus ${(q)NAME}/${(q)TOPIC}" \
     >/dev/null 2>&1 || true
 else
-  # argv, not string interpolation — TEXT may contain quotes.
   osascript - "$TEXT" "$NAME/$TOPIC" >/dev/null 2>&1 <<'EOF' || true
 on run argv
   display notification (item 1 of argv) with title (item 2 of argv) sound name "Glass"

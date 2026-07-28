@@ -100,9 +100,9 @@ test_notify_in_shell_frame_banners_with_session_identity() {
   cd "$SANDBOX/frames/$TNAME"
   export FRAME_NAME=shell FRAME_TOPIC=$TNAME
   export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
-  run_frame notify needs input
+  run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - needs input shell/$TNAME"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - ⏸ waiting shell/$TNAME"
 }
 
 test_notify_outside_any_frame_still_exits_0() {
