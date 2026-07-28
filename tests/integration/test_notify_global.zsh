@@ -26,7 +26,7 @@ test_off_writes_setting_and_reports() {
 test_off_suppresses_banner() {
   setup_shell_frame
   run_frame notify off
-  run_frame notify pssst
+  run_frame notify
   assert_status 0
   assert_file_absent "$FAKE_OSASCRIPT_LOG"
 }
@@ -36,9 +36,9 @@ test_on_restores_banner() {
   run_frame notify off
   run_frame notify on
   assert_contains "$(<$HOME/$CONFIG_REL)" "notify=on"
-  run_frame notify pssst
+  run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - pssst shell/$TNAME"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - ⏸ waiting shell/$TNAME"
 }
 
 test_toggle_words_never_banner() {
@@ -46,6 +46,15 @@ test_toggle_words_never_banner() {
   setup_shell_frame
   run_frame notify on
   assert_status 0
+  assert_file_absent "$FAKE_OSASCRIPT_LOG"
+}
+
+test_text_args_are_a_usage_error() {
+  # The old `frame notify TEXT…` form is gone — bare or on|off only.
+  setup_shell_frame
+  run_frame notify pssst
+  assert_status 2
+  assert_contains "$OUT" "usage: frame notify"
   assert_file_absent "$FAKE_OSASCRIPT_LOG"
 }
 

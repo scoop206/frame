@@ -21,7 +21,7 @@ test_muted_session_suppresses_banner() {
   (( $+commands[python3] )) || { skip "python3 not found"; return }
   setup_shell_frame
   export FAKE_NVIM_EXPR_RESULT=1
-  run_frame notify pssst
+  run_frame notify
   assert_status 0
   assert_file_absent "$FAKE_OSASCRIPT_LOG"
 }
@@ -30,9 +30,9 @@ test_unmuted_session_still_banners() {
   (( $+commands[python3] )) || { skip "python3 not found"; return }
   setup_shell_frame
   export FAKE_NVIM_EXPR_RESULT=0
-  run_frame notify pssst
+  run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - pssst shell/$TNAME"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - ⏸ waiting shell/$TNAME"
 }
 
 test_unanswerable_session_defaults_to_banner() {
@@ -41,9 +41,9 @@ test_unanswerable_session_defaults_to_banner() {
   # FAKE_NVIM_EXPR_RESULT the stub treats the RPC as a tripwire (exit 97).
   (( $+commands[python3] )) || { skip "python3 not found"; return }
   setup_shell_frame
-  run_frame notify pssst
+  run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - pssst shell/$TNAME"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - ⏸ waiting shell/$TNAME"
 }
 
 run_tests "$0"

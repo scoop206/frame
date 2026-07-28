@@ -25,7 +25,7 @@ frame shell TOPIC          casual frame in ~/frames/TOPIC — no repo, no branch
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame services [up|down|ps]            manage the shared postgres/minio stack
 frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears)
-frame notify [TEXT…]       macOS banner + the same title status (default "⏸ waiting")
+frame notify               macOS banner + "⏸ waiting" title status
 frame notify on|off        global banner switch: off silences every frame's banners
 frame yolo on|off          master switch: claude in every frame launches with
                            --dangerously-skip-permissions (default off)
@@ -88,10 +88,10 @@ directory; plain `:FrameDown` always refuses, since nothing there is under git.
 
 ### Notifications
 
-`frame notify [TEXT…]` pings you on both channels at once: a macOS banner
-(titled `$NAME/$TOPIC`, so parallel frames are tellable apart) plus the same
-window-title status as `frame status`. Both are best-effort and it always
-exits 0, so it's safe as a hook target.
+`frame notify` pings you on both channels at once: a macOS banner
+(titled `$NAME/$TOPIC`, so parallel frames are tellable apart) plus a
+"⏸ waiting" window-title status via `frame status`. Both are best-effort and
+it always exits 0, so it's safe as a hook target.
 
 `frame init` wires it into a project's `.claude/settings.json`:
 
