@@ -28,8 +28,11 @@ frame notify [TEXT…]       macOS banner + the same title status (default "⏸ 
 
 ### Frames
 
-All work happens in topic worktrees, each called a "frame" — the same name as
-the framework itself. Each is a self-sufficient peer — `frame wt` runs the
+A frame is a terminal window running neovim as it's buffer management layer.
+This is usually one buffer running Claude and then whatver else is appropriate.
+Frames assumes a 1:1:1 mapping between a frame:worktree:branch.
+
+All work happens in topic worktrees, each are self-sufficient peer — `frame wt` runs the
 project's idempotent `stack_up()`, so whichever frame boots first brings up
 the shared services.
 
@@ -51,27 +54,6 @@ When you are done working on the feature you (or claude) can merge to main:
 ```
 frame merge
 ```
-
-### Casual frames
-
-Not everything is a project. `frame shell TOPIC` boots the same kind of
-session — claude + local buffers, window titled `shell/TOPIC` — in a
-generated directory `~/frames/TOPIC` (override the parent with
-`FRAME_SHELL_HOME`), with no git repo, branch, or worktree involved. Each
-topic still gets its own unique directory, so parallel claude instances stay
-apart.
-
-`frame status` and `frame notify` work inside as usual — the session's env
-identifies the frame where git can't. There's no repo to `frame scaffold`,
-so boot wires the claude-code notification hooks itself: a missing
-`.claude/settings.json` in the topic dir is written with the same Stop →
-`frame notify` / UserPromptSubmit → `frame status` hooks a project gets
-(an existing file is never touched).
-`:FrameQuit` closes the session and rerunning `frame shell TOPIC` reopens
-it. `:FrameDown!` quits and deletes the topic directory — the bang is
-always required, since nothing in a casual frame is under git: where a
-worktree frame's plain `:FrameDown` refuses on uncommitted work, here
-everything is uncommitted, so plain `:FrameDown` always refuses.
 
 ### Vim commands
 
@@ -179,11 +161,11 @@ Needed only by specific commands or buffers:
 
 Everything project-side lives under one `.frame/` directory:
 
-| path                  | committed?         | contents                                                           |
-| --------------------- | ------------------ | ------------------------------------------------------------------ |
+| path                  | committed?         | contents                                                                   |
+| --------------------- | ------------------ | -------------------------------------------------------------------------- |
 | `.frame/config.sh`    | yes                | project facts: NAME, ports, SERVER_CMD, BUFFERS, `stack_up()`, `app_env()` |
-| `.frame/worktree.lua` | optional           | project-level layout override                                      |
-| `.frame/local/`       | never (gitignored) | personal overrides — `config.sh`/layouts here win                  |
+| `.frame/worktree.lua` | optional           | project-level layout override                                              |
+| `.frame/local/`       | never (gitignored) | personal overrides — `config.sh`/layouts here win                          |
 
 One setting is required: `BUFFERS=(…)` — which buffers this project's frames
 open (see Buffers below). Everything else is optional. Hooks:
@@ -221,11 +203,11 @@ buffer a frame can open — the formal superset. Per entry:
 `BUFFERS=(…)` in `$PROJECT/.frame/config.sh` is required, and authoritative
 even when empty:
 
-| `BUFFERS` in `$PROJECT/.frame/config.sh` ? | result                                       |
-| ------------------------------------------ | -------------------------------------------- |
-| not set                                    | `frame wt` refuses to boot                   |
-| `BUFFERS=(claude server local)`            | those buffers, as defined in the registry    |
-| `BUFFERS=()`                               | no buffers                                   |
+| `BUFFERS` in `$PROJECT/.frame/config.sh` ? | result                                    |
+| ------------------------------------------ | ----------------------------------------- |
+| not set                                    | `frame wt` refuses to boot                |
+| `BUFFERS=(claude server local)`            | those buffers, as defined in the registry |
+| `BUFFERS=()`                               | no buffers                                |
 
 A buffer whose command can't run (no `web/`, unset env var) fails inside
 that buffer, visibly — fix the config or drop it from `BUFFERS`. One
