@@ -15,11 +15,9 @@
 #   frame services [up|down]   manage the shared postgres/minio stack
 #   frame status [TEXT…]       append "- TEXT" to this frame's window title
 #                              (no TEXT clears it back to name/topic)
-#   frame notify               macOS banner + "⏸ waiting" title status
-#                              (never fails — hook-safe)
-#   frame notify on|off|init   on|off: global banner switch, off silences
-#                              every frame; init: build/repair the banner
-#                              app (needs `brew install terminal-notifier`)
+#   frame notify               frame will send waiting notification
+#   frame notification on|off|init   on|off: global switch
+#                              init: build/repair the banner app (needs `brew install terminal-notifier`)
 #   frame yolo on|off          master switch: claude in every frame launches
 #                              with --dangerously-skip-permissions (default
 #                              off; bare `frame yolo` shows the state)
@@ -46,16 +44,16 @@ case "$cmd" in
   wt|worktree)
     source "$FRAME_ROOT/commands/wt.sh" "$@"
     ;;
-  init|shell|merge|services|status|notify|focus|yolo)
+  init|shell|merge|services|status|notify|notification|focus|yolo)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   notifier)
-    # internal spelling of `frame notify init` — the banner-app build, run
+    # internal spelling of `frame notification init` — the banner-app build, run
     # by `frame init` as its own process (not in the usage text above)
     source "$FRAME_ROOT/commands/notifier.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "$X_MARK frame: unknown command '$cmd' (try: frame help)" >&2
