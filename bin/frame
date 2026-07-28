@@ -10,6 +10,8 @@
 #   frame services [up|down]   manage the shared postgres/minio stack
 #   frame status [TEXT…]       append "- TEXT" to this frame's window title
 #                              (no TEXT clears it back to name/topic)
+#   frame notify [TEXT…]       macOS banner + the same title status
+#                              (default "⏸ waiting"; never fails — hook-safe)
 #   (`worktree` is accepted as a synonym for `wt`)
 #
 # All work happens in topic worktrees ("frames"). Each is self-sufficient —
@@ -31,11 +33,11 @@ case "$cmd" in
   wt|worktree)
     source "$FRAME_ROOT/commands/wt.sh" "$@"
     ;;
-  scaffold|merge|services|status)
+  scaffold|merge|services|status|notify)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "✗ frame: unknown command '$cmd' (try: frame help)" >&2

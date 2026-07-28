@@ -17,6 +17,7 @@ frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame services [up|down|ps]            manage the shared postgres/minio stack
 frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears)
+frame notify [TEXT…]       macOS banner + the same title status (default "⏸ waiting")
 ```
 
 `worktree` is accepted as a synonym for `wt`.
@@ -71,6 +72,25 @@ Either with no text clears back to the base title.
 
 The CLI form works by RPC over the frame's nvim socket (nvim owns the title),
 so it also works from outside the frame while its session is up.
+
+### Notifications
+
+`frame notify [TEXT…]` pings you on both channels at once: a macOS banner
+(titled `$NAME/$TOPIC`, so parallel frames are tellable apart) plus the same
+window-title status as `frame status`. Both are best-effort and it always
+exits 0, so it's safe as a hook target.
+
+`frame scaffold` wires it into a project's `.claude/settings.json`:
+
+- **Stop** → `frame notify` — every time claude ends a turn you get a banner
+  and the title gains "- ⏸ waiting"
+- **UserPromptSubmit** → `frame status` — sending the next prompt clears the
+  status back to the base title
+
+This is deliberately unfiltered for now: every turn end notifies, including
+quick conversational ones. If that proves too chatty, the intended fix is a
+duration gate in `frame notify` (stamp turn start on UserPromptSubmit, skip
+the banner for turns under a couple of minutes) — one place, all projects.
 
 ### Frame Removal
 

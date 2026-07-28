@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "frame notify >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "frame status >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}
