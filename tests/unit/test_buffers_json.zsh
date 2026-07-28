@@ -24,13 +24,13 @@ PY
   assert_eq "$st" "0" "buffers.json shape check failed: $out"
 }
 
-test_scaffold_default_buffers_exist_in_registry() {
+test_init_default_buffers_exist_in_registry() {
   if ! command -v python3 >/dev/null 2>&1; then
     skip "python3 not available"
     return 0
   fi
   make_repo
-  run_frame scaffold
+  run_frame init
   assert_status 0
   local -a bufs
   bufs=($(zsh -c 'source .frame/config.sh && print -r -- $BUFFERS'))

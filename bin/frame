@@ -2,7 +2,7 @@
 # frame — shared dev-workflow harness. Run from inside a project checkout.
 #
 # Usage:
-#   frame scaffold             scaffold .frame/config.sh, gitignore .frame/local/
+#   frame init                 scaffold .frame/config.sh, gitignore .frame/local/
 #   frame wt TOPIC             create/reuse branch TOPIC + worktree, boot it
 #   frame wt                   boot the worktree you're already in
 #   frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
@@ -22,7 +22,7 @@
 # git anchor that topic branches merge back into; it never needs a dev session.
 #
 # Project config: .frame/config.sh (committed) / .frame/local/config.sh
-# (gitignored, wins). See `frame scaffold` for a starter template.
+# (gitignored, wins). See `frame init` for a starter template.
 set -euo pipefail
 
 export FRAME_ROOT="${0:A:h:h}"
@@ -35,7 +35,7 @@ case "$cmd" in
   wt|worktree)
     source "$FRAME_ROOT/commands/wt.sh" "$@"
     ;;
-  scaffold|shell|merge|services|status|notify)
+  init|shell|merge|services|status|notify)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   ""|-h|--help|help)
