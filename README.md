@@ -67,9 +67,11 @@ so boot wires the claude-code notification hooks itself: a missing
 `.claude/settings.json` in the topic dir is written with the same Stop →
 `frame notify` / UserPromptSubmit → `frame status` hooks a project gets
 (an existing file is never touched).
-There's nothing to tear down: `:FrameQuit` closes the session, rerunning
-`frame shell TOPIC` reopens it, and the directory is plain filesystem you
-can delete whenever.
+`:FrameQuit` closes the session and rerunning `frame shell TOPIC` reopens
+it. `:FrameDown!` quits and deletes the topic directory — the bang is
+always required, since nothing in a casual frame is under git: where a
+worktree frame's plain `:FrameDown` refuses on uncommitted work, here
+everything is uncommitted, so plain `:FrameDown` always refuses.
 
 ### Vim commands
 
@@ -83,6 +85,9 @@ When frame instantiates the nvim instance it injects these user commands
 | `:FrameQuit`         | quit the session only — worktree and branch stay for a later `frame wt TOPIC` |
 | `:FrameDown`         | tear down the whole frame: quit nvim, remove the worktree, delete the branch  |
 | `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits             |
+
+In a casual frame (`frame shell`) `:FrameDown!` quits and deletes the topic
+directory; plain `:FrameDown` always refuses, since nothing there is under git.
 
 ### Status
 
