@@ -29,7 +29,7 @@ sandbox_up() {
 EOF
   export PATH="$TESTS_DIR/stubs:$PATH"
   export TNAME="proj$RANDOM$RANDOM"
-  unset FAKE_NVIM_LOG FAKE_BUSY_PORTS
+  unset FAKE_NVIM_LOG FAKE_BUSY_PORTS FAKE_OSASCRIPT_LOG FAKE_NVIM_EXPR_RESULT
   # The suite may itself be running inside a frame session, whose exports
   # (PORT_PREFIX, FRAME_*, SERVER_CMD, <PREFIX>_*_PORT, …) would leak into
   # frame_load_config's ${VAR:=default} lines. Strip them. FRAME_ROOT is
@@ -38,7 +38,7 @@ EOF
   local _v
   for _v in ${(M)${(k)parameters}:#[A-Z0-9_]##_(API|VITE|HMR)_PORT}; do unset "$_v"; done
   unset NAME PORT_PREFIX BUFFERS SERVER_CMD PORT WT_LINKS \
-        API_PORT VITE_PORT HMR_PORT \
+        API_PORT VITE_PORT HMR_PORT FRAME_SHELL_HOME \
         FRAME_NAME FRAME_TOPIC FRAME_MAIN_WT FRAME_VITE_PORT FRAME_BUFFERS
   cd "$SANDBOX"
 }
@@ -46,6 +46,7 @@ EOF
 sandbox_down() {
   cd /
   [[ -n "${SANDBOX:-}" ]] && rm -rf "$SANDBOX"
-  [[ -n "${TNAME:-}" ]] && rm -f /tmp/$TNAME-*.teardown.log(N)
+  [[ -n "${TNAME:-}" ]] && rm -f /tmp/$TNAME-*.teardown.log(N) \
+                                 /tmp/*-$TNAME.nvim(N) /tmp/$TNAME-*.nvim(N)
   return 0
 }

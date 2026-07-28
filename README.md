@@ -16,6 +16,8 @@ frame scaffold             scaffold .frame/config.sh, gitignore .frame/local/
 frame wt TOPIC             create/reuse branch TOPIC + worktree ../_<name>-TOPIC, boot it
 frame wt                   boot the worktree you're already in
 frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
+frame shell TOPIC          casual frame in ~/frames/TOPIC — no repo, no branch,
+                           just the claude + local buffers
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame services [up|down|ps]            manage the shared postgres/minio stack
 frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears)
@@ -50,6 +52,25 @@ When you are done working on the feature you (or claude) can merge to main:
 frame merge
 ```
 
+### Casual frames
+
+Not everything is a project. `frame shell TOPIC` boots the same kind of
+session — claude + local buffers, window titled `shell/TOPIC` — in a
+generated directory `~/frames/TOPIC` (override the parent with
+`FRAME_SHELL_HOME`), with no git repo, branch, or worktree involved. Each
+topic still gets its own unique directory, so parallel claude instances stay
+apart.
+
+`frame status` and `frame notify` work inside as usual — the session's env
+identifies the frame where git can't. There's no repo to `frame scaffold`,
+so boot wires the claude-code notification hooks itself: a missing
+`.claude/settings.json` in the topic dir is written with the same Stop →
+`frame notify` / UserPromptSubmit → `frame status` hooks a project gets
+(an existing file is never touched).
+There's nothing to tear down: `:FrameQuit` closes the session, rerunning
+`frame shell TOPIC` reopens it, and the directory is plain filesystem you
+can delete whenever.
+
 ### Vim commands
 
 When frame instantiates the nvim instance it injects these user commands
@@ -58,6 +79,7 @@ When frame instantiates the nvim instance it injects these user commands
 | command              | action                                                                        |
 | -------------------- | ----------------------------------------------------------------------------- |
 | `:FrameStatus TEXT…` | append "- TEXT" to the window title's status suffix (no TEXT clears it)       |
+| `:FrameNotify off`   | mute `frame notify` banners for this session (`on` unmutes, bare shows state) |
 | `:FrameQuit`         | quit the session only — worktree and branch stay for a later `frame wt TOPIC` |
 | `:FrameDown`         | tear down the whole frame: quit nvim, remove the worktree, delete the branch  |
 | `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits             |
@@ -89,10 +111,19 @@ exits 0, so it's safe as a hook target.
 - **UserPromptSubmit** → `frame status` — sending the next prompt clears the
   status back to the base title
 
-This is deliberately unfiltered for now: every turn end notifies, including
-quick conversational ones. If that proves too chatty, the intended fix is a
-duration gate in `frame notify` (stamp turn start on UserPromptSubmit, skip
-the banner for turns under a couple of minutes) — one place, all projects.
+When a frame gets too chatty — a long conversational session, say — mute it
+with `:FrameNotify off` (`on` unmutes; bare `:FrameNotify` shows the state).
+The switch lives in that session's nvim and dies with it, so each parallel
+frame mutes independently and every frame boots unmuted. `frame notify` asks
+the session over its socket before popping the banner; only the banner+sound
+is muted — the window-title status still updates, so a muted frame still
+shows "- ⏸ waiting" when claude finishes.
+
+Beyond that, notifications are deliberately unfiltered for now: every turn
+end notifies, including quick conversational ones. If that proves too chatty
+even with muting, the intended fix is a duration gate in `frame notify`
+(stamp turn start on UserPromptSubmit, skip the banner for turns under a
+couple of minutes) — one place, all projects.
 
 ### Frame Removal
 

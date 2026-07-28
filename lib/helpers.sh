@@ -61,6 +61,42 @@ frame_resolve() {
   return 1
 }
 
+# ── claude-code hooks ─────────────────────────────────────────────────────────
+
+frame_write_claude_hooks() {
+  # .claude/settings.json in cwd, wiring claude-code to frame's notification
+  # channels: Stop → `frame notify` (banner + "- ⏸ waiting" title status),
+  # UserPromptSubmit → `frame status` (clears it). Callers guard the
+  # file-exists case — this always writes.
+  mkdir -p .claude
+  cat > .claude/settings.json <<'EOF'
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "frame notify >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "frame status >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+}
+
 # ── window titling ────────────────────────────────────────────────────────────
 
 set_title() {

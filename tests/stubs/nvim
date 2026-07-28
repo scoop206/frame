@@ -5,6 +5,14 @@
 # With FAKE_NVIM_LOG set: record how nvim was invoked (argv, cwd, the env
 # frame exported) and exit 0.
 # Without it: tripwire — no test should reach an editor launch unannounced.
+# RPC mode (frame status / notify use `nvim --server … --remote-expr`): a
+# test opts in by setting FAKE_NVIM_EXPR_RESULT, which becomes the answer to
+# ANY expression query. Without it, --server calls fall through to the
+# tripwire like everything else.
+if [[ "${1:-}" == "--server" && -n "${FAKE_NVIM_EXPR_RESULT:-}" ]]; then
+  print -rn -- "$FAKE_NVIM_EXPR_RESULT"
+  exit 0
+fi
 if [[ -n "${FAKE_NVIM_LOG:-}" ]]; then
   {
     print -r -- "argv: $*"

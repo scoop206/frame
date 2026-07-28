@@ -56,33 +56,7 @@ if [[ -f .claude/settings.json ]]; then
   echo "  (for notifications, add hooks yourself: Stop → 'frame notify',"
   echo "   UserPromptSubmit → 'frame status')"
 else
-  mkdir -p .claude
-  cat > .claude/settings.json <<'EOF'
-{
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "frame notify >/dev/null 2>&1 || true"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "frame status >/dev/null 2>&1 || true"
-          }
-        ]
-      }
-    ]
-  }
-}
-EOF
+  frame_write_claude_hooks
   echo "✓ scaffolded .claude/settings.json — claude notifies via 'frame notify'"
 fi
 

@@ -9,21 +9,41 @@
 # needs the session's nvim socket) and a macOS banner (osascript). Built to
 # be the target of Claude Code hooks (Stop → `frame notify`), so a channel
 # failing must never fail the hook: every step is guarded and the command
-# always exits 0.
+# always exits 0. A session can mute its banner channel with :FrameNotify
+# off (asked over the socket below); the title status still updates.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
-
-frame_load_config
 
 TEXT="${*:-⏸ waiting}"
 
 "$FRAME_ROOT/bin/frame" status "$TEXT" 2>/dev/null || true
 
-# Same topic derivation as status.sh, for the banner's title — except
-# guarded: HEAD is unresolvable in a repo with no commits yet.
-if [[ "${PROJECT_ROOT:t}" == _$NAME-* ]]; then
-  TOPIC="${${PROJECT_ROOT:t}#_$NAME-}"
+# Identity for the banner's title, best-effort like everything here: a shell
+# frame (frame shell — no git repo) carries it in the session env; a checkout
+# derives it as status.sh does (guarded: HEAD is unresolvable in a repo with
+# no commits yet); anywhere else fall back to ?/? — the banner still fires.
+if ! frame_project_root >/dev/null \
+    && [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
+  NAME=$FRAME_NAME TOPIC=$FRAME_TOPIC
+elif frame_load_config 2>/dev/null; then
+  if [[ "${PROJECT_ROOT:t}" == _$NAME-* ]]; then
+    TOPIC="${${PROJECT_ROOT:t}#_$NAME-}"
+  else
+    TOPIC=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null) || TOPIC='?'
+  fi
 else
-  TOPIC=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null) || TOPIC='?'
+  NAME='?' TOPIC='?'
+fi
+
+# The session holds the banner mute switch (:FrameNotify off) — ask it over
+# the socket. No session, or no/odd answer → unmuted: the banner errs toward
+# firing, and sessions predating the switch just don't have g:frame_notify_muted.
+SOCKET="/tmp/$NAME-$TOPIC.nvim"
+if [[ -S "$SOCKET" ]]; then
+  _muted=$(nvim --server "$SOCKET" \
+    --remote-expr "get(g:, 'frame_notify_muted', 0)" 2>/dev/null) || _muted=0
+  if [[ "$_muted" == 1 ]]; then
+    exit 0
+  fi
 fi
 
 # argv, not string interpolation — TEXT may contain quotes.
