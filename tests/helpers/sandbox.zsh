@@ -29,7 +29,8 @@ sandbox_up() {
 EOF
   export PATH="$TESTS_DIR/stubs:$PATH"
   export TNAME="proj$RANDOM$RANDOM"
-  unset FAKE_NVIM_LOG FAKE_BUSY_PORTS FAKE_OSASCRIPT_LOG FAKE_NVIM_EXPR_RESULT
+  unset FAKE_NVIM_LOG FAKE_BUSY_PORTS FAKE_OSASCRIPT_LOG FAKE_NVIM_EXPR_RESULT \
+        FAKE_OSASCRIPT_RESULT
   # The suite may itself be running inside a frame session, whose exports
   # (PORT_PREFIX, FRAME_*, SERVER_CMD, <PREFIX>_*_PORT, …) would leak into
   # frame_load_config's ${VAR:=default} lines. Strip them. FRAME_ROOT is

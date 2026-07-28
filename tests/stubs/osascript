@@ -7,4 +7,9 @@ cat >/dev/null
 if [[ -n "${FAKE_OSASCRIPT_LOG:-}" ]]; then
   print -r -- "argv: $*" >> "$FAKE_OSASCRIPT_LOG"
 fi
+# With FAKE_OSASCRIPT_RESULT set: print it, standing in for the script's
+# return value (focus.sh reads "raised"/"activated" back).
+if [[ -n "${FAKE_OSASCRIPT_RESULT:-}" ]]; then
+  print -r -- "$FAKE_OSASCRIPT_RESULT"
+fi
 exit 0

@@ -6,7 +6,8 @@
 #     → the same, carrying that text
 #
 # Two channels, both best-effort: the window-title status (frame status —
-# needs the session's nvim socket) and a macOS banner (osascript). Built to
+# needs the session's nvim socket) and a macOS banner (the Frame notifier
+# app when `frame notifier` has built it, else osascript). Built to
 # be the target of Claude Code hooks (Stop → `frame notify`), so a channel
 # failing must never fail the hook: every step is guarded and the command
 # always exits 0. The banner (never the title status) is skipped in two
@@ -59,9 +60,23 @@ if [[ -S "$SOCKET" ]]; then
   fi
 fi
 
-# argv, not string interpolation — TEXT may contain quotes.
-osascript - "$TEXT" "$NAME/$TOPIC" >/dev/null 2>&1 <<'EOF' || true
+# The banner itself, best channel first. The Frame notifier app (built once
+# by `frame notifier`) is a real bundle, so the banner wears the frame icon
+# and clicking it runs `frame focus` on this frame — by absolute path, since
+# the click callback runs under a bare /bin/sh env. -group: a frame's new
+# banner replaces its previous one instead of stacking. Without the app,
+# the osascript banner (Script Editor icon, click opens it) still fires.
+NOTIFIER="$HOME/.local/share/frame/Frame.app/Contents/MacOS/terminal-notifier"
+if [[ -x "$NOTIFIER" ]]; then
+  "$NOTIFIER" -title "$NAME/$TOPIC" -message "$TEXT" -sound Glass \
+    -group "frame-$NAME-$TOPIC" \
+    -execute "${(q)FRAME_ROOT}/bin/frame focus ${(q)NAME}/${(q)TOPIC}" \
+    >/dev/null 2>&1 || true
+else
+  # argv, not string interpolation — TEXT may contain quotes.
+  osascript - "$TEXT" "$NAME/$TOPIC" >/dev/null 2>&1 <<'EOF' || true
 on run argv
   display notification (item 1 of argv) with title (item 2 of argv) sound name "Glass"
 end run
 EOF
+fi
