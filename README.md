@@ -114,6 +114,27 @@ even with muting, the intended fix is a duration gate in `frame notify`
 (stamp turn start on UserPromptSubmit, skip the banner for turns under a
 couple of minutes) — one place, all projects.
 
+#### Fixing the banner badge
+
+The frame badge on banners comes from `~/.local/share/frame/Frame.app`, a
+rebranded terminal-notifier built by the first `frame init` (needs
+homebrew + terminal-notifier — see Recommended below).
+
+**After the first install** — macOS won't show the app's banners until you
+allow them: System Settings → Notifications → Frame → Allow. Click-to-focus
+also asks for Accessibility on the first banner click; grant that too. Both
+are one-time.
+
+**If banners lose the badge later** (generic or Terminal icon instead of the
+frame vortex):
+
+1. `killall NotificationCenter` — it caches sender icons and respawns
+   instantly; a stale cache is the usual culprit.
+2. Still wrong? Force a rebuild: `rm -rf ~/.local/share/frame/Frame.app`,
+   then re-run `frame init`. The rebuild mints a fresh code signature, and
+   macOS keys the notification grant to the signature — so re-allow the
+   banners in System Settings → Notifications → Frame afterwards.
+
 ### Frame Merge
 
 When you are done working on the feature you (or claude) can merge to main —
