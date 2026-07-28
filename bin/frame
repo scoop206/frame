@@ -19,6 +19,9 @@
 #                              (default "⏸ waiting"; never fails — hook-safe)
 #   frame notify on|off        global banner switch: off silences every
 #                              frame's banners until back on
+#   frame yolo on|off          master switch: claude in every frame launches
+#                              with --dangerously-skip-permissions (default
+#                              off; bare `frame yolo` shows the state)
 #   frame focus [NAME/TOPIC]   raise that frame's ghostty window (default:
 #                              the frame you're in)
 #   (`worktree` is accepted as a synonym for `wt`)
@@ -42,7 +45,7 @@ case "$cmd" in
   wt|worktree)
     source "$FRAME_ROOT/commands/wt.sh" "$@"
     ;;
-  init|shell|merge|services|status|notify|focus)
+  init|shell|merge|services|status|notify|focus|yolo)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   notifier)
@@ -51,7 +54,7 @@ case "$cmd" in
     source "$FRAME_ROOT/commands/notifier.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "$X_MARK frame: unknown command '$cmd' (try: frame help)" >&2

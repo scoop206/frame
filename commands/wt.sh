@@ -207,5 +207,6 @@ export FRAME_BUFFERS="${BUFFERS[*]}"
 # frame-computed values with no config counterpart.
 export SERVER_CMD="${SERVER_CMD:-}"
 export PORT_PREFIX
+frame_export_claude_flags
 
 exec nvim -S "$FRAME_ROOT/layouts/worktree.lua"

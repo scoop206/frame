@@ -50,5 +50,6 @@ export FRAME_TOPIC="$TOPIC"
 export FRAME_MAIN_WT=""
 export FRAME_VITE_PORT=""
 export FRAME_BUFFERS="claude local"
+frame_export_claude_flags
 
 exec nvim -S "$FRAME_ROOT/layouts/worktree.lua"
