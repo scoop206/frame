@@ -47,7 +47,13 @@ fi
 # Vimscript single-quoted string: only ' needs escaping, as ''.
 TEXT="$*"
 _esc=${TEXT//\'/\'\'}
-if _title=$(nvim --server "$SOCKET" --remote-expr "v:lua.FrameSetStatus('$_esc')"); then
+# --headless: the remote-expr client must not attach a UI. Without it, a
+# recent nvim (0.10+) whose stdout is a pipe — as it is under this $(…) —
+# routes the expr result to /dev/tty instead of stdout (so $_title comes
+# back empty) and probes the terminal for capabilities, whose replies then
+# leak onto the caller's prompt. Headless writes to real stdout and never
+# touches the tty.
+if _title=$(nvim --headless --server "$SOCKET" --remote-expr "v:lua.FrameSetStatus('$_esc')"); then
   echo "$OK_MARK title: $_title"
 else
   echo "$X_MARK session at $SOCKET didn't accept the update — layout predates" >&2
