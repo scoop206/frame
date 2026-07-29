@@ -132,20 +132,11 @@ if (( ! ${+BUFFERS} )); then
   exit 1
 fi
 
+# Resolve the topic first, before any worktree is created — the collision guard
+# below must run before side effects, so a rejected topic leaves nothing behind.
 if (( $# >= 1 )); then
   TOPIC=$1
   WT_DIR="${MAIN_WT:h}/_$NAME-$TOPIC"
-  if [[ ! -d "$WT_DIR" ]]; then
-    if git -C "$MAIN_WT" show-ref --verify --quiet "refs/heads/$TOPIC"; then
-      echo "$RUN_MARK adding worktree $WT_DIR on existing branch $TOPIC…"
-      git -C "$MAIN_WT" worktree add "$WT_DIR" "$TOPIC"
-    else
-      echo "$RUN_MARK creating branch $TOPIC + worktree $WT_DIR…"
-      git -C "$MAIN_WT" worktree add -b "$TOPIC" "$WT_DIR"
-    fi
-  else
-    echo "$OK_MARK worktree $WT_DIR already exists — reusing"
-  fi
   PROJECT_DIR="$WT_DIR"
 else
   PROJECT_DIR="$PROJECT_ROOT"
@@ -157,6 +148,28 @@ else
     TOPIC="${${PROJECT_DIR:t}#_$NAME-}"
   fi
 fi
+
+# Topics are the handle `frame focus TOPIC` matches on, and that match ignores
+# the owner name — so a topic must be unique across every live frame or focus
+# can't tell them apart. Refuse before creating/booting rather than let the
+# collision exist. (Rebooting this same frame is exempt — see the helper.)
+frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
+
+# Topic is clear — now materialize the worktree for the `frame wt TOPIC` form.
+if (( $# >= 1 )); then
+  if [[ ! -d "$WT_DIR" ]]; then
+    if git -C "$MAIN_WT" show-ref --verify --quiet "refs/heads/$TOPIC"; then
+      echo "$RUN_MARK adding worktree $WT_DIR on existing branch $TOPIC…"
+      git -C "$MAIN_WT" worktree add "$WT_DIR" "$TOPIC"
+    else
+      echo "$RUN_MARK creating branch $TOPIC + worktree $WT_DIR…"
+      git -C "$MAIN_WT" worktree add -b "$TOPIC" "$WT_DIR"
+    fi
+  else
+    echo "$OK_MARK worktree $WT_DIR already exists — reusing"
+  fi
+fi
+
 cd "$PROJECT_DIR"
 
 set_title "$(frame_base_title "$NAME" "$TOPIC")"

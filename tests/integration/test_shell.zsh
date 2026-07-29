@@ -23,6 +23,24 @@ test_shell_creates_dir_and_boots() {
     || fail "topic dir unexpectedly inside a git repo"
 }
 
+test_shell_refuses_topic_live_elsewhere() {
+  # A live frame in another project already carries this topic — a shell frame
+  # with the same topic would make `frame focus jam` ambiguous, so refuse it
+  # before the topic dir is created. The nvim stub answers FrameInfo() from the
+  # planted companion; socket carries $TNAME so sandbox_down sweeps it.
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  local sock="/tmp/$TNAME-other.nvim"
+  python3 -c 'import socket,sys
+s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$sock"
+  printf '%s\t%s\t%s\t%s\n' flipnem jam 5173 '' > "$sock.info"
+  run_frame shell jam
+  assert_status 1
+  assert_contains "$OUT" "is already live"
+  assert_dir_absent "$SANDBOX/frames/jam"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
 test_shell_home_defaults_under_home() {
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
   run_frame shell jam

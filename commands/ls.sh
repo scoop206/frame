@@ -37,34 +37,18 @@ elif frame_project_root >/dev/null 2>&1 && frame_load_config 2>/dev/null; then
 fi
 
 # ── ask each live socket for its identity ─────────────────────────────────────
-# --headless for the same reason status.sh uses it: a piped-stdout nvim client
-# otherwise routes the expr result to /dev/tty and probes the terminal.
-_frame_query() {  # _frame_query SOCKET EXPR → prints result, or fails
-  nvim --headless --server "$1" --remote-expr "$2" 2>/dev/null
-}
-
-# Sourced by bin/frame → this runs at top-level shell scope, so no `local` /
-# `setopt local_options` here (both are function-only in zsh); _frame_query
-# above is a real function and uses `local` fine. (N) = null_glob for this one
-# pattern, so an empty /tmp still expands to nothing rather than the literal.
+# The socket sweep + FrameInfo query lives in lib/helpers.sh (frame_live_frames),
+# shared with the creation paths' topic-collision guard so the two can't drift.
+# It prints one `name<TAB>topic<TAB>port<TAB>status` row per live frame; here we
+# just mark the current frame and shape the columns.
 typeset -a _rows _f
-for _sock in /tmp/*.nvim(N); do
-  [[ -S "$_sock" ]] || continue
-  # FrameInfo answers only on sessions booted with the current layout; a socket
-  # that doesn't (dead session, or one predating the helper — reboot it) is skipped.
-  _rec=$(_frame_query "$_sock" 'v:lua.FrameInfo()') || continue
-  [[ -n "$_rec" ]] || continue
-
-  _name=${_rec%%$'\t'*};  _rec=${_rec#*$'\t'}
-  _topic=${_rec%%$'\t'*}; _rec=${_rec#*$'\t'}
-  _port=${_rec%%$'\t'*};  _status=${_rec#*$'\t'}
+while IFS=$'\t' read -r _name _topic _port _status; do
   [[ -n "$_name" ]] || continue
-
   _mark=' '
   [[ "$_name" == "$_cur_name" && "$_topic" == "$_cur_topic" ]] && _mark='→'
   # Sort key (name, then topic) up front; stripped before printing.
   _rows+=("$_name	$_topic	$_mark	$_name	$_topic	${_port:--}	${_status:--}")
-done
+done < <(frame_live_frames)
 
 if (( ${#_rows} == 0 )); then
   echo "no frames running"

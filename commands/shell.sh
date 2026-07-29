@@ -20,6 +20,13 @@ if [[ "$TOPIC" == */* ]]; then
 fi
 
 NAME=shell
+
+# Topics are the handle `frame focus TOPIC` matches on, ignoring the owner name,
+# so a topic must be unique across every live frame (shell frames included) or
+# focus can't disambiguate. Refuse before creating the dir. (Re-entering this
+# same shell frame is exempt — see frame_assert_topic_free.)
+frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
+
 DIR="${FRAME_SHELL_HOME:-$HOME/frames}/$TOPIC"
 if [[ -d "$DIR" ]]; then
   echo "$OK_MARK directory $DIR already exists — reusing"
