@@ -38,7 +38,7 @@ test_on_restores_banner() {
   assert_contains "$(<$HOME/$CONFIG_REL)" "notify=on"
   run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - waiting shell [ $TNAME ]"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - task complete shell [ $TNAME ]"
 }
 
 test_toggle_never_banners() {
