@@ -51,6 +51,7 @@ sandbox_down() {
   [[ -n "${TNAME:-}" ]] && rm -f /tmp/$TNAME-*.teardown.log(N) \
                                  /tmp/*-$TNAME.nvim(N) /tmp/$TNAME-*.nvim(N) \
                                  /tmp/*-$TNAME.nvim.info(N) /tmp/$TNAME-*.nvim.info(N) \
+                                 /tmp/*-$TNAME.nvim.hang(N) /tmp/$TNAME-*.nvim.hang(N) \
                                  /tmp/*-$TNAME.prompt(N) /tmp/$TNAME-*.prompt(N)
   return 0
 }

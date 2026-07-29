@@ -16,6 +16,7 @@ plant_live() {  # plant_live SOCK NAME TOPIC PORT STATUS  — a FrameInfo sessio
   printf '%s\t%s\t%s\t%s\n' "$2" "$3" "$4" "$5" > "$1.info"
 }
 plant_dead() { _mksock "$1"; }                                  # no responder
+plant_hung() { _mksock "$1"; : > "$1.hang"; }                   # alive but wedged
 
 test_lists_live_frames_in_columns() {
   plant_live "/tmp/$TNAME-alpha.nvim" "$TNAME" alpha 5173 WAITING
@@ -64,6 +65,20 @@ test_stale_socket_excluded() {
   assert_status 0
   assert_contains "$OUT" "live"
   assert_not_contains "$OUT" "dead"
+}
+
+test_unresponsive_socket_skipped_promptly() {
+  # An alive-but-wedged frame (socket up, but its nvim never answers the RPC)
+  # must not hang the sweep: frame_rpc_expr's timeout bounds the probe, the
+  # frame is skipped like dead debris, and the responsive rows still list. A
+  # short timeout keeps the suite fast; without the bound this test would hang.
+  export FRAME_RPC_TIMEOUT=1
+  plant_live "/tmp/$TNAME-live.nvim" "$TNAME" live 5173 ''
+  plant_hung "/tmp/$TNAME-hung.nvim"          # blocks forever if not bounded
+  run_frame ls
+  assert_status 0
+  assert_contains "$OUT" "live"
+  assert_not_contains "$OUT" "hung"
 }
 
 test_no_live_frames_prints_message() {
