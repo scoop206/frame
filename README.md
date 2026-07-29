@@ -45,7 +45,7 @@ frame focus [NAME/TOPIC]   raise that frame's ghostty window (default: the one y
 
 ### Frames
 
-A frame is a terminal window running neovim as it's buffer management layer.
+A frame is a terminal window running neovim as it's buffer management layer (multiplexer).
 This is usually one buffer running Claude and then whatver else is appropriate.
 Frames assumes a 1:1:1 mapping between a frame:worktree:branch.
 
