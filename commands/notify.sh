@@ -1,7 +1,7 @@
 # frame notify — ping the human that this frame wants attention:
 #
 #   frame notify
-#     → banner "WAITING", title "<name> [ <topic> :<port> ] - WAITING"
+#     → banner "waiting", title "<name> [ <topic> :<port> ] - waiting"
 #
 # The controls live under `frame notification` (notification.sh): on|off is
 # the global banner switch, init the banner-app build/repair.
@@ -26,7 +26,7 @@ if (( $# )); then
   exit 2
 fi
 
-TEXT="WAITING"
+TEXT="waiting"
 
 "$FRAME_ROOT/bin/frame" status "$TEXT" 2>/dev/null || true
 

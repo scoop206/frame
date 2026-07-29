@@ -121,7 +121,7 @@ frame_export_claude_flags() {
 
 frame_write_claude_hooks() {
   # .claude/settings.json in cwd, wiring claude-code to frame's notification
-  # channels: Stop → `frame notify` (banner + "- WAITING" title status),
+  # channels: Stop → `frame notify` (banner + "- waiting" title status),
   # UserPromptSubmit → `frame status` (clears it). Callers guard the
   # file-exists case — this always writes.
   mkdir -p .claude

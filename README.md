@@ -100,7 +100,7 @@ frame --help
 ### Recommended extras
 
 - **Ghostty** — the terminal Frame was built with; on others your YMMV.
-- **Raycast** — window fuzzy-find lets you leverage the WAITING and TOPIC name of your frames.
+- **Raycast** — window fuzzy-find lets you leverage the waiting and TOPIC name of your frames.
 - **homebrew + terminal-notifier** — optional; `brew install terminal-notifier`,
   then `frame notification init` (or the first `frame init`) builds the frame-icon,
   click-to-focus banner app (without them, plain osascript banners still fire).
