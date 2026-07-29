@@ -86,8 +86,9 @@ transport; `inbox` reads. (`agent` stays free as a future umbrella noun.)
   object*, and liveness is free: frame dies → socket + state vanish, nothing to
   garbage-collect.
 - **Division of labor:** nvim = coordination brain (all routing + state); the
-  Stop hook = a dumb sensor that reads the agent's clean last response from the
-  JSONL **transcript** (never the TUI buffer) and hands it to the brain.
+  Stop hook = a dumb sensor that reads the agent's clean last response from
+  Claude Code's **Stop-hook payload** (`last_assistant_message`, never the TUI
+  buffer) and hands it to the brain.
 
 ## The two hard constraints
 
@@ -205,10 +206,13 @@ one place the "state in nvim" idea fights physics.
 
 Clean split:
 
-- **Stop hook = sensor.** It already receives the `transcript_path` on stdin
-  (Claude Code hook contract). It reads the agent's *actual* last assistant
-  message from that JSONL (clean, structured) and RPCs it into the frame:
-  `v:lua.FrameOnTurnEnd(text)`. The hook decides nothing.
+- **Stop hook = sensor.** Claude Code's Stop payload (on stdin) carries
+  `last_assistant_message` — the flattened answer, synchronously — so the sensor
+  RPCs *that* text into the frame: `v:lua.FrameOnTurnEnd(text)`. The hook decides
+  nothing. (It does NOT parse `transcript_path`: at Stop time the transcript on
+  disk lags the hook — the final assistant line often isn't flushed yet — so
+  reading the file races and comes back empty. The transcript path is kept only
+  as a fallback for payloads lacking the field. Never scrape the TUI buffer.)
 - **`FrameOnTurnEnd(text)` = brain.** One Lua function does all routing: if
   `subscribers` is empty, no-op (the existing banner still fires); else deliver
   `text` home to each address as a **report** — appended to that address's
@@ -286,7 +290,7 @@ Phases 4–5 are not yet built.*
    into `FrameState`; every frame gets an `inbox`; keep the title a pure view.
    Mostly a refactor — de-risks the rest.
 3. **One-shot reply into the sender's inbox.** Arm `subscribers` on send; teach the
-   Stop hook to read the transcript tail and call `FrameOnTurnEnd`; deliver the
+   Stop hook to read the payload's `last_assistant_message` and call `FrameOnTurnEnd`; deliver the
    report socket-to-socket into the sending frame's `inbox`; `frame inbox` to
    read. The first real round-trip — and since inboxes are already socket-backed,
    there's no separate human/file path to build.
