@@ -12,6 +12,16 @@ EOF
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
 }
 
+# A live frame owned by some OTHER project carrying $2 as its topic — the nvim
+# stub answers FrameInfo() from the planted <sock>.info companion (see
+# test_ls.zsh). Socket name carries $TNAME so sandbox_down sweeps it.
+plant_live_topic() {  # plant_live_topic NAME TOPIC
+  local sock="/tmp/$TNAME-other.nvim"
+  python3 -c 'import socket,sys
+s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$sock"
+  printf '%s\t%s\t%s\t%s\n' "$1" "$2" 5173 '' > "$sock.info"
+}
+
 test_create_boots_into_nvim() {
   setup_project
   run_frame wt topic
@@ -116,6 +126,35 @@ EOF
   assert_link_target "$SANDBOX/_$TNAME-topic/.env" "$REPO/.env"
   # entries missing in the primary checkout are skipped silently
   assert_file_absent "$SANDBOX/_$TNAME-topic/nope.txt"
+}
+
+test_topic_live_elsewhere_is_refused() {
+  setup_project
+  plant_live_topic othername topic     # another project already owns "topic"
+  run_frame wt topic
+  assert_status 1
+  assert_contains "$OUT" "is already live"
+  # Refused before side effects: no worktree, no branch, no editor launch.
+  assert_dir_absent "$SANDBOX/_$TNAME-topic"
+  assert_branch_absent "$REPO" topic
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_same_name_topic_reboot_is_allowed() {
+  # A live frame with this frame's OWN name+topic is a reboot, not a collision.
+  setup_project
+  plant_live_topic "$TNAME" topic
+  run_frame wt topic
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_TOPIC=topic"
+}
+
+test_different_topic_ignores_live_frame() {
+  setup_project
+  plant_live_topic othername othertopic   # different topic → no conflict
+  run_frame wt topic
+  assert_status 0
+  assert_dir_exists "$SANDBOX/_$TNAME-topic"
 }
 
 run_tests "$0"

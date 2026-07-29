@@ -178,6 +178,55 @@ set_title() {
   printf '\e]2;%s\e\\' "$1"
 }
 
+# ── live-frame discovery ──────────────────────────────────────────────────────
+
+frame_live_frames() {
+  # Print one `name<TAB>topic<TAB>port<TAB>status` row per running frame on this
+  # machine, unsorted. A running frame is exactly one with a live nvim socket at
+  # /tmp/<name>-<topic>.nvim that answers FrameInfo() over that socket — we ask
+  # the session for its own identity rather than parsing the ambiguous
+  # <name>-<topic> filename (topics can contain dashes). Sockets that don't
+  # answer are skipped: dead debris from a crash, or a session predating
+  # FrameInfo (a reboot fixes it). Shared by `frame ls` (renders the rows) and
+  # the creation paths (topic-collision guard). --headless keeps the client from
+  # routing the expr result to /dev/tty and probing the terminal.
+  #
+  # (N) = null_glob for this one pattern, so an empty /tmp expands to nothing
+  # rather than the literal. Port/status are printed raw ('' when absent);
+  # callers render the empty case however they like.
+  local _sock _rec _name _topic _port _status
+  for _sock in /tmp/*.nvim(N); do
+    [[ -S "$_sock" ]] || continue
+    _rec=$(nvim --headless --server "$_sock" --remote-expr 'v:lua.FrameInfo()' 2>/dev/null) || continue
+    [[ -n "$_rec" ]] || continue
+    _name=${_rec%%$'\t'*};  _rec=${_rec#*$'\t'}
+    _topic=${_rec%%$'\t'*}; _rec=${_rec#*$'\t'}
+    _port=${_rec%%$'\t'*};  _status=${_rec#*$'\t'}
+    [[ -n "$_name" ]] || continue
+    print -r -- "$_name	$_topic	$_port	$_status"
+  done
+}
+
+frame_assert_topic_free() {
+  # frame_assert_topic_free NAME TOPIC — refuse (return 1, message on stderr) if
+  # any OTHER live frame already carries TOPIC. Topics are the handle
+  # `frame focus TOPIC` resolves by, and that match ignores the owner name
+  # (see commands/focus.sh), so a topic shared by two live frames is ambiguous:
+  # focus silently raises whichever the window server lists first. Enforcing
+  # uniqueness at boot keeps that situation from ever existing. A live frame
+  # that is this very frame — same NAME and TOPIC, i.e. a reboot/reuse — is fine.
+  local _name=$1 _topic=$2 _o_name _o_topic
+  while IFS=$'\t' read -r _o_name _o_topic _; do
+    [[ "$_o_topic" == "$_topic" ]] || continue
+    [[ "$_o_name" == "$_name" ]] && continue   # same frame rebooting — allowed
+    echo "$X_MARK topic '$_topic' is already live ($_o_name [ $_o_topic ]) —" >&2
+    echo "  topics must be unique so 'frame focus $_topic' is unambiguous." >&2
+    echo "  pick another topic, or tear that frame down first: frame wt -d" >&2
+    return 1
+  done < <(frame_live_frames)
+  return 0
+}
+
 # ── docker / shared services ──────────────────────────────────────────────────
 
 ensure_docker() {
