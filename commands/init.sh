@@ -3,10 +3,9 @@
 #   .frame/local/           personal overrides + state — appended to .gitignore
 #   .claude/settings.json   claude-code hooks: `frame notify` when a turn ends,
 #                           clear the title status when the next prompt lands
-# Also builds the machine-global banner app (notifier.sh) so banners wear the
-# frame icon from the first init on.
-# Idempotent: existing files are left alone, the gitignore entry is added
-# once, and the banner app is rebuilt only when its inputs changed.
+# Idempotent: existing files are left alone, the gitignore entry is added once.
+# The machine-global banner app is built separately by `frame notification
+# init` (notifier.sh) — run it once per machine for frame-icon banners.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 PROJECT_ROOT=$(frame_project_root) || {
@@ -70,10 +69,6 @@ else
   echo "$OK_MARK added .frame/local/ to .gitignore"
 fi
 
-# Banner app (machine-global, not per-project): notifier.sh skips by content
-# fingerprint, so only the first init on a machine — or one after the icon
-# art or brew copy changed — actually builds. Own process + || true: a failed
-# build (no homebrew, say) leaves the osascript banner fallback, never a
-# broken init. Not `( source … ) || true` — in a ||-tested subshell zsh
-# suppresses ERR_EXIT, and notifier.sh leans on set -e between its steps.
-"$FRAME_ROOT/bin/frame" notifier || true
+# Banner app is machine-global, not per-project, so it's built on its own:
+# run `frame notification init` once per machine for frame-icon banners.
+echo "  Want frame-icon banners? Build the banner app once: frame notification init"
