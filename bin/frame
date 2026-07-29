@@ -13,7 +13,7 @@
 #   frame services [up|down]   manage the shared postgres/minio stack
 #   frame status [TEXT…]       append "- TEXT" to this frame's window title
 #                              (no TEXT clears it back to the base title)
-#   frame notify               frame will send waiting notification
+#   frame notify               frame will send task complete notification
 #   frame notification on|off|init   on|off: global switch
 #                                    init: build/repair the banner icon
 #   frame yolo on|off          master switch: claude in every frame launches

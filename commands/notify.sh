@@ -1,7 +1,7 @@
 # frame notify — ping the human that this frame wants attention:
 #
 #   frame notify
-#     → banner "waiting", title "<name> [ <topic> :<port> ] - waiting"
+#     → banner "task complete", title "<name> [ <topic> :<port> ] - waiting"
 #
 # The controls live under `frame notification` (notification.sh): on|off is
 # the global banner switch, init the banner-app build/repair.
@@ -26,9 +26,13 @@ if (( $# )); then
   exit 2
 fi
 
-TEXT="waiting"
+# Two distinct strings: the title status reflects the frame's ongoing state
+# (it's waiting on the human), while the banner is the proactive "I'm done"
+# ping. STATUS goes to the window title, TEXT to the banner below.
+STATUS="waiting"
+TEXT="task complete"
 
-"$FRAME_ROOT/bin/frame" status "$TEXT" 2>/dev/null || true
+"$FRAME_ROOT/bin/frame" status "$STATUS" 2>/dev/null || true
 
 # Globally off → no banner from any frame. The title status above still
 # ran — same contract as the session mute.
