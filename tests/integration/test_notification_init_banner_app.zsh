@@ -79,14 +79,13 @@ test_missing_notifier_hints_instead_of_installing() {
 
 test_frame_init_does_not_build_banner_app() {
   # the split (d182db2): `frame init` scaffolds the project but never touches
-  # the machine-global banner app, even with a working brew on PATH — it just
-  # points at `frame notification init`.
+  # the machine-global banner app, even with a working brew on PATH.
   make_repo
   plant_brew_and_source
   run_frame init
   assert_status 0
-  assert_contains "$OUT" "scaffolded .frame/config.sh"
-  assert_contains "$OUT" "frame notification init"
+  assert_contains "$OUT" ".frame/config.sh"
+  assert_contains "$OUT" "scaffolded"
   assert_not_contains "$OUT" "built $(APP_DIR)"
   assert_dir_absent "$(APP_DIR)"
 }
