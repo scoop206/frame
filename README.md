@@ -2,14 +2,39 @@
 
 [![tests](https://github.com/scoop206/frame/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/scoop206/frame/actions/workflows/test.yml)
 
-An opinionated AI harness based around:
-
-- neovim
-- git worktrees
+An opinionated AI harness built around **neovim** and **git worktrees** — a frame
+per feature, parallel Claude sessions you can tell apart, and shared services
+across all your projects.
 
 <p align="center">
   <img src="assets/frame-icon.png" alt="frame icon: a stack of overlapping windows" width="216">
 </p>
+
+<!-- Record with: vhs assets/demo.tape  (see assets/demo.tape) -->
+<p align="center">
+  <img src="assets/demo.gif" alt="frame wt booting a worktree into neovim with a Claude buffer" width="900">
+</p>
+
+## Table of Contents
+
+- [What Frame does](#what-frame-does)
+- [Features](#features)
+- [Installation](#installation)
+  - [Prerequisites](#prerequisites)
+  - [Install Frame](#install-frame)
+  - [Recommended extras](#recommended-extras)
+- [Getting Started](#getting-started)
+- [Concepts: Frames](#concepts-frames)
+- [Vim commands](#vim-commands)
+- [Frame Merge](#frame-merge)
+- [Frame Removal](#frame-removal)
+- [Notifications](#notifications)
+- [How a project plugs in](#how-a-project-plugs-in)
+- [Buffer Definitions](#buffer-definitions)
+- [Shared (Centralized) Services](#shared-centralized-services)
+- [License](#license)
+
+## What Frame does
 
 Run from a project:
 
@@ -35,21 +60,86 @@ frame focus [NAME/TOPIC]   raise that frame's ghostty window (default: the one y
 
 `worktree` is accepted as a synonym for `wt`.
 
-### Features
+## Features
 
 - A frame per feature
 - Parallel sessions you can tell apart
 - Claude notifications
-- Shared postgres + minio (or whatver) across all your projects
-- stock neovim (no plugins), zsh, git worktrees
+- Shared postgres + minio (or whatever) across all your projects
+- minimal neovim, zsh, git worktrees
 
-### Frames
+## Installation
 
-A frame is a terminal window running neovim as it's buffer management layer (multiplexer).
-This is usually one buffer running Claude and then whatver else is appropriate.
+### Prerequisites
+
+- zsh
+- git ≥ 2.5
+- neovim (no plugins required)
+- claude (Claude Code CLI) — permission prompts stay on unless you opt in with `frame yolo on`
+- docker with the compose v2 plugin
+- macOS + OrbStack (any docker provider works if already running; auto-start is OrbStack-only)
+- curl, lsof
+
+Frame also assumes **every project's default branch is named `main`**.
+
+### Install Frame
+
+```bash
+# 1. Clone Frame — location doesn't matter
+git clone https://github.com/scoop206/frame.git
+cd frame
+
+# 2. Put frame on your PATH (this line persists it in ~/.zshrc)
+echo "export PATH=\"$PWD/bin:\$PATH\"" >> ~/.zshrc
+exec zsh
+
+# 3. Verify
+frame --help
+```
+
+### Recommended extras
+
+- **Ghostty** — the terminal Frame was built with; on others your YMMV.
+- **Raycast** — window fuzzy-find lets you leverage the WAITING and TOPIC name of your frames.
+- **homebrew + terminal-notifier** — optional; `brew install terminal-notifier`,
+  then `frame notification init` (or the first `frame init`) builds the frame-icon,
+  click-to-focus banner app (without them, plain osascript banners still fire).
+
+## Getting Started
+
+From inside any project, scaffold its Frame config and start a worktree:
+
+```bash
+cd your-project
+
+# 1. Scaffold .frame/config.sh and gitignore .frame/local/
+frame init
+
+# 2. (optional) let Claude run with permissions skipped in every frame
+frame yolo on
+
+# 3. Create a topic worktree and boot it
+frame wt scratch-topic
+```
+
+Neovim will fire up with the Claude buffer in the foreground.
+
+A bare-bones `.frame/config.sh` needs only your buffer list — if you'd rather write
+it by hand instead of running `frame init`:
+
+```bash
+cd your-project && mkdir -p .frame && echo "BUFFERS(claude local)" > .frame/config.sh
+```
+
+See [How a project plugs in](#how-a-project-plugs-in) for the full config.
+
+## Concepts: Frames
+
+A frame is a terminal window running neovim as its buffer management layer (multiplexer).
+This is usually one buffer running Claude and then whatever else is appropriate.
 Frames assumes a 1:1:1 mapping between a frame:worktree:branch.
 
-All work happens in topic worktrees, each are self-sufficient peer — `frame wt` runs the
+All work happens in topic worktrees, each a self-sufficient peer — `frame wt` runs the
 project's idempotent `stack_up()`, so whichever frame boots first brings up
 the shared services.
 
@@ -71,7 +161,7 @@ This starts neovim w/ custom layout which is usually 4 buffers:
 The ghostty window will now be named $REPO/$TOPIC:PORT
 You can see vite's rendered web app at http://localhost:PORT
 
-### Vim commands
+## Vim commands
 
 When frame instantiates the nvim instance it injects these user commands
 (defined in `layouts/worktree.lua`), available from any buffer in the session:
@@ -79,45 +169,12 @@ When frame instantiates the nvim instance it injects these user commands
 | command              | action                                                                        |
 | -------------------- | ----------------------------------------------------------------------------- |
 | `:FrameStatus TEXT…` | append "- TEXT" to the window title's status suffix (no TEXT clears it)       |
-| `:FrameNotify off`   | 'on' or 'off' to umute/mute banners; no arg shows state)                      |
+| `:FrameNotify off`   | 'on' or 'off' to unmute/mute banners; no arg shows state                      |
 | `:FrameQuit`         | quit the session only — worktree and branch stay for a later `frame wt TOPIC` |
 | `:FrameDown`         | tear down the whole frame: quit nvim, remove the worktree, delete the branch  |
 | `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits             |
 
-In a casual frame (`frame shell`) `:FrameDown!` quits and deletes the topic
-directory; plain `:FrameDown` always refuses, since nothing there is under git.
-
-### Notifications
-
-#### Fixing the banner badge
-
-At first the badge is a generic AppleScript badge — clicking it opens Script
-Editor instead of focusing your frame.
-
-Things work fine in this state but here's extra to steps to get the badge right:
-
-`brew install terminal-notifier`  
-`
-
-To fix:
-
-- System Settings → Notifications → Frame → Allow.
-- Clicking a badge also asks for Accessibility on the first click; grant that
-  too. Both are one-time.
-
-Fire a test banner with `frame notify` to check any fix.
-
-**If banners lose the badge later** (generic or Terminal icon instead of the
-frame vortex):
-
-1. `killall usernoted NotificationCenter` — both notification daemons cache the
-   old icon; they respawn instantly, and a stale cache is the usual culprit.
-2. Still wrong? Force a rebuild: `rm -rf ~/.local/share/frame/Frame.app`,
-   then `frame notification init`. The rebuild mints a fresh code signature, and
-   macOS keys the notification grant to the signature — so re-allow the
-   banners in System Settings → Notifications → Frame afterwards.
-
-### Frame Merge
+## Frame Merge
 
 When you are done working on the feature you (or claude) can merge to main —
 from wherever you are:
@@ -151,7 +208,7 @@ Safeguards, in the order they run:
 
 Worktree and branch cleanup stays with `frame wt -d` (below).
 
-### Frame Removal
+## Frame Removal
 
 Tear down from _inside_ the frame — either entry point works:
 
@@ -162,7 +219,7 @@ From outside the frame — the project's primary checkout, or another frame of
 the same project: `frame wt -d TOPIC`. TOPIC is resolved in the current
 project's namespace, so you must run it from inside that project's git tree.
 
-#### Teardown Safeguards
+### Teardown Safeguards
 
 Teardown refuses if the worktree has uncommitted changes or the branch has
 commits not yet on main — merge first (`frame merge`), or force with
@@ -170,49 +227,35 @@ commits not yet on main — merge first (`frame merge`), or force with
 quit, so a refusal never leaves you editor-less. Reaper output lands in
 `/tmp/<name>-<topic>.teardown.log`.
 
-### Installation and Getting Started
+## Notifications
 
-Clone this repo (location does not matter)  
-Check the dependcies (see below).  
-put `/path/to/frame/bin/` on your PATH.  
-add a .frame directory to your projects. To get a bare bones do:
+### Fixing the banner badge
 
-```
-cd project && mkdir -p .frame && echo "BUFFERS(claude local)" > .frame/config.sh
-```
+At first the badge is a generic AppleScript badge — clicking it opens Script
+Editor instead of focusing your frame. Things work fine in this state, but here
+are the extra steps to get the badge right:
 
-Bump up the Claude permissions if you desire: `frame yolo on`
-
-Start a frame worktree instance:
-
-```
-cd project
-frame wt scratch-topic
+```bash
+brew install terminal-notifier
 ```
 
-Neovim will fire up with the Claude buffer in the foreground.
+Then:
 
-### Dependencies
+- System Settings → Notifications → Frame → Allow.
+- Clicking a badge also asks for Accessibility on the first click; grant that
+  too. Both are one-time.
 
-- zsh
-- git ≥ 2.5
-- neovim (no plugins required)
-- claude (Claude Code CLI) — permission prompts stay on unless you opt in with `frame yolo on`
-- docker with the compose v2 plugin
-- macOS + OrbStack (any docker provider works if already running; auto-start is OrbStack-only)
-- curl, lsof
+Fire a test banner with `frame notify` to check any fix.
 
-### Assumptions
+**If banners lose the badge later** (generic or Terminal icon instead of the
+frame vortex):
 
-- every project's default branch is named `main`
-
-### Recommended
-
-- Ghostty - was the terminal Frame was built with so for others your MMV
-- Raycast - window fuzzy find allows you to leverage the WAITING and TOPIC name of your frames
-- homebrew + terminal-notifier - optional; `brew install terminal-notifier`,
-  then `frame notification init` (or the first `frame init`) builds the frame-icon,
-  click-to-focus banner app (without them, plain osascript banners still fire)
+1. `killall usernoted NotificationCenter` — both notification daemons cache the
+   old icon; they respawn instantly, and a stale cache is the usual culprit.
+2. Still wrong? Force a rebuild: `rm -rf ~/.local/share/frame/Frame.app`,
+   then `frame notification init`. The rebuild mints a fresh code signature, and
+   macOS keys the notification grant to the signature — so re-allow the
+   banners in System Settings → Notifications → Frame afterwards.
 
 ## How a project plugs in
 
@@ -264,8 +307,7 @@ Per entry:
 
 ## Shared (Centralized) Services
 
-Within Frame repo is services/docker-compose.yml  
-Helper functions in
+Within the Frame repo is `services/docker-compose.yml`. Helper functions in
 `lib/helpers.sh` create roles/databases/buckets idempotently.
 
 ## License
