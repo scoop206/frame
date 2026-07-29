@@ -3,9 +3,7 @@
 #
 # Usage:
 #   frame init                 scaffold .frame/config.sh, gitignore
-#                              .frame/local/; first init on a machine also
-#                              builds the banner app (frame icon on banners,
-#                              click focuses the emitting frame)
+#                              .frame/local/, .claude/settings.json hooks
 #   frame wt TOPIC             create/reuse branch TOPIC + worktree, boot it
 #   frame wt                   boot the worktree you're already in
 #   frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
@@ -17,7 +15,7 @@
 #                              (no TEXT clears it back to name/topic)
 #   frame notify               frame will send waiting notification
 #   frame notification on|off|init   on|off: global switch
-#                              init: build/repair the banner app (needs `brew install terminal-notifier`)
+#                                    init: build/repair the banner icon
 #   frame yolo on|off          master switch: claude in every frame launches
 #                              with --dangerously-skip-permissions (default
 #                              off; bare `frame yolo` shows the state)
@@ -25,13 +23,13 @@
 #                              the frame you're in)
 #   (`worktree` is accepted as a synonym for `wt`)
 #
-# All work happens in topic worktrees ("frames"). Each is self-sufficient —
-# `frame wt` runs the project's stack_up, which is idempotent, so whichever
-# frame boots first brings up the world. The primary checkout is just the
-# git anchor that topic branches merge back into; it never needs a dev session.
+# A frame is a terminal window running neovim as its buffer management layer
+# (multiplexer). This is usually one buffer running Claude and then whatever
+# else is appropriate. Frames assumes a 1:1:1 mapping between
+# a frame:worktree:branch.
+# `cd project && frame wt YOUR_TOPIC` once project is configured.
 #
-# Project config: .frame/config.sh (committed) / .frame/local/config.sh
-# (gitignored, wins). See `frame init` for a starter template.
+# Set project level config with `cd project && frame init`
 set -euo pipefail
 
 export FRAME_ROOT="${0:A:h:h}"
@@ -53,7 +51,7 @@ case "$cmd" in
     source "$FRAME_ROOT/commands/notifier.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "$X_MARK frame: unknown command '$cmd' (try: frame help)" >&2
