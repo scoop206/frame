@@ -6,6 +6,10 @@
           {
             "type": "command",
             "command": "frame notify >/dev/null 2>&1 || true"
+          },
+          {
+            "type": "command",
+            "command": "frame reply >/dev/null 2>&1 || true"
           }
         ]
       }
