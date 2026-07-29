@@ -126,19 +126,24 @@ re-parses the title). `FrameState` is the same move, generalized:
 
 ```lua
 local FrameState = {
-  status      = '',       -- == today's current_status
-  muted       = 0,        -- == today's vim.g.frame_notify_muted
-  claude_chan = nil,      -- job channel of the `claude` terminal buffer (for send)
-  subscribers = {},       -- return addresses currently listening to ME
-  inbox       = {},       -- reports come home here (EVERY frame has one)
+  status      = '',   -- == today's current_status (window-title suffix)
+  chan        = {},   -- name → terminal job channel (for send); e.g. ['claude']
+  subscribers = {},   -- return addresses currently listening to ME
+  inbox       = {},   -- reports come home here (EVERY frame has one)
 }
 ```
 
 - `FrameSetStatus` becomes a setter on `FrameState.status`; `FrameInfo` reads it;
-  the title stays a pure view. **This consolidates two ad-hoc pieces of state
-  (`current_status`, `frame_notify_muted`) that already exist**, then adds the
-  coordination tables in the same place — not a new mechanism, an extension of a
-  pattern the code already committed to.
+  the title stays a pure view. **This consolidates `current_status` and the
+  send-channel registry that already exist**, then adds the coordination tables
+  (`subscribers`, `inbox`) in the same place — not a new mechanism, an extension
+  of a pattern the code already committed to.
+- **The notify mute switch stays `vim.g.frame_notify_muted`, not a `FrameState`
+  field.** `frame notify` reads it over RPC as `get(g:, 'frame_notify_muted', 0)`,
+  so sessions predating the switch degrade gracefully to unmuted. Folding it into
+  a Lua table would trade that cheap, backward-compatible read for uniformity —
+  not worth it. Mute is the one piece of per-frame state that stays a `g:` var by
+  design.
 - **No `mode` field, no delivery preference.** Every frame has an `inbox`
   unconditionally; "commander"/"worker" are descriptions of position in an
   exchange, not stored state (see

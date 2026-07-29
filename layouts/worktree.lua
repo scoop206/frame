@@ -33,13 +33,26 @@ local base_title = name .. ' [ ' .. topic
 vim.o.title = true
 vim.o.titlestring = base_title
 
+-- FrameState — this session's coordination state, kept in one place. It lives
+-- in the running nvim (like the socket in the identity model) and dies with it,
+-- so there's nothing to garbage-collect. The window title is a pure *view* of
+-- .status, never the source of truth (FrameInfo reads the field, never
+-- re-parses the title).
+--   status       window-title status suffix (frame status / :FrameStatus)
+--   chan         per-buffer terminal job channels (name → channel), for send
+--   subscribers  return addresses awaiting a reply — Phase 3; empty for now
+--   inbox        reports routed home to this frame — Phase 3; empty for now
+-- The notify mute switch is deliberately NOT a field here: it stays
+-- vim.g.frame_notify_muted because `frame notify` reads it over RPC as
+-- get(g:, 'frame_notify_muted', 0), so sessions predating it degrade to
+-- unmuted. Keeping it a g: var preserves that cheap, backward-compatible read.
+local FrameState = { status = '', chan = {}, subscribers = {}, inbox = {} }
+
 -- Status suffix: appends " - TEXT" to the base title (which never changes).
 -- Global so `frame status` can call it over the socket from any terminal
--- buffer; returns the new title for the caller to echo. current_status is kept
--- alongside so FrameInfo can report it without re-parsing the title.
-local current_status = ''
+-- buffer; returns the new title for the caller to echo.
 _G.FrameSetStatus = function(status)
-  current_status = status
+  FrameState.status = status
   vim.o.titlestring = base_title
       .. (status ~= '' and (' - ' .. status) or '')
   return vim.o.titlestring
@@ -53,22 +66,18 @@ end
 -- renders those as '-'. Sessions booted before this helper existed lack it; ls
 -- falls back to parsing &titlestring for those.
 _G.FrameInfo = function()
-  return table.concat({ name, topic, vite_port, current_status }, '\t')
+  return table.concat({ name, topic, vite_port, FrameState.status }, '\t')
 end
-
--- buf_chan[name] = the terminal job channel of each opened buffer, captured as
--- the buffers are launched (bottom of this file). It's how `frame agent` reaches
--- the running Claude: chansend to a terminal's channel writes to its pty exactly
--- as if the keys were typed. (Populated later; read only at call time.)
-local buf_chan = {}
 
 -- _G.FrameAgentSend(text) — type TEXT into the `claude` buffer and submit it,
 -- exactly as if the operator had typed it there. `frame agent <name/topic> TEXT`
--- calls this over the socket. The trailing '\r' is the Enter key (a pty in raw
--- mode delivers Return as CR). Returns 'ok', or 'no-claude-buffer' when this
--- frame opened no claude buffer to message.
+-- calls this over the socket. FrameState.chan['claude'] is the buffer's terminal
+-- job channel (captured at boot, bottom of this file); chansend to it writes to
+-- the pty exactly as if the keys were typed. The trailing '\r' is the Enter key
+-- (a pty in raw mode delivers Return as CR). Returns 'ok', or 'no-claude-buffer'
+-- when this frame opened no claude buffer to message.
 _G.FrameAgentSend = function(text)
-  local chan = buf_chan['claude']
+  local chan = FrameState.chan['claude']
   if not chan then return 'no-claude-buffer' end
   vim.fn.chansend(chan, text .. '\r')
   return 'ok'
@@ -282,8 +291,8 @@ for _, b in ipairs(picked) do
   elseif mode == 'prefill' then term_prefill(b.name, cmd)
   else term(b.name, '') end
   -- Right after term*(), the new terminal is the current buffer — record its
-  -- job channel so FrameAgentSend can type into it later (see above).
-  buf_chan[b.name] = vim.b.terminal_job_id
+  -- job channel so FrameAgentSend can type into it later (see FrameState above).
+  FrameState.chan[b.name] = vim.b.terminal_job_id
   launched = launched + 1
   if b.focus then focus = b.name end
   for _, e in ipairs(b.env or {}) do
