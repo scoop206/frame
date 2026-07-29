@@ -293,21 +293,16 @@ if main_wt ~= '' then
   end, { bang = true, desc = 'Tear down this frame (worktree + branch)' })
 else
   -- Shell frame (frame shell): no worktree or branch — teardown means
-  -- deleting the topic directory itself, and no git backs it up. So where a
-  -- worktree frame's plain :FrameDown refuses on uncommitted work, here
-  -- EVERYTHING is uncommitted: plain always refuses, :FrameDown! deletes.
+  -- deleting the topic directory itself. Scratch dirs are disposable by
+  -- design, so plain :FrameDown just does it; there are no git safeguards
+  -- for a bang to override (it's accepted as a no-op for muscle-memory
+  -- parity with worktree frames). :FrameQuit keeps the dir.
   -- Same reaper shape as above — nvim can't rm its own cwd out from under
   -- its terminal buffers, so a detached job waits for the socket to unlink
   -- (nvim removes it on exit) and only then deletes; if nvim somehow
   -- survives, the timeout leaves the directory alone.
   local shell_dir = vim.fn.getcwd()
-  vim.api.nvim_create_user_command('FrameDown', function(opts)
-    if not opts.bang then
-      vim.notify('shell frame: nothing in ' .. shell_dir .. ' is under git — '
-        .. ':FrameDown! deletes it forever; :FrameQuit keeps it',
-        vim.log.levels.WARN)
-      return
-    end
+  vim.api.nvim_create_user_command('FrameDown', function()
     if shell_dir == '' or shell_dir == '/' or shell_dir == vim.env.HOME then
       vim.notify('frame: refusing to delete ' .. shell_dir, vim.log.levels.ERROR)
       return
@@ -321,7 +316,7 @@ else
       { cwd = vim.fn.fnamemodify(shell_dir, ':h'), detach = true })
     vim.cmd('qa!')
   end, { bang = true,
-    desc = 'Delete this casual frame\'s directory (! required — no git net)' })
+    desc = 'Tear down this casual frame (delete its directory — no git net)' })
 end
 
 local function term(cmd_name, cmd)

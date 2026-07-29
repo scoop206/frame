@@ -175,6 +175,11 @@ When frame instantiates the nvim instance it injects these user commands
 | `:FrameDown`         | tear down the whole frame: quit nvim, remove the worktree, delete the branch  |
 | `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits             |
 
+In a shell frame (`frame shell`) there is no worktree or branch, so
+`:FrameDown` simply quits and deletes the topic directory — the safeguards
+below don't apply, and the bang changes nothing. `:FrameQuit` keeps the
+directory for a later `frame shell TOPIC`.
+
 ## Frame Merge
 
 When you are done working on the feature you (or claude) can merge to main —
