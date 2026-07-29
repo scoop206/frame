@@ -2,8 +2,8 @@
 # frame — shared dev-workflow harness. Run from inside a project checkout.
 #
 # Usage:
-#   frame init                 scaffold .frame/config.sh, gitignore
-#                              .frame/local/, .claude/settings.json hooks
+#   frame init                 scaffold integration into project (.frame/*
+#                              and .claude/settings.json hooks)
 #   frame wt TOPIC             create/reuse branch TOPIC + worktree, boot it
 #   frame wt                   boot the worktree you're already in
 #   frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
