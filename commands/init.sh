@@ -4,8 +4,9 @@
 #   .claude/settings.json   claude-code hooks: `frame notify` when a turn ends,
 #                           clear the title status when the next prompt lands
 # Idempotent: existing files are left alone, the gitignore entry is added once.
-# The machine-global banner app is built separately by `frame notification
-# init` (notifier.sh) — run it once per machine for frame-icon banners.
+# A one-row-per-file table summarizes what was modified vs left as-is. When a
+# settings.json already exists we can't safely rewrite it, so init checks
+# whether frame's hooks are wired and warns the user to merge them by hand if not.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 PROJECT_ROOT=$(frame_project_root) || {
@@ -16,8 +17,13 @@ cd "$PROJECT_ROOT"
 
 mkdir -p .frame/local
 
+# Each block records one "FILE|MODIFIED|NOTE" row; the table prints at the end so
+# a yes/no column shows at a glance what init touched vs what it left alone.
+typeset -a _rows
+_hooks_hint=
+
 if [[ -f .frame/config.sh ]]; then
-  echo "$OK_MARK .frame/config.sh already exists — leaving it alone"
+  _rows+=( ".frame/config.sh|no|already exists — left alone" )
 else
   _name="${$(frame_main_wt "$PROJECT_ROOT"):t}"
   cat > .frame/config.sh <<EOF
@@ -50,25 +56,60 @@ BUFFERS=(claude local)
 #  export DATABASE_URL=postgres://$_name:devpassword@localhost:5432/$_name
 #}
 EOF
-  echo "$OK_MARK scaffolded .frame/config.sh — edit it to fit the project"
+  _rows+=( ".frame/config.sh|yes|scaffolded — edit it to fit the project" )
 fi
 
 if [[ -f .claude/settings.json ]]; then
-  echo "$OK_MARK .claude/settings.json already exists — leaving it alone"
-  echo "  (for notifications, add hooks yourself: Stop → 'frame notify',"
-  echo "   UserPromptSubmit → 'frame status')"
+  # We never rewrite an existing settings.json — it may hold the user's own
+  # hooks or keys that a blind overwrite would clobber, and merging JSON is
+  # surgery frame won't attempt. Instead detect whether frame's notification
+  # hooks are already wired; if any are missing, flag it so the user knows the
+  # file needs a hand-merge rather than assuming init finished the job.
+  typeset -a _missing
+  _missing=()
+  for _h in 'frame notify' 'frame reply' 'frame status'; do
+    grep -qF "$_h" .claude/settings.json || _missing+=( "$_h" )
+  done
+  if (( ${#_missing} )); then
+    _rows+=( ".claude/settings.json|no|exists — frame hooks missing, merge by hand" )
+    _hooks_hint=1
+  else
+    _rows+=( ".claude/settings.json|no|already wired for frame" )
+  fi
 else
   frame_write_claude_hooks
-  echo "$OK_MARK scaffolded .claude/settings.json — claude notifies via 'frame notify'"
+  _rows+=( ".claude/settings.json|yes|scaffolded — claude notifies via 'frame notify'" )
 fi
 
 if [[ -f .gitignore ]] && grep -qxF '.frame/local/' .gitignore; then
-  echo "$OK_MARK .gitignore already covers .frame/local/"
+  _rows+=( ".gitignore|no|already covers .frame/local/" )
 else
   printf '\n# frame — personal/local harness overrides, never committed\n.frame/local/\n' >> .gitignore
-  echo "$OK_MARK added .frame/local/ to .gitignore"
+  _rows+=( ".gitignore|yes|added .frame/local/" )
 fi
 
-# Banner app is machine-global, not per-project, so it's built on its own:
-# run `frame notification init` once per machine for frame-icon banners.
-echo "  Want frame-icon banners? Build the banner app once: frame notification init"
+# Print the summary table: widen the FILE column to its longest entry so the
+# MODIFIED / NOTE columns line up.
+_w=4  # len("FILE")
+for _r in $_rows; do
+  _f=${_r%%|*}
+  (( ${#_f} > _w )) && _w=${#_f}
+done
+printf '\n  %-*s  %-8s  %s\n' $_w FILE MODIFIED NOTE
+for _r in $_rows; do
+  _f=${_r%%|*}; _rest=${_r#*|}
+  printf '  %-*s  %-8s  %s\n' $_w "$_f" "${_rest%%|*}" "${_rest#*|}"
+done
+
+if [[ -n $_hooks_hint ]]; then
+  print
+  print -- "  ⚠ .claude/settings.json already exists, so frame left it untouched —"
+  print -- "    but it's missing frame's notification hooks. Add these by hand:"
+  for _h in $_missing; do
+    case $_h in
+      'frame notify') print -- "      Stop             → 'frame notify'  (banner + \"waiting\" status)" ;;
+      'frame reply')  print -- "      Stop             → 'frame reply'   (route the reply to a requester)" ;;
+      'frame status') print -- "      UserPromptSubmit → 'frame status'  (clear the status)" ;;
+    esac
+  done
+fi
