@@ -149,11 +149,11 @@ _G.FrameOnTurnEnd = function(text)
   return #subs
 end
 
--- _G.FrameReplyFromTranscript(path) — the explicit transcript path: pull the
--- last assistant message and route it. _G.FrameReplyFromHook(payload_path) — the
--- Stop-hook path: `frame reply` stashes Claude Code's hook JSON to a temp file
--- and passes its path here, so all JSON parsing stays in Lua (vim.json), which
--- frame already trusts. Both return the count FrameOnTurnEnd notified.
+-- _G.FrameReplyFromTranscript(path) — pull the last assistant message out of a
+-- transcript and route it. _G.FrameReplyFromHook(payload_path) — the Stop-hook
+-- path: `frame reply` stashes Claude Code's hook JSON to a temp file and passes
+-- its path here, so all JSON parsing stays in Lua (vim.json), which frame
+-- already trusts. Both return the count FrameOnTurnEnd notified.
 _G.FrameReplyFromTranscript = function(path)
   return _G.FrameOnTurnEnd(last_assistant_text(path))
 end
@@ -161,11 +161,21 @@ _G.FrameReplyFromHook = function(payload_path)
   if vim.fn.filereadable(payload_path) ~= 1 then return 0 end
   local ok, payload = pcall(vim.json.decode,
     table.concat(vim.fn.readfile(payload_path), '\n'))
-  if not ok or type(payload) ~= 'table'
-      or type(payload.transcript_path) ~= 'string' then
-    return 0
+  if not ok or type(payload) ~= 'table' then return 0 end
+  -- Prefer the answer the hook hands us directly: Claude Code's Stop payload
+  -- carries `last_assistant_message` (the flattened text) synchronously — no
+  -- file, no parse, and crucially no flush race. The transcript on disk often
+  -- lags the Stop hook (the final assistant line isn't written yet), so parsing
+  -- transcript_path here would read a stale/empty tail. Keep it only as a
+  -- backstop for payloads that lack the field.
+  local msg = payload.last_assistant_message
+  if type(msg) == 'string' and msg ~= '' then
+    return _G.FrameOnTurnEnd(msg)
   end
-  return _G.FrameReplyFromTranscript(payload.transcript_path)
+  if type(payload.transcript_path) == 'string' then
+    return _G.FrameReplyFromTranscript(payload.transcript_path)
+  end
+  return 0
 end
 
 -- _G.FrameInboxAdd(from, text) — `frame deliver` calls this over the socket to
