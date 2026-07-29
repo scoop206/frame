@@ -47,6 +47,8 @@ frame wt                   boot the worktree you're already in
 frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
 frame shell TOPIC          casual frame in ~/frames/TOPIC — no repo, no branch,
                            just the claude + local buffers
+frame ls                   list every live frame (all projects); → marks the one
+                           you're in. `frame focus` a topic you spot here
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame services [up|down|ps]            manage the shared postgres/minio stack
 frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears)
@@ -58,7 +60,7 @@ frame yolo on|off          master switch: claude in every frame launches with
 frame focus [TOPIC|NAME/TOPIC]  raise that frame's ghostty window (default: the one you're in)
 ```
 
-`worktree` is accepted as a synonym for `wt`.
+`worktree` is accepted as a synonym for `wt`; `list` for `ls`.
 
 ## Features
 
