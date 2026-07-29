@@ -50,7 +50,7 @@ frame shell TOPIC          casual frame in ~/frames/TOPIC — no repo, no branch
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame services [up|down|ps]            manage the shared postgres/minio stack
 frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears)
-frame notify               frame will send waiting notification
+frame notify               frame will send task complete notification
 frame notification on|off|init   on|off: global switch
                            init: build/repair the banner app (needs `brew install terminal-notifier`)
 frame yolo on|off          master switch: claude in every frame launches with
