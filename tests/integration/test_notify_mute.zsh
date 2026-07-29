@@ -32,7 +32,7 @@ test_unmuted_session_still_banners() {
   export FAKE_NVIM_EXPR_RESULT=0
   run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - waiting shell [ $TNAME ]"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - task complete shell [ $TNAME ]"
 }
 
 test_unanswerable_session_defaults_to_banner() {
@@ -43,7 +43,7 @@ test_unanswerable_session_defaults_to_banner() {
   setup_shell_frame
   run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - waiting shell [ $TNAME ]"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - task complete shell [ $TNAME ]"
 }
 
 run_tests "$0"

@@ -102,7 +102,7 @@ test_notify_in_shell_frame_banners_with_session_identity() {
   export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
   run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - waiting shell [ $TNAME ]"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - task complete shell [ $TNAME ]"
 }
 
 test_notify_outside_any_frame_still_exits_0() {
@@ -112,7 +112,7 @@ test_notify_outside_any_frame_still_exits_0() {
   export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
   run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - waiting ? [ ? ]"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - task complete ? [ ? ]"
 }
 
 run_tests "$0"
