@@ -56,14 +56,14 @@ test_stale_prompt_still_banners() {
   touch -t 202601010000 "/tmp/shell-$TNAME.prompt"
   run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - ⏸ waiting shell/$TNAME"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - WAITING shell [ $TNAME ]"
 }
 
 test_no_stamp_still_banners() {
   setup_frame_env
   run_frame notify
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - ⏸ waiting shell/$TNAME"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - WAITING shell [ $TNAME ]"
 }
 
 run_tests "$0"

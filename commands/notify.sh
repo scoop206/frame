@@ -1,7 +1,7 @@
 # frame notify — ping the human that this frame wants attention:
 #
 #   frame notify
-#     → banner "⏸ waiting", title "<name>/<topic> :<port> - ⏸ waiting"
+#     → banner "WAITING", title "<name> [ <topic> :<port> ] - WAITING"
 #
 # The controls live under `frame notification` (notification.sh): on|off is
 # the global banner switch, init the banner-app build/repair.
@@ -26,7 +26,7 @@ if (( $# )); then
   exit 2
 fi
 
-TEXT="⏸ waiting"
+TEXT="WAITING"
 
 "$FRAME_ROOT/bin/frame" status "$TEXT" 2>/dev/null || true
 
@@ -52,6 +52,11 @@ elif frame_load_config 2>/dev/null; then
 else
   NAME='?' TOPIC='?'
 fi
+
+# The banner wears the frame's identity block (bracketed, matching the window
+# title). Port omitted — notify doesn't compute it, and the identity reads fine
+# without it.
+TITLE=$(frame_base_title "$NAME" "$TOPIC")
 
 # Quick-turn gate: sending a prompt stamps /tmp/<name>-<topic>.prompt (the
 # UserPromptSubmit hook runs the bare `frame status` clear — see status.sh).
@@ -87,12 +92,12 @@ fi
 # the osascript banner (Script Editor icon, click opens it) still fires.
 NOTIFIER="$HOME/.local/share/frame/Frame.app/Contents/MacOS/terminal-notifier"
 if [[ -x "$NOTIFIER" ]]; then
-  "$NOTIFIER" -title "$NAME/$TOPIC" -message "$TEXT" -sound Glass \
+  "$NOTIFIER" -title "$TITLE" -message "$TEXT" -sound Glass \
     -group "frame-$NAME-$TOPIC" \
     -execute "${(q)FRAME_ROOT}/bin/frame focus ${(q)NAME}/${(q)TOPIC}" \
     >/dev/null 2>&1 || true
 else
-  osascript - "$TEXT" "$NAME/$TOPIC" >/dev/null 2>&1 <<'EOF' || true
+  osascript - "$TEXT" "$TITLE" >/dev/null 2>&1 <<'EOF' || true
 on run argv
   display notification (item 1 of argv) with title (item 2 of argv) sound name "Glass"
 end run

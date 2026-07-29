@@ -159,7 +159,7 @@ else
 fi
 cd "$PROJECT_DIR"
 
-set_title "$NAME/$TOPIC"
+set_title "$(frame_base_title "$NAME" "$TOPIC")"
 
 # Frames are self-sufficient: whichever boots first brings up the world.
 # stack_up is idempotent (compose up -d no-ops, ensure_* helpers no-op), so

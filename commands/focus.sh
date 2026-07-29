@@ -1,46 +1,68 @@
-# frame focus [NAME/TOPIC] — bring a frame's ghostty window to the front:
+# frame focus [TOPIC | NAME/TOPIC] — bring a frame's ghostty window to the front:
 #
 #   frame focus                 the frame you're in
-#   frame focus flipnem/schema  any frame, by banner title
+#   frame focus schema          any frame with that topic, whatever its name
+#   frame focus flipnem/schema  a specific frame, name and topic
 #
+# You never type the window title's brackets — pass the bare topic (optionally
+# NAME/topic to disambiguate) and focus builds the bracketed match internally.
 # Built to be the click target of the notify banner (notify.sh passes it via
-# the notifier app's -execute), so the argument form matches the banner title
-# exactly. Activating ghostty needs no permissions; raising the *specific*
-# window goes through System Events (AXRaise), which asks for Accessibility
-# once — declined, the try block leaves plain activation, so clicking still
-# surfaces ghostty, just not the exact window.
+# the notifier app's -execute as NAME/TOPIC), so the argument form matches what
+# the banner knows. Activating ghostty needs no permissions; raising the
+# *specific* window goes through System Events (AXRaise), which asks for
+# Accessibility once — declined, the try block leaves plain activation, so
+# clicking still surfaces ghostty, just not the exact window.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 if (( $# )); then
-  TARGET="$*"
+  ARG="$*"
+  if [[ "$ARG" == */* ]]; then
+    F_NAME="${ARG%%/*}" F_TOPIC="${ARG#*/}"
+  else
+    # Topic only — match any name carrying this topic.
+    F_NAME="" F_TOPIC="$ARG"
+  fi
 else
   # Same identity derivation as status.sh: shell frames carry it in the
   # session env, checkouts derive it from worktree/branch.
   if ! frame_project_root >/dev/null \
       && [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
-    NAME=$FRAME_NAME TOPIC=$FRAME_TOPIC
+    F_NAME=$FRAME_NAME F_TOPIC=$FRAME_TOPIC
   else
     frame_load_config
+    F_NAME=$NAME
     if [[ "${PROJECT_ROOT:t}" == _$NAME-* ]]; then
-      TOPIC="${${PROJECT_ROOT:t}#_$NAME-}"
+      F_TOPIC="${${PROJECT_ROOT:t}#_$NAME-}"
     else
-      TOPIC=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD)
+      F_TOPIC=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD)
     fi
   fi
-  TARGET="$NAME/$TOPIC"
 fi
 
-# Titles are "<name>/<topic>" pre-nvim and "<name>/<topic> :<port>[ - status]"
-# once the session owns them — exact match or "<target> " prefix, so
-# shell/foo never grabs shell/foo-bar's window.
-RESULT=$(osascript - "$TARGET" <<'EOF'
+# Human-readable label for messages (mirrors what was typed).
+TARGET="${F_NAME:+$F_NAME/}$F_TOPIC"
+
+# Match against the bracketed base title — "<name> [ <topic>" pre-nvim and
+# "<name> [ <topic> :<port> ]" once the session owns it — anchored on the
+# space+":" (vite) or space+"]" (no port) that always follows the topic, so
+# `foo` never grabs `foo-bar`'s window. Empty name matches any owner.
+RESULT=$(osascript - "$F_NAME" "$F_TOPIC" <<'EOF'
 on run argv
-  set t to item 1 of argv
+  set nm to item 1 of argv
+  set tp to item 2 of argv
+  if nm is "" then
+    set aPort to " [ " & tp & " :"
+    set aClose to " [ " & tp & " ]"
+  else
+    set aPort to nm & " [ " & tp & " :"
+    set aClose to nm & " [ " & tp & " ]"
+  end if
   tell application "Ghostty" to activate
   tell application "System Events" to tell process "Ghostty"
     try
-      perform action "AXRaise" of ¬
-        (first window whose name is t or name begins with (t & " "))
+      set hits to (every window whose (name contains aPort) or (name contains aClose))
+      if (count of hits) is 0 then return "nomatch"
+      perform action "AXRaise" of (item 1 of hits)
       return "raised"
     end try
   end tell
@@ -49,10 +71,15 @@ end run
 EOF
 ) || { echo "$X_MARK couldn't reach ghostty (is Ghostty installed?)" >&2; exit 1; }
 
-if [[ "$RESULT" == raised ]]; then
-  echo "$OK_MARK focused $TARGET"
-else
-  echo "$X_MARK ghostty raised, but no window titled $TARGET — frame closed," >&2
-  echo "  or Accessibility not granted (System Settings → Privacy → Accessibility)" >&2
-  exit 1
-fi
+case "$RESULT" in
+  raised)
+    echo "$OK_MARK focused $TARGET" ;;
+  nomatch)
+    echo "$X_MARK no frame matching $TARGET (check frame status)" >&2
+    exit 1 ;;
+  *)  # activated — found nothing to raise through System Events; the usual
+      # cause is Accessibility not being granted (AXRaise is gated).
+    echo "$X_MARK ghostty raised, but couldn't raise the $TARGET window —" >&2
+    echo "  grant Accessibility (System Settings → Privacy → Accessibility)" >&2
+    exit 1 ;;
+esac

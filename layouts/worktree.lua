@@ -21,12 +21,15 @@ local name = vim.env.FRAME_NAME or '?'
 local topic = vim.env.FRAME_TOPIC or '?'
 local vite_port = vim.env.FRAME_VITE_PORT or ''
 
--- Name the terminal window "<name>/<topic> :<vite port>" so parallel Ghostty
--- windows are tellable apart — the port shown is the one the browser connects
--- to. nvim owns the title for the whole session, so shell integration can't
--- overwrite it.
-local base_title = name .. '/' .. topic
+-- Name the terminal window "<name> [ <topic> :<vite port> ]" so parallel
+-- Ghostty windows are tellable apart — bare name, the topic bracketed with the
+-- browser's vite port beside it (omitted when there's no vite port). nvim owns
+-- the title for the whole session, so shell integration can't overwrite it.
+-- lib/helpers.sh frame_base_title builds the same shape for the pre-nvim title
+-- and the notify banner; commands/focus.sh matches against it. Keep them in step.
+local base_title = name .. ' [ ' .. topic
     .. (vite_port ~= '' and (' :' .. vite_port) or '')
+    .. ' ]'
 vim.o.title = true
 vim.o.titlestring = base_title
 

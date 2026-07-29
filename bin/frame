@@ -12,15 +12,15 @@
 #   frame merge [TOPIC] [--push|--ff|-n]   merge TOPIC (default: current branch)
 #   frame services [up|down]   manage the shared postgres/minio stack
 #   frame status [TEXT…]       append "- TEXT" to this frame's window title
-#                              (no TEXT clears it back to name/topic)
+#                              (no TEXT clears it back to the base title)
 #   frame notify               frame will send waiting notification
 #   frame notification on|off|init   on|off: global switch
 #                                    init: build/repair the banner icon
 #   frame yolo on|off          master switch: claude in every frame launches
 #                              with --dangerously-skip-permissions (default
 #                              off; bare `frame yolo` shows the state)
-#   frame focus [NAME/TOPIC]   raise that frame's ghostty window (default:
-#                              the frame you're in)
+#   frame focus [TOPIC|NAME/TOPIC]   raise that frame's ghostty window
+#                              (default: the frame you're in)
 #   (`worktree` is accepted as a synonym for `wt`)
 #
 # A frame is a terminal window running neovim as its buffer management layer

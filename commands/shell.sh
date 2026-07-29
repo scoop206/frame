@@ -38,7 +38,7 @@ if [[ ! -f .claude/settings.json ]]; then
   echo "$OK_MARK wired claude hooks (.claude/settings.json) — Stop → frame notify"
 fi
 
-set_title "$NAME/$TOPIC"
+set_title "$(frame_base_title "$NAME" "$TOPIC")"
 
 # Same layout as worktree frames — it's parameterized entirely by env, and
 # an empty FRAME_MAIN_WT is the "no primary checkout" signal that selects

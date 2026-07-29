@@ -1,9 +1,9 @@
 # frame status [TEXT…] — set a status suffix on this frame's window title:
 #
 #   frame status DEPLOYED. Waiting verification
-#     → "<name>/<topic> :<port> - DEPLOYED. Waiting verification"
+#     → "<name> [ <topic> :<port> ] - DEPLOYED. Waiting verification"
 #   frame status
-#     → back to the base "<name>/<topic> :<port>" title
+#     → back to the base "<name> [ <topic> :<port> ]" title
 #
 # The base name/topic part never changes — the status is purely appended.
 # nvim owns the title for the whole session, so this works by RPC over the

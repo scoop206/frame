@@ -55,7 +55,7 @@ frame notification on|off|init   on|off: global switch
                            init: build/repair the banner app (needs `brew install terminal-notifier`)
 frame yolo on|off          master switch: claude in every frame launches with
                            --dangerously-skip-permissions (default off)
-frame focus [NAME/TOPIC]   raise that frame's ghostty window (default: the one you're in)
+frame focus [TOPIC|NAME/TOPIC]  raise that frame's ghostty window (default: the one you're in)
 ```
 
 `worktree` is accepted as a synonym for `wt`.
@@ -158,7 +158,7 @@ This starts neovim w/ custom layout which is usually 4 buffers:
 - server - cargo run -p $PROJECT-server
 - local - bare terminal
 
-The ghostty window will now be named $REPO/$TOPIC:PORT
+The ghostty window will now be named `$REPO [ $TOPIC :PORT ]`
 You can see vite's rendered web app at http://localhost:PORT
 
 ## Vim commands
