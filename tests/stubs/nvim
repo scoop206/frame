@@ -22,10 +22,12 @@ if [[ "${1:-}" == "--server" ]]; then
   case "$_expr" in
     *FrameInfo*) [[ -f "$_sock.info" ]] && { cat "$_sock.info"; exit 0; }; exit 1 ;;
   esac
-  # Other exprs (frame status / notify): a test opts in via FAKE_NVIM_EXPR_RESULT,
-  # which becomes the answer to any such query. Without it, fall through to the
+  # Other exprs (frame status / notify / req / deliver / inbox …): a test opts in
+  # via FAKE_NVIM_EXPR_RESULT, which becomes the answer to any such query. The
+  # +x test means set-BUT-empty still answers (empty string) — an empty inbox
+  # returns '' successfully, distinct from "unset" which falls through to the
   # tripwire like everything else.
-  if [[ -n "${FAKE_NVIM_EXPR_RESULT:-}" ]]; then
+  if [[ -n "${FAKE_NVIM_EXPR_RESULT+x}" ]]; then
     print -rn -- "$FAKE_NVIM_EXPR_RESULT"
     exit 0
   fi

@@ -10,3 +10,7 @@ the "what we're about to build."
 
 - [identity-model.md](identity-model.md) — a frame's identity is its socket +
   env, not its window title; what does / doesn't break when the title changes.
+- [agent-messaging.md](agent-messaging.md) — `frame req` / `frame reply` /
+  `frame deliver` / `frame inbox`: message the Claude in another frame and route
+  its reply back via an inbox; `FrameState` as the frame-resident coordination
+  object.
