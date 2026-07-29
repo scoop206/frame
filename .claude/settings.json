@@ -9,7 +9,6 @@
           },
           {
             "type": "command",
-            "command": "frame reply >/dev/null 2>&1 || true"
             "command": "tee /tmp/frame-hook.json | frame reply >/dev/null 2>&1 || true"
           }
         ]
