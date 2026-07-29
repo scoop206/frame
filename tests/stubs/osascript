@@ -2,7 +2,7 @@
 # Test stub for osascript. `frame notify` pipes a banner script into it; the
 # stub swallows that so the suite never pops real macOS notifications.
 # With FAKE_OSASCRIPT_LOG set: append argv so tests can assert the banner's
-# arguments (TEXT, then the "<name>/<topic>" title).
+# arguments (TEXT, then the "<name> [ <topic> ]" title).
 cat >/dev/null
 if [[ -n "${FAKE_OSASCRIPT_LOG:-}" ]]; then
   print -r -- "argv: $*" >> "$FAKE_OSASCRIPT_LOG"

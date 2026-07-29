@@ -16,23 +16,41 @@ test_explicit_target_passed_to_applescript() {
   setup_frame_env
   run_frame focus flipnem/schema
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - flipnem/schema"
+  # name and topic reach the matcher as separate args (it builds the brackets).
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - flipnem schema"
   assert_contains "$OUT" "focused flipnem/schema"
+}
+
+test_topic_only_target_matches_any_name() {
+  setup_frame_env
+  run_frame focus schema
+  assert_status 0
+  # Empty name → the matcher wildcards the owner (leading empty arg).
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: -  schema"
+  assert_contains "$OUT" "focused schema"
 }
 
 test_bare_focus_derives_identity_from_env() {
   setup_frame_env
   run_frame focus
   assert_status 0
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - shell/$TNAME"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - shell $TNAME"
 }
 
 test_no_matching_window_fails() {
   setup_frame_env
-  export FAKE_OSASCRIPT_RESULT=activated
+  export FAKE_OSASCRIPT_RESULT=nomatch
   run_frame focus gone/frame
   assert_status 1
-  assert_contains "$OUT" "no window titled gone/frame"
+  assert_contains "$OUT" "no frame matching gone/frame"
+}
+
+test_activate_fallback_reports_accessibility() {
+  setup_frame_env
+  export FAKE_OSASCRIPT_RESULT=activated
+  run_frame focus flipnem/schema
+  assert_status 1
+  assert_contains "$OUT" "Accessibility"
 }
 
 run_tests "$0"

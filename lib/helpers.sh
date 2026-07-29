@@ -121,7 +121,7 @@ frame_export_claude_flags() {
 
 frame_write_claude_hooks() {
   # .claude/settings.json in cwd, wiring claude-code to frame's notification
-  # channels: Stop → `frame notify` (banner + "- ⏸ waiting" title status),
+  # channels: Stop → `frame notify` (banner + "- WAITING" title status),
   # UserPromptSubmit → `frame status` (clears it). Callers guard the
   # file-exists case — this always writes.
   mkdir -p .claude
@@ -155,9 +155,26 @@ EOF
 
 # ── window titling ────────────────────────────────────────────────────────────
 
+frame_base_title() {
+  # frame_base_title NAME TOPIC [PORT] — the bracketed window-title base:
+  #   NAME [ TOPIC ]          shell frames, and any pre-nvim title (no port yet)
+  #   NAME [ TOPIC :PORT ]    vite worktrees, once the port is known
+  # Name stays bare so it reads as an owner; the topic (the thing you tell
+  # frames apart by) is wrapped, with the browser's vite port beside it. The
+  # mutable " - STATUS" suffix is appended elsewhere — this is only the base.
+  # layouts/worktree.lua rebuilds the same shape in Lua (it owns the title once
+  # nvim starts); keep the two in step.
+  local _name=$1 _topic=$2 _port=${3:-}
+  if [[ -n "$_port" ]]; then
+    print -r -- "$_name [ $_topic :$_port ]"
+  else
+    print -r -- "$_name [ $_topic ]"
+  fi
+}
+
 set_title() {
   # Set the ghostty window title now, before nvim takes over — windows are
-  # Raycast-findable even mid-boot or after nvim exits.
+  # Raycast-findable even mid-boot or after nvim exits. Pass a frame_base_title.
   printf '\e]2;%s\e\\' "$1"
 }
 
