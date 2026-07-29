@@ -79,7 +79,7 @@ When frame instantiates the nvim instance it injects these user commands
 | command              | action                                                                        |
 | -------------------- | ----------------------------------------------------------------------------- |
 | `:FrameStatus TEXT…` | append "- TEXT" to the window title's status suffix (no TEXT clears it)       |
-| `:FrameNotify off`   | mute `frame notify` banners for this session (`on` unmutes, bare shows state) |
+| `:FrameNotify off`   | 'on' or 'off' to umute/mute banners; no arg shows state)                      |
 | `:FrameQuit`         | quit the session only — worktree and branch stay for a later `frame wt TOPIC` |
 | `:FrameDown`         | tear down the whole frame: quit nvim, remove the worktree, delete the branch  |
 | `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits             |
@@ -89,49 +89,29 @@ directory; plain `:FrameDown` always refuses, since nothing there is under git.
 
 ### Notifications
 
-`frame notify` pings you on both channels at once: a macOS banner
-(titled `$NAME/$TOPIC`, so parallel frames are tellable apart) plus a
-"⏸ waiting" window-title status via `frame status`. Both are best-effort and
-it always exits 0, so it's safe as a hook target.
-
-`frame init` wires it into a project's `.claude/settings.json`:
-
-- **Stop** → `frame notify` — every time claude ends a turn you get a banner
-  and the title gains "- ⏸ waiting"
-- **UserPromptSubmit** → `frame status` — sending the next prompt clears the
-  status back to the base title
-
-When a frame gets too chatty — a long conversational session, say — mute it
-with `:FrameNotify off` (`on` unmutes; bare `:FrameNotify` shows the state).
-The switch lives in that session's nvim and dies with it, so each parallel
-frame mutes independently and every frame boots unmuted. `frame notify` asks
-the session over its socket before popping the banner; only the banner+sound
-is muted — the window-title status still updates, so a muted frame still
-shows "- ⏸ waiting" when claude finishes.
-
-Beyond that, notifications are deliberately unfiltered for now: every turn
-end notifies, including quick conversational ones. If that proves too chatty
-even with muting, the intended fix is a duration gate in `frame notify`
-(stamp turn start on UserPromptSubmit, skip the banner for turns under a
-couple of minutes) — one place, all projects.
-
 #### Fixing the banner badge
 
-The frame badge on banners comes from `~/.local/share/frame/Frame.app`, a
-rebranded terminal-notifier built by the first `frame init` (needs
-homebrew + terminal-notifier — see Recommended below). `frame notification init`
-builds or repairs it directly, without re-running a project init.
+At first the badge is a generic AppleScript badge — clicking it opens Script
+Editor instead of focusing your frame.
 
-**After the first install** — macOS won't show the app's banners until you
-allow them: System Settings → Notifications → Frame → Allow. Click-to-focus
-also asks for Accessibility on the first banner click; grant that too. Both
-are one-time.
+Things work fine in this state but here's extra to steps to get the badge right:
+
+`brew install terminal-notifier`  
+`
+
+To fix:
+
+- System Settings → Notifications → Frame → Allow.
+- Clicking a badge also asks for Accessibility on the first click; grant that
+  too. Both are one-time.
+
+Fire a test banner with `frame notify` to check any fix.
 
 **If banners lose the badge later** (generic or Terminal icon instead of the
 frame vortex):
 
-1. `killall NotificationCenter` — it caches sender icons and respawns
-   instantly; a stale cache is the usual culprit.
+1. `killall usernoted NotificationCenter` — both notification daemons cache the
+   old icon; they respawn instantly, and a stale cache is the usual culprit.
 2. Still wrong? Force a rebuild: `rm -rf ~/.local/share/frame/Frame.app`,
    then `frame notification init`. The rebuild mints a fresh code signature, and
    macOS keys the notification grant to the signature — so re-allow the
@@ -188,12 +168,27 @@ commits not yet on main — merge first (`frame merge`), or force with
 quit, so a refusal never leaves you editor-less. Reaper output lands in
 `/tmp/<name>-<topic>.teardown.log`.
 
-### Install
+### Installation and Getting Started
 
 Clone this repo (location does not matter)  
 Check the dependcies (see below).  
 put `/path/to/frame/bin/` on your PATH.  
-add a .frame directory to the projects w/ optional components see below.
+add a .frame directory to your projects. To get a bare bones do:
+
+```
+cd project && mkdir -p .frame && echo "BUFFERS(claude local)" > .frame/config.sh
+```
+
+Bump up the Claude permissions if you desire: `frame yolo on`
+
+Start a frame worktree instance:
+
+```
+cd project
+frame wt scratch-topic
+```
+
+Neovim will fire up with the Claude buffer in the foreground.
 
 ### Dependencies
 
@@ -204,6 +199,10 @@ add a .frame directory to the projects w/ optional components see below.
 - docker with the compose v2 plugin
 - macOS + OrbStack (any docker provider works if already running; auto-start is OrbStack-only)
 - curl, lsof
+
+### Assumptions
+
+- every project's default branch is named `main`
 
 ### Recommended
 
