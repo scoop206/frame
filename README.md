@@ -158,7 +158,9 @@ Tear down from _inside_ the frame — either entry point works:
 - in nvim: `:FrameDown`
 - in any terminal buffer: `frame wt -d`
 
-From outside (base terminal or another frame): `frame wt -d TOPIC`.
+From outside the frame — the project's primary checkout, or another frame of
+the same project: `frame wt -d TOPIC`. TOPIC is resolved in the current
+project's namespace, so you must run it from inside that project's git tree.
 
 #### Teardown Safeguards
 
