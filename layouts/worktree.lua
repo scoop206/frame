@@ -56,6 +56,24 @@ _G.FrameInfo = function()
   return table.concat({ name, topic, vite_port, current_status }, '\t')
 end
 
+-- buf_chan[name] = the terminal job channel of each opened buffer, captured as
+-- the buffers are launched (bottom of this file). It's how `frame agent` reaches
+-- the running Claude: chansend to a terminal's channel writes to its pty exactly
+-- as if the keys were typed. (Populated later; read only at call time.)
+local buf_chan = {}
+
+-- _G.FrameAgentSend(text) — type TEXT into the `claude` buffer and submit it,
+-- exactly as if the operator had typed it there. `frame agent <name/topic> TEXT`
+-- calls this over the socket. The trailing '\r' is the Enter key (a pty in raw
+-- mode delivers Return as CR). Returns 'ok', or 'no-claude-buffer' when this
+-- frame opened no claude buffer to message.
+_G.FrameAgentSend = function(text)
+  local chan = buf_chan['claude']
+  if not chan then return 'no-claude-buffer' end
+  vim.fn.chansend(chan, text .. '\r')
+  return 'ok'
+end
+
 -- :FrameStatus TEXT — set the status suffix; no TEXT clears it.
 vim.api.nvim_create_user_command('FrameStatus', function(opts)
   _G.FrameSetStatus(opts.args)
@@ -263,6 +281,9 @@ for _, b in ipairs(picked) do
   if mode == 'durable' then term_durable(b.name, cmd, b.dir)
   elseif mode == 'prefill' then term_prefill(b.name, cmd)
   else term(b.name, '') end
+  -- Right after term*(), the new terminal is the current buffer — record its
+  -- job channel so FrameAgentSend can type into it later (see above).
+  buf_chan[b.name] = vim.b.terminal_job_id
   launched = launched + 1
   if b.focus then focus = b.name end
   for _, e in ipairs(b.env or {}) do

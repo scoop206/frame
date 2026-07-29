@@ -23,6 +23,8 @@
 #                              off; bare `frame yolo` shows the state)
 #   frame focus [TOPIC|NAME/TOPIC]   raise that frame's ghostty window
 #                              (default: the frame you're in)
+#   frame agent TOPIC|NAME/TOPIC TEXT…   type TEXT into that frame's claude
+#                              buffer (send-only for now)
 #   (`worktree` is accepted as a synonym for `wt`)
 #
 # A frame is a terminal window running neovim as its buffer management layer
@@ -47,7 +49,7 @@ case "$cmd" in
   ls|list)
     source "$FRAME_ROOT/commands/ls.sh" "$@"
     ;;
-  init|shell|merge|services|status|notify|notification|focus|yolo)
+  init|shell|merge|services|status|notify|notification|focus|yolo|agent)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   notifier)
@@ -56,7 +58,7 @@ case "$cmd" in
     source "$FRAME_ROOT/commands/notifier.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "$X_MARK frame: unknown command '$cmd' (try: frame help)" >&2
