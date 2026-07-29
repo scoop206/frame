@@ -11,13 +11,24 @@
 # below still sees --server as $1; the wt editor launch (`nvim -S …`) never
 # passes it, so this is a no-op there.
 [[ "${1:-}" == "--headless" ]] && shift
-# RPC mode (frame status / notify use `nvim --server … --remote-expr`): a
-# test opts in by setting FAKE_NVIM_EXPR_RESULT, which becomes the answer to
-# ANY expression query. Without it, --server calls fall through to the
-# tripwire like everything else.
-if [[ "${1:-}" == "--server" && -n "${FAKE_NVIM_EXPR_RESULT:-}" ]]; then
-  print -rn -- "$FAKE_NVIM_EXPR_RESULT"
-  exit 0
+# RPC mode (frame status / notify / ls use `nvim --server SOCK --remote-expr EXPR`).
+if [[ "${1:-}" == "--server" ]]; then
+  _sock=$2
+  _expr=${@[-1]}   # the expression is always the last arg
+  # `frame ls` probes each socket with FrameInfo(). A test stands in for a live
+  # session by planting a <sock>.info companion holding the answer; a socket
+  # without one is "dead" — the query fails, exactly as a real unanswered
+  # socket would, and ls skips it.
+  case "$_expr" in
+    *FrameInfo*) [[ -f "$_sock.info" ]] && { cat "$_sock.info"; exit 0; }; exit 1 ;;
+  esac
+  # Other exprs (frame status / notify): a test opts in via FAKE_NVIM_EXPR_RESULT,
+  # which becomes the answer to any such query. Without it, fall through to the
+  # tripwire like everything else.
+  if [[ -n "${FAKE_NVIM_EXPR_RESULT:-}" ]]; then
+    print -rn -- "$FAKE_NVIM_EXPR_RESULT"
+    exit 0
+  fi
 fi
 if [[ -n "${FAKE_NVIM_LOG:-}" ]]; then
   {

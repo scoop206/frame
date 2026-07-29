@@ -35,11 +35,25 @@ vim.o.titlestring = base_title
 
 -- Status suffix: appends " - TEXT" to the base title (which never changes).
 -- Global so `frame status` can call it over the socket from any terminal
--- buffer; returns the new title for the caller to echo.
+-- buffer; returns the new title for the caller to echo. current_status is kept
+-- alongside so FrameInfo can report it without re-parsing the title.
+local current_status = ''
 _G.FrameSetStatus = function(status)
+  current_status = status
   vim.o.titlestring = base_title
       .. (status ~= '' and (' - ' .. status) or '')
   return vim.o.titlestring
+end
+
+-- _G.FrameInfo() — this session's identity as one tab-delimited record for
+-- `frame ls`:   name<TAB>topic<TAB>port<TAB>status
+-- Queried over the socket exactly like FrameSetStatus, so ls reads clean fields
+-- straight from the session instead of parsing the window title (whose dashes
+-- make <name>-<topic> ambiguous). port and status are '' when absent — ls
+-- renders those as '-'. Sessions booted before this helper existed lack it; ls
+-- falls back to parsing &titlestring for those.
+_G.FrameInfo = function()
+  return table.concat({ name, topic, vite_port, current_status }, '\t')
 end
 
 -- :FrameStatus TEXT — set the status suffix; no TEXT clears it.

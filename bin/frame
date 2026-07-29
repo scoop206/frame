@@ -9,6 +9,8 @@
 #   frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
 #   frame shell TOPIC          casual frame in ~/frames/TOPIC — no repo, no
 #                              branch, just the claude + local buffers
+#   frame ls                   list every live frame (all projects), → marks
+#                              the one you're in; `list` is a synonym
 #   frame merge [TOPIC] [--push|--ff|-n]   merge TOPIC (default: current branch)
 #   frame services [up|down]   manage the shared postgres/minio stack
 #   frame status [TEXT…]       append "- TEXT" to this frame's window title
@@ -41,6 +43,9 @@ if (( $# > 0 )); then shift; fi
 case "$cmd" in
   wt|worktree)
     source "$FRAME_ROOT/commands/wt.sh" "$@"
+    ;;
+  ls|list)
+    source "$FRAME_ROOT/commands/ls.sh" "$@"
     ;;
   init|shell|merge|services|status|notify|notification|focus|yolo)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
