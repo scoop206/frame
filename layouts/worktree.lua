@@ -291,6 +291,27 @@ if main_wt ~= '' then
     end
     vim.defer_fn(watch, 1500)
   end, { bang = true, desc = 'Tear down this frame (worktree + branch)' })
+
+  -- :FrameMerge[!] — merge this frame's branch into main from the primary
+  -- worktree, without leaving this session. A thin passthrough to `frame merge`:
+  -- every safety rail (clean primary tree, no origin divergence, conflict abort)
+  -- lives there and reports itself, so we just run it and surface the result.
+  -- Bang pushes main afterward (mirrors `frame merge --push`). Unlike :FrameDown
+  -- the merge runs in $FRAME_MAIN_WT, not our cwd, so no reaper is needed — nvim
+  -- outlives it. Pass `topic` explicitly: with cwd=main_wt a bare `frame merge`
+  -- would resolve the topic from main's own branch and refuse.
+  vim.api.nvim_create_user_command('FrameMerge', function(opts)
+    local args = { frame_bin, 'merge', topic }
+    if opts.bang then table.insert(args, '--push') end
+    vim.notify('frame: merging ' .. topic .. ' → main…', vim.log.levels.INFO)
+    vim.system(args, { cwd = main_wt, text = true }, function(res)
+      vim.schedule(function()
+        local out = vim.trim((res.stdout or '') .. (res.stderr or ''))
+        vim.notify(out, res.code == 0 and vim.log.levels.INFO
+                                       or vim.log.levels.WARN)
+      end)
+    end)
+  end, { bang = true, desc = 'Merge this frame into main (! also pushes)' })
 else
   -- Shell frame (frame shell): no worktree or branch — teardown means
   -- deleting the topic directory itself, and no git backs it up. So where a

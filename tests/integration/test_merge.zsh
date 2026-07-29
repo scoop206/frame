@@ -57,6 +57,20 @@ test_topic_defaults_to_current_worktree_branch() {
   assert_contains "$OUT" "merging 'feature' → 'main'"
 }
 
+test_explicit_topic_overrides_cwd_branch() {
+  # :FrameMerge always passes an explicit topic while cwd is the primary
+  # worktree (main_wt), never the topic's own. Pin that an explicit topic wins
+  # over the invoking worktree's branch — the config where getting it wrong
+  # merges the WRONG branch rather than harmlessly refusing.
+  setup_topic
+  make_topic other
+  cd "$SANDBOX/_$TNAME-other"
+  run_frame merge feature
+  assert_status 0
+  assert_contains "$OUT" "merging 'feature' → 'main'"
+  assert_eq "$(git -C "$REPO" log -1 --format=%s main)" "Merge branch 'feature'"
+}
+
 test_merging_main_into_itself_fails() {
   setup_topic
   run_frame merge main
