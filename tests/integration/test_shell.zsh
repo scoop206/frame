@@ -16,7 +16,7 @@ test_shell_creates_dir_and_boots() {
   assert_contains "$log" "FRAME_TOPIC=jam"
   assert_contains "$log" "FRAME_BUFFERS=claude local"
   # empty on purpose: no primary checkout → the layout swaps in the
-  # shell-frame :FrameDown (bang-only dir delete) instead of the worktree one
+  # shell-frame :FrameDown (dir delete) instead of the worktree one
   assert_contains "$log" "FRAME_MAIN_WT="$'\n'
   # and no git repo was conjured up around the topic dir
   ! git -C "$SANDBOX/frames/jam" rev-parse --show-toplevel >/dev/null 2>&1 \
