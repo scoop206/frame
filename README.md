@@ -239,23 +239,27 @@ are the extra steps to get the badge right:
 brew install terminal-notifier
 ```
 
-Then:
+Then build the Frame app icon for the banner with:
+
+```bash
+frame notification init
+```
+
+You should be prompted to allow for Frame to notify:
 
 - System Settings → Notifications → Frame → Allow.
-- Clicking a badge also asks for Accessibility on the first click; grant that
-  too. Both are one-time.
 
-Fire a test banner with `frame notify` to check any fix.
+You can send a test notification with:
 
-**If banners lose the badge later** (generic or Terminal icon instead of the
-frame vortex):
+```bash
+frame notify
+```
 
-1. `killall usernoted NotificationCenter` — both notification daemons cache the
-   old icon; they respawn instantly, and a stale cache is the usual culprit.
-2. Still wrong? Force a rebuild: `rm -rf ~/.local/share/frame/Frame.app`,
-   then `frame notification init`. The rebuild mints a fresh code signature, and
-   macOS keys the notification grant to the signature — so re-allow the
-   banners in System Settings → Notifications → Frame afterwards.
+If the new badge is still not working you can also try (they will respawn):
+
+```
+killall usernoted NotificationCenter
+```
 
 ## How a project plugs in
 
