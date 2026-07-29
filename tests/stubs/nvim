@@ -20,7 +20,14 @@ if [[ "${1:-}" == "--server" ]]; then
   # without one is "dead" — the query fails, exactly as a real unanswered
   # socket would, and ls skips it.
   case "$_expr" in
-    *FrameInfo*) [[ -f "$_sock.info" ]] && { cat "$_sock.info"; exit 0; }; exit 1 ;;
+    *FrameInfo*)
+      # A <sock>.hang companion stands in for an alive-but-unresponsive nvim:
+      # the socket exists but the session never answers the RPC. Sleep well
+      # past frame_rpc_expr's timeout so the caller must bound + skip us; a
+      # real wedged frame would block here indefinitely. The client is killed
+      # before this returns, so the exit code never matters.
+      [[ -f "$_sock.hang" ]] && { sleep 30; exit 0; }
+      [[ -f "$_sock.info" ]] && { cat "$_sock.info"; exit 0; }; exit 1 ;;
   esac
   # Other exprs (frame status / notify / req / deliver / inbox …): a test opts in
   # via FAKE_NVIM_EXPR_RESULT, which becomes the answer to any such query. The

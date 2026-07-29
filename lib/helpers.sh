@@ -210,16 +210,62 @@ set_title() {
 
 # ── live-frame discovery ──────────────────────────────────────────────────────
 
+frame_rpc_expr() {
+  # frame_rpc_expr SOCKET EXPR [TIMEOUT_S] — evaluate EXPR on the frame at
+  # SOCKET over --remote-expr, printing its result on stdout. Returns non-zero
+  # on RPC error OR if the session doesn't answer within TIMEOUT_S seconds
+  # (default 2, overridable with $FRAME_RPC_TIMEOUT).
+  #
+  # The timeout is the whole point. A dead socket (no listener) refuses fast
+  # and is skipped; a healthy session answers fast. But an nvim that is
+  # alive-but-unresponsive — mid-boot, wedged, momentarily not servicing RPC —
+  # makes a bare --remote-expr block *forever*. frame_live_frames loops over
+  # every /tmp/*.nvim, so one such socket would hang `frame ls` and the
+  # wt/shell topic-collision guard until Ctrl-C. Bounding each probe means a
+  # wedged frame costs at most TIMEOUT_S and is skipped like any dead debris.
+  #
+  # macOS ships no timeout(1), so we use gtimeout (coreutils) when it's present
+  # and otherwise fall back to a dependency-free zsh timer: background the
+  # headless client, poll for it, and kill it if it outlives the deadline.
+  # --headless is kept on both paths — it stops a piped-stdout nvim from
+  # routing the expr result to /dev/tty and probing the terminal (see
+  # commands/status.sh for the full story).
+  local _sock=$1 _expr=$2 _t=${3:-${FRAME_RPC_TIMEOUT:-2}}
+  if (( $+commands[gtimeout] )); then
+    gtimeout "$_t" nvim --headless --server "$_sock" --remote-expr "$_expr" 2>/dev/null
+    return $?
+  fi
+  local _out _pid _i _rc
+  _out=$(mktemp) || return 1
+  nvim --headless --server "$_sock" --remote-expr "$_expr" >"$_out" 2>/dev/null & _pid=$!
+  for (( _i = 0; _i < _t * 10; _i++ )); do
+    kill -0 $_pid 2>/dev/null || break
+    sleep 0.1
+  done
+  if kill -0 $_pid 2>/dev/null; then          # still running past the deadline
+    kill $_pid 2>/dev/null
+    wait $_pid 2>/dev/null
+    rm -f "$_out"
+    return 1
+  fi
+  wait $_pid; _rc=$?
+  (( _rc == 0 )) && cat "$_out"
+  rm -f "$_out"
+  return $_rc
+}
+
 frame_live_frames() {
   # Print one `name<TAB>topic<TAB>port<TAB>status` row per running frame on this
   # machine, unsorted. A running frame is exactly one with a live nvim socket at
   # /tmp/<name>-<topic>.nvim that answers FrameInfo() over that socket — we ask
   # the session for its own identity rather than parsing the ambiguous
   # <name>-<topic> filename (topics can contain dashes). Sockets that don't
-  # answer are skipped: dead debris from a crash, or a session predating
-  # FrameInfo (a reboot fixes it). Shared by `frame ls` (renders the rows) and
-  # the creation paths (topic-collision guard). --headless keeps the client from
-  # routing the expr result to /dev/tty and probing the terminal.
+  # answer are skipped: dead debris from a crash, a session predating FrameInfo
+  # (a reboot fixes it), or one that's alive but wedged and can't service RPC.
+  # frame_rpc_expr bounds each per-socket query with a short timeout, so a
+  # single unresponsive frame can't hang the sweep — and thus can't hang
+  # `frame ls` or the wt/shell topic-collision guard that call this. Shared by
+  # `frame ls` (renders the rows) and the creation paths (topic-collision guard).
   #
   # (N) = null_glob for this one pattern, so an empty /tmp expands to nothing
   # rather than the literal. Port/status are printed raw ('' when absent);
@@ -227,7 +273,7 @@ frame_live_frames() {
   local _sock _rec _name _topic _port _status
   for _sock in /tmp/*.nvim(N); do
     [[ -S "$_sock" ]] || continue
-    _rec=$(nvim --headless --server "$_sock" --remote-expr 'v:lua.FrameInfo()' 2>/dev/null) || continue
+    _rec=$(frame_rpc_expr "$_sock" 'v:lua.FrameInfo()') || continue
     [[ -n "$_rec" ]] || continue
     _name=${_rec%%$'\t'*};  _rec=${_rec#*$'\t'}
     _topic=${_rec%%$'\t'*}; _rec=${_rec#*$'\t'}
