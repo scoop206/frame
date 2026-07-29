@@ -39,9 +39,8 @@ across all your projects.
 Run from a project:
 
 ```
-frame init                 scaffold .frame/config.sh, gitignore .frame/local/;
-                           first init also builds the banner app (frame icon +
-                           click-to-focus banners)
+frame init                 scaffold integration into project (.frame/* and
+                           .claude/settings.json hooks)
 frame wt TOPIC             create/reuse branch TOPIC + worktree ../_<name>-TOPIC, boot it
 frame wt                   boot the worktree you're already in
 frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
