@@ -174,6 +174,8 @@ When frame instantiates the nvim instance it injects these user commands
 | `:FrameQuit`         | quit the session only — worktree and branch stay for a later `frame wt TOPIC` |
 | `:FrameDown`         | tear down the whole frame: quit nvim, remove the worktree, delete the branch  |
 | `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits             |
+| `:FrameMerge`        | merge this frame's branch into main (same safeguards as `frame merge`)         |
+| `:FrameMerge!`       | merge, then push main to origin (mirrors `frame merge --push`)                 |
 
 In a shell frame (`frame shell`) there is no worktree or branch, so
 `:FrameDown` simply quits and deletes the topic directory — the safeguards
@@ -197,6 +199,10 @@ The worktrees share one object store, so the primary checkout already sees
 every topic branch. `frame merge` drives that primary worktree via `git -C`:
 fast-forward main to origin, merge the topic branch, and (only when asked)
 push — all without leaving whichever worktree you're in.
+
+From inside the session, `:FrameMerge` runs the same thing for the current
+frame's branch (`:FrameMerge!` also pushes); a blocked merge reports the
+reason without leaving nvim.
 
 Safeguards, in the order they run:
 
