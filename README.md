@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/scoop206/frame/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/scoop206/frame/actions/workflows/test.yml)
 
-An opinionated AI harness built around **neovim** and **git worktrees** — a frame
+An AI harness built around **neovim** and **git worktrees** — a frame
 per feature, parallel Claude sessions you can tell apart, and shared services
 across all your projects.
 
