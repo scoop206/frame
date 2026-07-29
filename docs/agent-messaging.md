@@ -32,7 +32,7 @@ direction, addressing, discipline, and effect on the gate:
 | **Addressing** | you **name** the target | **implicit** — this frame's armed `subscribers`; you name no one |
 | **Delivery discipline** | **inject** into the target's Claude prompt (a *command*) | **accumulate** in the recipient's inbox (a *report*) |
 | **Effect on the gate** | **arms** it on the *target* | **fires + clears** it on *this* frame (one-shot) |
-| **Where the text comes from** | you type it | bare form **reads the transcript** (last assistant message) |
+| **Where the text comes from** | you type it | the Stop payload's **`last_assistant_message`** (transcript only as a fallback) |
 | **Mechanism** | `chansend` → the target's pty | `frame deliver` → the recipient's inbox table |
 
 The other two verbs support them:
@@ -206,13 +206,16 @@ one place the "state in nvim" idea fights physics.
 
 Clean split:
 
-- **Stop hook = sensor.** Claude Code's Stop payload (on stdin) carries
-  `last_assistant_message` — the flattened answer, synchronously — so the sensor
-  RPCs *that* text into the frame: `v:lua.FrameOnTurnEnd(text)`. The hook decides
-  nothing. (It does NOT parse `transcript_path`: at Stop time the transcript on
-  disk lags the hook — the final assistant line often isn't flushed yet — so
-  reading the file races and comes back empty. The transcript path is kept only
-  as a fallback for payloads lacking the field. Never scrape the TUI buffer.)
+- **Stop hook = sensor.** `commands/reply.sh` (bare form) stashes Claude Code's
+  Stop payload (stdin JSON) to a temp file and RPCs
+  `v:lua.FrameReplyFromHook(path)` — so all JSON parsing stays in Lua
+  (`vim.json`). That function reads `last_assistant_message` — the flattened
+  answer the payload carries synchronously — and hands it to `FrameOnTurnEnd`.
+  The hook decides nothing. (It does NOT parse `transcript_path` on the live
+  path: at Stop time the transcript on disk lags the hook — the final assistant
+  line often isn't flushed yet — so reading the file races and comes back empty.
+  `transcript_path` is kept only as a fallback for payloads lacking the field.
+  Never scrape the TUI buffer.)
 - **`FrameOnTurnEnd(text)` = brain.** One Lua function does all routing: if
   `subscribers` is empty, no-op (the existing banner still fires); else deliver
   `text` home to each address as a **report** — appended to that address's
@@ -284,7 +287,7 @@ Multiple concurrent commanders are never ambiguous: the return address is always
 Phases 4–5 are not yet built.*
 
 1. **Send only.** `frame req name/topic TEXT` → `chansend` into the `claude`
-   buffer. Stash `claude_chan` in `FrameState` at boot. No reply yet — already
+   buffer. Stash the channel in `FrameState.chan` at boot. No reply yet — already
    useful (fire a message into a frame).
 2. **`FrameState` consolidation.** Fold `current_status` + `frame_notify_muted`
    into `FrameState`; every frame gets an `inbox`; keep the title a pure view.
@@ -319,22 +322,26 @@ hard `frame wt -d` teardown) already exist. Revisit alongside `--watch`.
   ride in with `--watch`/escalation — it's the "wake a parked node" machinery we
   already scoped out of v1.
 - **`frame req` run outside any frame is refused in v1.** With no return
-  socket there's no inbox for a reply to come home to, so it errors: *"run
-  `frame req` from inside a frame — no inbox to receive replies."* Fired from
+  socket there's no inbox for a reply to come home to, so it errors: *"frame req
+  must be run from inside a frame — its inbox receives the reply."* Fired from
   *any* frame is fine (that frame is the return address). A fire-and-forget
   `--no-reply` for bare terminals is an easy later add if demand appears.
 
 ## Open questions
 
-- **Transcript-tail extraction robustness** — the Stop-hook sensor reads the
-  agent's last turn from the JSONL: last assistant message only, or the whole
-  final turn? What about a turn that ends on a tool call with no closing prose?
-  An implementation detail to settle while building phase 3.
+*None blocking.* The one that stood here — how to extract the reply text from the
+transcript — dissolved during phase 3: Claude Code's Stop payload carries
+`last_assistant_message` directly, so the sensor uses that and never parses the
+transcript on the live path. The transcript-parsing **fallback** still assumes
+the last assistant text and would return empty on a tool-only final turn — an
+accepted limitation for a backstop that almost never runs.
 
 ## Related
 
 - [identity-model.md](identity-model.md) — the socket-is-identity rule this
   builds on; `FrameState` is its state counterpart.
-- `layouts/worktree.lua` — `current_status` / `FrameInfo` / `FrameSetStatus`, the
-  seed of `FrameState`.
-- `commands/notify.sh` — the Stop-hook out-channel that becomes the reply sensor.
+- `layouts/worktree.lua` — `FrameState` and the `FrameRequest` / `FrameOnTurnEnd`
+  / `FrameReplyFromHook` / `FrameInbox*` routing functions.
+- `commands/req.sh` · `reply.sh` · `deliver.sh` · `inbox.sh` — the four verbs.
+  `reply.sh` is the Stop-hook sensor; `notify.sh` is the sibling Stop hook it's
+  wired beside (`frame_write_claude_hooks` in `lib/helpers.sh`).
