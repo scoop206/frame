@@ -63,6 +63,29 @@ frame_load_config() {
   : "${PORT_PREFIX:=${(U)NAME//-/_}}"
 }
 
+frame_self_identity() {
+  # Sets SELF_NAME / SELF_TOPIC to THIS frame's own identity — used as a reply
+  # return address by `frame agent` (arming) and as the socket to read by
+  # `frame reply` / `frame inbox`. Same derivation as status.sh: a shell frame
+  # (no git repo) carries it in the session env; a checkout derives it from the
+  # worktree dir (_NAME-TOPIC) or the current branch. Returns 1 with SELF_* unset
+  # when not inside any frame — the caller decides whether that's fatal.
+  if ! frame_project_root >/dev/null \
+      && [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
+    SELF_NAME=$FRAME_NAME SELF_TOPIC=$FRAME_TOPIC
+    return 0
+  fi
+  frame_load_config 2>/dev/null || return 1
+  SELF_NAME=$NAME
+  if [[ "${PROJECT_ROOT:t}" == _$NAME-* ]]; then
+    SELF_TOPIC="${${PROJECT_ROOT:t}#_$NAME-}"
+  else
+    SELF_TOPIC=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null) \
+      || return 1
+  fi
+  return 0
+}
+
 # ── machine-global config ─────────────────────────────────────────────────────
 # ~/.local/share/frame/config — key=value settings that apply to every
 # project's frames on this machine (notify=on|off, the global banner switch;
@@ -121,9 +144,12 @@ frame_export_claude_flags() {
 
 frame_write_claude_hooks() {
   # .claude/settings.json in cwd, wiring claude-code to frame's notification
-  # channels: Stop → `frame notify` (banner + "- waiting" title status),
-  # UserPromptSubmit → `frame status` (clears it). Callers guard the
-  # file-exists case — this always writes.
+  # channels: Stop → `frame notify` (banner + "- waiting" title status) and
+  # `frame reply` (routes the turn's last message to anyone who req'd this
+  # frame); UserPromptSubmit → `frame status` (clears it). `frame reply` reads
+  # the hook JSON on stdin (transcript path) — the redirects touch stdout/stderr
+  # only, so stdin still flows. Callers guard the file-exists case — this always
+  # writes.
   mkdir -p .claude
   cat > .claude/settings.json <<'EOF'
 {
@@ -134,6 +160,10 @@ frame_write_claude_hooks() {
           {
             "type": "command",
             "command": "frame notify >/dev/null 2>&1 || true"
+          },
+          {
+            "type": "command",
+            "command": "frame reply >/dev/null 2>&1 || true"
           }
         ]
       }

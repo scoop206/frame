@@ -2,7 +2,7 @@
 
 *Design note. Captures how an operator (a human, or an orchestrator Claude) sends
 a message to the Claude agent in another frame and gets its reply routed home to
-an inbox — without polling. Written while scoping `frame agent`. Builds directly
+an inbox — without polling. Written while scoping `frame req`. Builds directly
 on the [identity model](identity-model.md).*
 
 *Revised (v2): **commander/worker is not a stored mode.** Roles are emergent and
@@ -12,11 +12,52 @@ orchestrator that is itself commanded from above). Every frame has an inbox;
 delivery discipline is decided by the operation (command → inject, report →
 inbox), not by a role attribute. See [Roles are emergent](#roles-are-emergent-not-a-stored-attribute).*
 
+*Revised (v3): **naming.** The verbs are `frame req` / `frame reply` (a
+request/reply pair, both present-tense actions the actor takes; the abbreviated
+`req` de-formalizes it), with `frame deliver` (the shared inbox-write transport)
+and `frame inbox` (read your mail). All four are first-class, documented
+top-level commands — nothing hidden under a fake "hook" verb. The noun `agent` is
+reserved for a future umbrella (`frame agent req|reply|…`) if the surface grows.
+See [The command surface](#the-command-surface--request--reply).*
+
+## The command surface — request / reply
+
+Four top-level verbs. `req` and `reply` are the two ends of one round-trip and
+read as mirror images — the deepest differences aren't "who calls them" but
+direction, addressing, discipline, and effect on the gate:
+
+| Axis | `frame req TARGET TEXT` | `frame reply [TEXT]` |
+|---|---|---|
+| **Role in the exchange** | *opens* it — the request | *answers* it — the response |
+| **Addressing** | you **name** the target | **implicit** — this frame's armed `subscribers`; you name no one |
+| **Delivery discipline** | **inject** into the target's Claude prompt (a *command*) | **accumulate** in the recipient's inbox (a *report*) |
+| **Effect on the gate** | **arms** it on the *target* | **fires + clears** it on *this* frame (one-shot) |
+| **Where the text comes from** | you type it | bare form **reads the transcript** (last assistant message) |
+| **Mechanism** | `chansend` → the target's pty | `frame deliver` → the recipient's inbox table |
+
+The other two verbs support them:
+
+- **`frame deliver TARGET TEXT`** — the transport `reply` rides on: append a
+  message to any frame's inbox. Callable directly to just leave a note.
+- **`frame inbox`** — read + drain this frame's inbox.
+
+One round-trip, end to end:
+
+```
+A:  frame req B "do X"        → injects into B, arms B's gate with A's address
+B:  …works, turn ends…
+B:  frame reply  (Stop hook)  → reads B's last message, delivers to A's inbox, clears gate
+A:  frame inbox               → reads B's answer
+```
+
+`req` asks and arms; `reply` answers and disarms; `deliver` is the shared
+transport; `inbox` reads. (`agent` stays free as a future umbrella noun.)
+
 ## TL;DR
 
 - **A frame already exposes exactly one way in: its nvim RPC socket**
   (`/tmp/<name>-<topic>.nvim`). `status`, `notify`, `ls`, teardown all go
-  through it; nothing talks to the Claude process directly. `frame agent` is
+  through it; nothing talks to the Claude process directly. `frame req` is
   just the newest consumer of that same socket.
 - **Send is easy** because nvim *owns the terminal Claude runs in*: RPC into the
   socket → `chansend` the text into the `claude` buffer's channel. It arrives as
@@ -64,10 +105,10 @@ Consequence: **send** is a natural fit (nvim owns the terminal, so it can type
 into it), and **reply** must ride the one out-channel the agent already has (the
 `frame` CLI), landing somewhere the sender can read on its own schedule.
 
-## Send: `frame agent <name>/<topic> TEXT`
+## Send: `frame req <name>/<topic> TEXT`
 
 ```
-frame agent web/auth "what's blocking the migration?"
+frame req web/auth "what's blocking the migration?"
 ```
 
 → resolve the target socket from `<name>/<topic>` (same lookup `status`/`focus`
@@ -78,7 +119,7 @@ Notes / open questions for this half:
 
 - **Finding the channel.** The layout knows which buffer is `claude`
   (`buffers.json`); `FrameState` should stash that buffer/channel handle at boot
-  so `frame agent` doesn't have to hunt for it.
+  so `frame req` doesn't have to hunt for it.
 - **Timing / consent.** If the agent is mid-turn, injected text queues in
   Claude Code's input the same way typing-while-busy does. That's acceptable
   default behavior; a future `--interrupt` could send an Esc first. Not in v1.
@@ -90,7 +131,7 @@ agent's own work triggered, everything. So "every Stop → write to an inbox"
 is wrong: it would flood the inbox with unrelated turn-endings. There must be a
 gate, and **the gate is the "subscribe" concept.**
 
-**A send arms the gate.** `frame agent` records a *return address* on the target
+**A send arms the gate.** `frame req` records a *return address* on the target
 frame — an entry in `FrameState.subscribers`, "someone is waiting to hear back,
 here's who." On turn-end the hook-fed router checks it:
 
@@ -104,7 +145,7 @@ here's who." On turn-end the hook-fed router checks it:
 - **One-shot / request–reply** (the atom): a send arms *one* reply. Turn-end
   fulfills and **removes** the address. Keep talking by sending again. Zero
   leakage — an unrelated later turn-end routes to nobody.
-- **Subscription / watch** (sugar): `frame agent --watch` **keeps** the address
+- **Subscription / watch** (sugar): `frame req --watch` **keeps** the address
   after firing, so every future turn-end of the target flows to the watcher
   until it unsubscribes. Good for an orchestrator passively monitoring a worker.
 
@@ -172,7 +213,7 @@ Clean split:
   `subscribers` is empty, no-op (the existing banner still fires); else deliver
   `text` home to each address as a **report** — appended to that address's
   `inbox` — then clear/keep per one-shot/watch. A report always accumulates; only
-  a `frame agent` *command* injects (you're telling the target to act). The
+  a `frame req` *command* injects (you're telling the target to act). The
   operation picks the discipline, and there are exactly two.
 
 That marries both ideas: nvim holds the state and owns the routing; the hook
@@ -196,7 +237,7 @@ So role isn't stored anywhere. What's stored is the mechanics that make the two
 
 | Operation | What it is | Delivery |
 |---|---|---|
-| **command** (`frame agent T "…"`) | tell T to do something | **inject** into T's Claude prompt (injecting *is* the point) |
+| **command** (`frame req T "…"`) | tell T to do something | **inject** into T's Claude prompt (injecting *is* the point) |
 | **report** (reply routed home) | tell the sender what happened | **accumulate** in the recipient's inbox (reference data, never spliced into a live turn) |
 
 Reports always accumulate — there is no per-node delivery preference. Injecting a
@@ -212,7 +253,7 @@ whole ceremony ("keep it around so I can command"). No `frame mode` command, no
 graduation step: send a command and you're commanding; receive one and you're
 working.
 
-You fire `frame agent web/auth "…"` → injected into that worker → it works → its
+You fire `frame req web/auth "…"` → injected into that worker → it works → its
 reply routes to *your* frame's inbox (your frame was the return address) → you
 read it and command again. An orchestrator agent runs the identical loop from its
 Claude buffer, draining its own inbox on each idle turn-end.
@@ -234,7 +275,11 @@ Multiple concurrent commanders are never ambiguous: the return address is always
 
 ## Build phases
 
-1. **Send only.** `frame agent name/topic TEXT` → `chansend` into the `claude`
+*Status: phases 1–3 are implemented and shipped (`frame req` / `reply` /
+`deliver` / `inbox`, `FrameState`, the Stop-hook sensor, one-shot round-trip).
+Phases 4–5 are not yet built.*
+
+1. **Send only.** `frame req name/topic TEXT` → `chansend` into the `claude`
    buffer. Stash `claude_chan` in `FrameState` at boot. No reply yet — already
    useful (fire a message into a frame).
 2. **`FrameState` consolidation.** Fold `current_status` + `frame_notify_muted`
@@ -269,9 +314,9 @@ hard `frame wt -d` teardown) already exist. Revisit alongside `--watch`.
   banner. A real async-wake (type a nudge into an idle prompt) is deferred to
   ride in with `--watch`/escalation — it's the "wake a parked node" machinery we
   already scoped out of v1.
-- **`frame agent` run outside any frame is refused in v1.** With no return
+- **`frame req` run outside any frame is refused in v1.** With no return
   socket there's no inbox for a reply to come home to, so it errors: *"run
-  `frame agent` from inside a frame — no inbox to receive replies."* Fired from
+  `frame req` from inside a frame — no inbox to receive replies."* Fired from
   *any* frame is fine (that frame is the return address). A fire-and-forget
   `--no-reply` for bare terminals is an easy later add if demand appears.
 

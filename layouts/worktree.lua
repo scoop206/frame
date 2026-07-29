@@ -69,18 +69,122 @@ _G.FrameInfo = function()
   return table.concat({ name, topic, vite_port, FrameState.status }, '\t')
 end
 
--- _G.FrameAgentSend(text) — type TEXT into the `claude` buffer and submit it,
--- exactly as if the operator had typed it there. `frame agent <name/topic> TEXT`
--- calls this over the socket. FrameState.chan['claude'] is the buffer's terminal
--- job channel (captured at boot, bottom of this file); chansend to it writes to
--- the pty exactly as if the keys were typed. The trailing '\r' is the Enter key
--- (a pty in raw mode delivers Return as CR). Returns 'ok', or 'no-claude-buffer'
--- when this frame opened no claude buffer to message.
-_G.FrameAgentSend = function(text)
+-- _G.FrameRequest(from, text) — deliver a COMMAND: type TEXT into the `claude`
+-- buffer and submit it, exactly as if the operator had typed it there, and arm a
+-- one-shot reply for `from` (the sender's "name/topic" return address) so the
+-- next turn-end routes the agent's answer home. `frame req <target> TEXT` calls
+-- this over the target's socket. FrameState.chan['claude'] is the buffer's
+-- terminal job channel (captured at boot, bottom of this file); chansend to it
+-- writes to the pty exactly as if the keys were typed — the trailing '\r' is the
+-- Enter key (a pty in raw mode delivers Return as CR). Returns 'ok', or
+-- 'no-claude-buffer' when this frame opened no claude buffer to message.
+_G.FrameRequest = function(from, text)
   local chan = FrameState.chan['claude']
   if not chan then return 'no-claude-buffer' end
+  -- Arm the gate: record the sender so FrameOnTurnEnd routes the reply back.
+  -- A set, not a list — messaging repeatedly before a reply must not stack
+  -- duplicate return addresses (the reply would be delivered N times).
+  if from ~= nil and from ~= '' then
+    local seen = false
+    for _, addr in ipairs(FrameState.subscribers) do
+      if addr == from then seen = true break end
+    end
+    if not seen then table.insert(FrameState.subscribers, from) end
+  end
   vim.fn.chansend(chan, text .. '\r')
   return 'ok'
+end
+
+-- last_assistant_text(path) — pull the last assistant message out of a Claude
+-- Code JSONL transcript: scan from the end for the last `assistant` event and
+-- return its concatenated text blocks. '' when that event was tool-only (no
+-- prose) or the file is unreadable — the caller treats '' as "nothing to report".
+local function last_assistant_text(path)
+  if vim.fn.filereadable(path) ~= 1 then return '' end
+  local lines = vim.fn.readfile(path)
+  for i = #lines, 1, -1 do
+    if lines[i] ~= '' then
+      local ok, ev = pcall(vim.json.decode, lines[i])
+      if ok and type(ev) == 'table' then
+        local msg = ev.message
+        local is_assistant = ev.type == 'assistant'
+          or (type(msg) == 'table' and msg.role == 'assistant')
+        if is_assistant then
+          local content = type(msg) == 'table' and msg.content or nil
+          if type(content) == 'string' then return content end
+          if type(content) == 'table' then
+            local parts = {}
+            for _, b in ipairs(content) do
+              if type(b) == 'table' and b.type == 'text' and type(b.text) == 'string' then
+                table.insert(parts, b.text)
+              end
+            end
+            return table.concat(parts, '\n')
+          end
+          return ''
+        end
+      end
+    end
+  end
+  return ''
+end
+
+-- _G.FrameOnTurnEnd(text) — route a REPORT home: deliver `text` to every armed
+-- return address (via `frame deliver`, decision B — one code path for all
+-- cross-frame talk), then clear them (one-shot). No-op with no subscribers (the
+-- gate: turns nobody asked about route nowhere) or empty text (a tool-only turn
+-- keeps the gate armed for the next turn that actually speaks). Returns the
+-- number of addresses notified. jobstart is detached and fire-and-forget so a
+-- slow or dead peer never blocks the Stop hook.
+_G.FrameOnTurnEnd = function(text)
+  if text == nil or text == '' then return 0 end
+  local subs = FrameState.subscribers
+  if #subs == 0 then return 0 end
+  local from = name .. '/' .. topic
+  local frame_bin = (vim.env.FRAME_ROOT or '') .. '/bin/frame'
+  for _, addr in ipairs(subs) do
+    vim.fn.jobstart({ frame_bin, 'deliver', addr, '--from', from, text })
+  end
+  FrameState.subscribers = {}
+  return #subs
+end
+
+-- _G.FrameReplyFromTranscript(path) — the explicit transcript path: pull the
+-- last assistant message and route it. _G.FrameReplyFromHook(payload_path) — the
+-- Stop-hook path: `frame reply` stashes Claude Code's hook JSON to a temp file
+-- and passes its path here, so all JSON parsing stays in Lua (vim.json), which
+-- frame already trusts. Both return the count FrameOnTurnEnd notified.
+_G.FrameReplyFromTranscript = function(path)
+  return _G.FrameOnTurnEnd(last_assistant_text(path))
+end
+_G.FrameReplyFromHook = function(payload_path)
+  if vim.fn.filereadable(payload_path) ~= 1 then return 0 end
+  local ok, payload = pcall(vim.json.decode,
+    table.concat(vim.fn.readfile(payload_path), '\n'))
+  if not ok or type(payload) ~= 'table'
+      or type(payload.transcript_path) ~= 'string' then
+    return 0
+  end
+  return _G.FrameReplyFromTranscript(payload.transcript_path)
+end
+
+-- _G.FrameInboxAdd(from, text) — `frame deliver` calls this over the socket to
+-- append a report to this frame's inbox; returns the new inbox length.
+-- _G.FrameInboxDrain() — `frame inbox` reads AND clears the inbox, returning it
+-- as human-readable text ('' when empty).
+_G.FrameInboxAdd = function(from, text)
+  table.insert(FrameState.inbox, { from = from or '', text = text or '' })
+  return #FrameState.inbox
+end
+_G.FrameInboxDrain = function()
+  local box = FrameState.inbox
+  if #box == 0 then return '' end
+  local out = {}
+  for _, m in ipairs(box) do
+    table.insert(out, (m.from ~= '' and ('from ' .. m.from .. ':\n') or '') .. m.text)
+  end
+  FrameState.inbox = {}
+  return table.concat(out, '\n\n──\n\n')
 end
 
 -- :FrameStatus TEXT — set the status suffix; no TEXT clears it.
