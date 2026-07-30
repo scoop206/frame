@@ -152,4 +152,14 @@ test_notify_outside_any_frame_still_exits_0() {
   assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - task complete ? [ ? ]"
 }
 
+test_nested_boot_refused_noninteractively() {
+  # $NVIM set = we're inside an existing frame's nvim; a non-tty caller (an
+  # agent, a script) gets a refusal, not a hanging y/N prompt.
+  export NVIM=/tmp/fake-parent.sock
+  run_frame shell $TNAME < /dev/null
+  assert_status 1
+  assert_contains "$OUT" "refusing to boot a frame inside this frame's nvim"
+  assert_contains "$OUT" "frame spawn"
+}
+
 run_tests "$0"

@@ -157,4 +157,16 @@ test_different_topic_ignores_live_frame() {
   assert_dir_exists "$SANDBOX/_$TNAME-topic"
 }
 
+test_nested_boot_refused_noninteractively() {
+  # $NVIM set = we're inside an existing frame's nvim; a non-tty caller gets a
+  # refusal BEFORE any side effect — no worktree, no branch, no nvim.
+  setup_project
+  export NVIM=/tmp/fake-parent.sock
+  run_frame wt topic < /dev/null
+  assert_status 1
+  assert_contains "$OUT" "refusing to boot a frame inside this frame's nvim"
+  assert_dir_absent "$SANDBOX/_$TNAME-topic"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
 run_tests "$0"

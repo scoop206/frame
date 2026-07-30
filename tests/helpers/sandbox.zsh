@@ -45,7 +45,8 @@ EOF
   unset NAME PORT_PREFIX BUFFERS SERVER_CMD PORT WT_LINKS \
         API_PORT VITE_PORT HMR_PORT FRAME_SHELL_HOME \
         FRAME_NAME FRAME_TOPIC FRAME_MAIN_WT FRAME_VITE_PORT FRAME_BUFFERS \
-        FRAME_CLAUDE_FLAGS
+        FRAME_CLAUDE_FLAGS \
+        NVIM  # a suite run from inside a frame's nvim must not trip frame_guard_nested
   cd "$SANDBOX"
 }
 
