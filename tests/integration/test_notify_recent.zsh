@@ -1,8 +1,10 @@
 #!/usr/bin/env zsh
 # frame notify's quick-turn gate: sending a prompt stamps
-# /tmp/<name>-<topic>.prompt (UserPromptSubmit hook → bare `frame status`),
-# and notify skips the banner when the stamp is 10 seconds old or less — the
-# human just prompted, they're still looking at the frame.
+# /tmp/<name>-<topic>.prompt (UserPromptSubmit hook → `frame status --prompt`,
+# which also sets the "working" status; the bare clear form still stamps for
+# projects wired before --prompt existed), and notify skips the banner when
+# the stamp is 10 seconds old or less — the human just prompted, they're
+# still looking at the frame.
 source "${${(%):-%x}:A:h:h}/helpers/harness.zsh"
 
 # Shell frame for identity (env-carried, no repo fixture needed); the gate is
@@ -25,7 +27,29 @@ setup_live_session() {
     "/tmp/shell-$TNAME.nvim"
 }
 
+test_prompt_flag_stamps_and_sets_working() {
+  # The UserPromptSubmit hook spelling: one call marks the turn start (stamp)
+  # AND flips the visible status to "working" (FrameSetStatus over the socket).
+  (( $+commands[python3] )) || { skip "python3 not found"; return }
+  setup_live_session
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs.log"
+  run_frame status --prompt
+  assert_status 0
+  assert_file_exists "/tmp/shell-$TNAME.prompt"
+  assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameSetStatus('working')"
+}
+
+test_prompt_flag_rejects_extra_args() {
+  setup_frame_env
+  run_frame status --prompt extra
+  assert_status 2
+  assert_contains "$OUT" "takes no further arguments"
+}
+
 test_bare_status_writes_prompt_stamp() {
+  # Pre---prompt projects still have UserPromptSubmit → bare `frame status`;
+  # the clear form keeps stamping so their quick-turn gate survives until
+  # their settings.json is refreshed.
   (( $+commands[python3] )) || { skip "python3 not found"; return }
   setup_live_session
   run_frame status

@@ -146,10 +146,11 @@ frame_write_claude_hooks() {
   # .claude/settings.json in cwd, wiring claude-code to frame's notification
   # channels: Stop → `frame notify` (banner + "- waiting" title status) and
   # `frame reply` (routes the turn's last message to anyone who req'd this
-  # frame); UserPromptSubmit → `frame status` (clears it). `frame reply` reads
-  # the hook JSON on stdin (transcript path) — the redirects touch stdout/stderr
-  # only, so stdin still flows. Callers guard the file-exists case — this always
-  # writes.
+  # frame); UserPromptSubmit → `frame status --prompt` ("- working" + the
+  # turn-start stamp). Working/waiting between them put claude's lifecycle in
+  # the window title and `frame ls`. `frame reply` reads the hook JSON on stdin
+  # (transcript path) — the redirects touch stdout/stderr only, so stdin still
+  # flows. Callers guard the file-exists case — this always writes.
   mkdir -p .claude
   cat > .claude/settings.json <<'EOF'
 {
@@ -173,7 +174,7 @@ frame_write_claude_hooks() {
         "hooks": [
           {
             "type": "command",
-            "command": "frame status >/dev/null 2>&1 || true"
+            "command": "frame status --prompt >/dev/null 2>&1 || true"
           }
         ]
       }
