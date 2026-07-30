@@ -219,15 +219,16 @@ fresh window, re-recorded. Dragging a tab out of the workers window rehomes it
 under a new window id; focus and close-tab therefore fall back to scanning
 every window for the recorded tab id.
 
-**Recommended cockpit setup — spawn everything, drag head out.** Spawn is the
-only command to learn: `frame spawn shell head` (head lands as a tab like any
-worker), then drag the head tab out into its own window and tile it beside
-the workers window. Spawn treats every frame it boots as a worker — it can't
-know a topic is head-shaped — so separation is a drag, not a flag; the
-recorded ids follow the tab wherever it lives, so focus and reap keep
-working. (`frame shell head` typed in a fresh window still works — it takes
-the window over in place, no tab bar — but the spawn+drag flow is the one to
-lead people down.) The new
+**Recommended cockpit setup — boot head in place, spawn the rest.** Open a
+fresh window and type `frame shell head`: it takes that window over (`exec
+nvim`) — nothing spawned, nothing left behind. From inside head,
+`frame spawn shell <topic>` puts every worker in the separate workers window;
+tile the two side by side. Spawning head instead (`frame spawn shell head`)
+works but is worse UX twice over: head lands as a tab among the workers
+(spawn treats everything it boots as a worker — it can't know a topic is
+head-shaped), and the window you typed the spawn in is left behind. If you do
+end up there, dragging the head tab out recovers — the recorded ids follow a
+tab wherever it lives, so focus and reap keep working. The new
 surface runs `/bin/zsh -ic '<bootstrap>'` via the scripting `command`
 configuration and its window/tab ids are recorded to `/tmp/shell-<topic>.nvim.gtab`
 for `frame focus` (select tab by id — no System Events, no Accessibility) and
