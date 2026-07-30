@@ -72,6 +72,51 @@ _G.FrameInfo = function()
   return table.concat({ name, topic, vite_port, FrameState.status }, '\t')
 end
 
+-- _G.FrameDebug() — the full attribute dump behind `frame view`: one
+-- `key<TAB>value` record per line (value is the rest of the line, so it may hold
+-- spaces). Read straight from the running session — its own env, FrameState, and
+-- the live FrameReady/broker/inbox reads — so `frame view` never guesses or
+-- re-parses the title. Strictly non-destructive: the inbox is counted and its
+-- senders listed, never drained (unlike FrameInboxDrain). A superset of
+-- FrameInfo; sessions booted before this helper lack it, so `frame view` falls
+-- back to the FrameInfo fields for them. Keep the keys in step with view.sh.
+_G.FrameDebug = function()
+  local prefix = vim.env.PORT_PREFIX or ''
+  -- env(k): a session env var, or '' when unset/empty (view.sh renders '-').
+  local function env(k) local v = vim.env[k]; return (v ~= nil and v ~= '') and v or '' end
+  -- inbox peek: count + senders, mapping an empty sender to '-'. Never drains.
+  local froms = {}
+  for _, m in ipairs(FrameState.inbox) do
+    froms[#froms + 1] = (m.from ~= nil and m.from ~= '') and m.from or '-'
+  end
+  -- buffers: the names we opened (FrameState.buf keys), in a stable order.
+  local bufs = {}
+  for n in pairs(FrameState.buf) do bufs[#bufs + 1] = n end
+  table.sort(bufs)
+  local b = FrameState.broker
+  local lines = {
+    'name\t' .. name,
+    'topic\t' .. topic,
+    'cwd\t' .. vim.fn.getcwd(),
+    'main_wt\t' .. env('FRAME_MAIN_WT'),
+    'status\t' .. FrameState.status,
+    'ready\t' .. _G.FrameReady(),
+    'notify\t' .. (vim.g.frame_notify_muted == 1 and 'muted' or 'on'),
+    'ephemeral\t' .. (env('FRAME_EPHEMERAL') == '1' and 'yes' or 'no'),
+    'prefix\t' .. prefix,
+    'api_port\t' .. env('PORT'),
+    'vite_port\t' .. vite_port,
+    'hmr_port\t' .. (prefix ~= '' and env(prefix .. '_HMR_PORT') or ''),
+    'server\t' .. env('SERVER_CMD'),
+    'buffers\t' .. table.concat(bufs, ','),
+    'broker_inflight\t' .. (b.inflight or ''),
+    'broker_queue\t' .. table.concat(b.queue, ','),
+    'inbox_count\t' .. #FrameState.inbox,
+    'inbox_from\t' .. table.concat(froms, ','),
+  }
+  return table.concat(lines, '\n')
+end
+
 -- _G.FrameReady() — 1 once this session can accept a `frame req`: the claude
 -- buffer's terminal channel is captured (the last step of boot, bottom of this
 -- file) AND claude's TUI has rendered its input prompt ('❯' on screen). The
