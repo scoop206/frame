@@ -9,9 +9,12 @@
 #   frame spawn shell calc --req "what is 2+2? reply with just the number"
 #   frame spawn shell calc --req "…" --ephemeral    reaps itself after replying
 #
-# The launch is `open -na Ghostty.app` (frame_open_window — macOS Ghostty has
-# no CLI new-window action) with --quit-after-last-window-closed=true so the
-# extra app instance exits with its window instead of lingering in the dock.
+# The launch is Ghostty's AppleScript dictionary (frame_open_window): workers
+# open as tabs congregating in one shared workers window — head keeps its own
+# window — and spawn records the window/tab ids to $SOCKET.gtab for
+# focus (select by id) and reap (`frame spawn close-tab`, an internal kind run
+# by the worker tab's shell once the frame exits — scripted surfaces hold on
+# [Process exited] rather than auto-close, so the close must be explicit).
 # After launching, spawn polls the worker's socket for FrameReady — the claude
 # buffer's channel captured (boot's LAST step) AND claude's input prompt
 # rendered on screen — and only then reports up and sends --req. The rendered
@@ -31,6 +34,30 @@ case "$KIND" in
   wt)
     echo "$X_MARK frame spawn wt is not built yet (frame spawn shell is) — see docs/head-frame.md" >&2
     exit 2 ;;
+  close-tab)
+    # Internal (not in usage): the worker tab's shell runs this after `frame
+    # shell` exits — close the tab by the ids spawn recorded. Scripted Ghostty
+    # surfaces hold on [Process exited] instead of auto-closing, so the frame's
+    # window dies here, however the frame ended (:FrameDown! self-reap or a
+    # plain quit). Silent no-op without a recording (legacy `open -na` window
+    # closes with its instance; a hand-booted frame was never ours to close).
+    TOPIC="${2:-}"
+    if [[ -z "$TOPIC" ]]; then
+      echo "$X_MARK usage: frame spawn close-tab TOPIC" >&2
+      exit 2
+    fi
+    GTAB="/tmp/shell-$TOPIC.nvim.gtab"
+    [[ -f "$GTAB" ]] || exit 0
+    read -r G_WID G_TID < "$GTAB"
+    rm -f "$GTAB"
+    osascript - "$G_WID" "$G_TID" >/dev/null 2>&1 <<'APPLESCRIPT' || true
+on run argv
+  tell application "Ghostty"
+    close tab (tab id (item 2 of argv) of window id (item 1 of argv))
+  end tell
+end run
+APPLESCRIPT
+    exit 0 ;;
   *)
     echo "$X_MARK $USAGE" >&2
     exit 2 ;;
@@ -93,18 +120,26 @@ frame_assert_topic_free "$W_NAME" "$TOPIC" || exit 1
 
 # zsh -ic (inside frame_open_window) sources ~/.zshrc, so the worker's PATH and
 # env come up exactly as when a human opens a window and types `frame shell
-# TOPIC`. The absolute FRAME_ROOT pins this checkout's frame — `open` launches
-# via launchd, which does not carry the caller's environment. --ephemeral rides
+# TOPIC`. The absolute FRAME_ROOT pins this checkout's frame — the surface's
+# command does not carry the caller's environment. --ephemeral rides
 # in as FRAME_EPHEMERAL=1: the worker is BORN ephemeral, and its reply router
-# (FrameOnTurnEnd) self-reaps the frame — dir, window, Ghostty instance — right
-# after its first reply routes home.
-if ! frame_open_window "${EPHEMERAL:+FRAME_EPHEMERAL=1 }exec ${(q)FRAME_ROOT}/bin/frame shell ${(q)TOPIC}"; then
-  echo "$X_MARK couldn't open a ghostty window (is Ghostty installed?)" >&2
+# (FrameOnTurnEnd) self-reaps the frame — dir, window — right after its first
+# reply routes home. No `exec` before `frame shell`: the tab's zsh must
+# survive nvim to run close-tab, which closes the tab (nvim's own exit merely
+# strands the surface on [Process exited] — see the close-tab kind above).
+SOCKET="/tmp/$W_NAME-$TOPIC.nvim"
+BOOT="${EPHEMERAL:+FRAME_EPHEMERAL=1 }${(q)FRAME_ROOT}/bin/frame shell ${(q)TOPIC}"
+BOOT+="; ${(q)FRAME_ROOT}/bin/frame spawn close-tab ${(q)TOPIC}"
+if ! IDS=$(frame_open_window "$BOOT"); then
+  echo "$X_MARK couldn't open a ghostty tab (is Ghostty installed?)" >&2
   exit 1
 fi
+# Record the surface for `frame focus` (select by id) and close-tab. Empty IDS
+# = the legacy `open -na` fallback fired — no recording, focus falls back to
+# title matching and the extra instance reaps its own window.
+[[ -n "$IDS" ]] && print -r -- "$IDS" > "$SOCKET.gtab"
 
-echo "$RUN_MARK spawned window for $W_NAME/$TOPIC — waiting for it to boot…"
-SOCKET="/tmp/$W_NAME-$TOPIC.nvim"
+echo "$RUN_MARK spawned tab for $W_NAME/$TOPIC — waiting for it to boot…"
 DEADLINE=$(( SECONDS + TIMEOUT ))
 while :; do
   if [[ -S "$SOCKET" ]]; then

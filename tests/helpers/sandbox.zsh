@@ -29,6 +29,9 @@ sandbox_up() {
 EOF
   export PATH="$TESTS_DIR/stubs:$PATH"
   export TNAME="proj$RANDOM$RANDOM"
+  # Keep frame_open_window's workers-window recording out of the real /tmp —
+  # a test run must never clobber (or read) a live session's window id.
+  export FRAME_WORKERS_WINDOW="$SANDBOX/frame-workers.window"
   unset FAKE_NVIM_LOG FAKE_BUSY_PORTS FAKE_OSASCRIPT_LOG FAKE_NVIM_EXPR_RESULT \
         FAKE_OSASCRIPT_RESULT FAKE_NVIM_EXPR_LOG FAKE_NVIM_EXPR_EMPTY_POLLS \
         FAKE_NVIM_POLL_COUNT_FILE FAKE_OPEN_LOG
@@ -54,6 +57,7 @@ sandbox_down() {
                                  /tmp/*-$TNAME.nvim.info(N) /tmp/$TNAME-*.nvim.info(N) \
                                  /tmp/*-$TNAME.nvim.hang(N) /tmp/$TNAME-*.nvim.hang(N) \
                                  /tmp/*-$TNAME.nvim.ready(N) /tmp/$TNAME-*.nvim.ready(N) \
+                                 /tmp/*-$TNAME.nvim.gtab(N) /tmp/$TNAME-*.nvim.gtab(N) \
                                  /tmp/*-$TNAME.prompt(N) /tmp/$TNAME-*.prompt(N)
   return 0
 }
