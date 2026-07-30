@@ -3,7 +3,9 @@
 #
 # Usage:
 #
-#     frame init                        scaffold integration into a project
+#     frame init [--force]              scaffold integration into a project;
+#                                       --force re-syncs an out-of-date
+#                                       .claude/settings.json (frame hooks only)
 #
 #     frame wt TOPIC                    create/reuse branch + worktree, boot it
 #     frame wt                          boot the worktree you're already in
