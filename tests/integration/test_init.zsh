@@ -60,6 +60,30 @@ test_init_quiet_when_existing_settings_already_wired() {
   fi
 }
 
+test_init_scaffolds_notification_hook() {
+  # A fresh scaffold wires the Notification hook → `frame notify --blocked`, so
+  # a frame that pauses mid-turn on a permission prompt surfaces as "blocked".
+  make_repo
+  run_frame init
+  assert_status 0
+  assert_contains "$(<$REPO/.claude/settings.json)" '"Notification"'
+  assert_contains "$(<$REPO/.claude/settings.json)" "frame notify --blocked"
+}
+
+test_init_flags_wiring_predating_notification_hook() {
+  # A settings.json carrying the pre-Notification frame hooks (fingerprint
+  # present, --blocked hook absent) is stale: flag it for a hand-merge rather
+  # than reporting "already wired", and name the missing hook.
+  make_repo
+  mkdir -p "$REPO/.claude"
+  print -r -- '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"frame notify"},{"type":"command","command":"frame reply"}]}],"UserPromptSubmit":[{"hooks":[{"type":"command","command":"frame status --prompt"}]}]}}' \
+    > "$REPO/.claude/settings.json"
+  run_frame init
+  assert_status 0
+  assert_contains "$OUT" "frame hooks missing, merge by hand"
+  assert_contains "$OUT" "frame notify --blocked"
+}
+
 test_init_outside_git_fails() {
   mkdir -p "$SANDBOX/plain"
   cd "$SANDBOX/plain"

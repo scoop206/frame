@@ -67,7 +67,7 @@ if [[ -f .claude/settings.json ]]; then
   # file needs a hand-merge rather than assuming init finished the job.
   typeset -a _missing
   _missing=()
-  for _h in 'frame notify' 'frame reply' 'frame status --prompt'; do
+  for _h in 'frame notify' 'frame reply' 'frame status --prompt' 'frame notify --blocked'; do
     grep -qF "$_h" .claude/settings.json || _missing+=( "$_h" )
   done
   if (( ${#_missing} )); then
@@ -107,6 +107,7 @@ if [[ -n $_hooks_hint ]]; then
   print -- "    but it's missing frame's notification hooks. Add these by hand:"
   for _h in $_missing; do
     case $_h in
+      'frame notify --blocked') print -- "      Notification     → 'frame notify --blocked'  (banner + \"blocked\" status when claude needs input)" ;;
       'frame notify') print -- "      Stop             → 'frame notify'  (banner + \"waiting\" status)" ;;
       'frame reply')  print -- "      Stop             → 'frame reply'   (route the reply to a requester)" ;;
       'frame status --prompt') print -- "      UserPromptSubmit → 'frame status --prompt'  (\"working\" status + turn stamp)" ;;

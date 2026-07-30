@@ -147,10 +147,14 @@ frame_write_claude_hooks() {
   # channels: Stop → `frame notify` (banner + "- waiting" title status) and
   # `frame reply` (routes the turn's last message to anyone who req'd this
   # frame); UserPromptSubmit → `frame status --prompt` ("- working" + the
-  # turn-start stamp). Working/waiting between them put claude's lifecycle in
-  # the window title and `frame ls`. `frame reply` reads the hook JSON on stdin
-  # (transcript path) — the redirects touch stdout/stderr only, so stdin still
-  # flows. Callers guard the file-exists case — this always writes.
+  # turn-start stamp); Notification → `frame notify --blocked` ("- blocked"
+  # status + banner) for when claude pauses MID-turn on a permission prompt (or
+  # any input) — the one state Stop/UserPromptSubmit structurally can't see, so
+  # without it a blocked frame reads as "working" forever. Working/waiting/blocked
+  # between them put claude's lifecycle in the window title and `frame ls`.
+  # `frame reply` reads the hook JSON on stdin (transcript path) — the redirects
+  # touch stdout/stderr only, so stdin still flows. Callers guard the file-exists
+  # case — this always writes.
   mkdir -p .claude
   cat > .claude/settings.json <<'EOF'
 {
@@ -175,6 +179,16 @@ frame_write_claude_hooks() {
           {
             "type": "command",
             "command": "frame status --prompt >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "frame notify --blocked >/dev/null 2>&1 || true"
           }
         ]
       }

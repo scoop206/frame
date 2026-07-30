@@ -1,36 +1,57 @@
-# frame notify — ping the human that this frame wants attention:
+# frame notify [--blocked] — ping the human that this frame wants attention:
 #
 #   frame notify
 #     → banner "task complete", title "<name> [ <topic> :<port> ] - waiting"
+#   frame notify --blocked
+#     → banner "needs your input", title "… - blocked"
 #
 # The controls live under `frame notification` (notification.sh): on|off is
 # the global banner switch, init the banner-app build/repair.
 #
+# Two modes, one Claude Code hook each:
+#   (bare)     the Stop hook — the turn ENDED, claude is done and waiting.
+#   --blocked  the Notification hook — claude paused MID-turn for input: a
+#              permission prompt, or an idle/needs-input stall. Neither Stop nor
+#              UserPromptSubmit fires here, so without this the frame would keep
+#              reading "working" while it's actually frozen on the human.
+#
 # Two channels, both best-effort: the window-title status (frame status —
 # needs the session's nvim socket) and a macOS banner (the Frame notifier
-# app when `frame notifier` has built it, else osascript). Built to
-# be the target of Claude Code hooks (Stop → `frame notify`), so a channel
-# failing must never fail the hook: every step is guarded and the command
-# always exits 0. The banner (never the title status) is skipped in three
-# cases: the global switch is off (the machine-global config, read below),
-# the session muted it with :FrameNotify off (asked over the socket below),
-# or the turn was quick — the human prompted within the last 10 seconds
-# (the stamp check below).
+# app when `frame notifier` has built it, else osascript). Built to be the
+# target of Claude Code hooks, so a channel failing must never fail the hook:
+# every step is guarded and the command always exits 0. The banner (never the
+# title status) is skipped when the global switch is off (machine-global config,
+# read below) or the session muted it with :FrameNotify off (asked over the
+# socket below). The bare mode additionally skips the banner for brokered turns
+# (the client already has the answer) and quick turns (the human prompted within
+# the last 10s and is still looking) — both are "done" heuristics that are wrong
+# for --blocked, where a mid-turn block is exactly when you want interrupting, so
+# --blocked bypasses those two gates.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
-# Hook target only — no arguments. Pointing stray args (including the old
-# on|off|init spellings) at frame notification beats guessing; the usage
-# error is fine hook-wise — hooks always call the bare form.
+# Hook target only. The bare form is the Stop hook; --blocked is the
+# Notification hook. Any other arg (including the old on|off|init spellings) is
+# a usage error — fine hook-wise, since the hooks always call one of these two.
+_mode=stop
+if [[ "${1:-}" == --blocked ]]; then
+  _mode=blocked
+  shift
+fi
 if (( $# )); then
   echo "$X_MARK frame notify takes no arguments (controls: frame notification on|off|init)" >&2
   exit 2
 fi
 
-# Two distinct strings: the title status reflects the frame's ongoing state
-# (it's waiting on the human), while the banner is the proactive "I'm done"
-# ping. STATUS goes to the window title, TEXT to the banner below.
-STATUS="waiting"
-TEXT="task complete"
+# Two distinct strings per mode: the title status reflects the frame's ongoing
+# state, the banner is the proactive ping. STATUS goes to the window title, TEXT
+# to the banner below. Stop → done and waiting; Notification → blocked on input.
+if [[ $_mode == blocked ]]; then
+  STATUS="blocked"
+  TEXT="needs your input"
+else
+  STATUS="waiting"
+  TEXT="task complete"
+fi
 
 "$FRAME_ROOT/bin/frame" status "$STATUS" 2>/dev/null || true
 
@@ -63,29 +84,37 @@ fi
 TITLE=$(frame_base_title "$NAME" "$TOPIC")
 SOCKET="/tmp/$NAME-$TOPIC.nvim"
 
-# Brokered turns get no banner: the client (frame claude / frame req) already
-# received the answer over the socket, so a "come look" desktop ping is noise.
-# Read-and-clear the flag the broker set at submit (FrameTakeBrokeredFlag) —
-# BEFORE the quick-turn gate, so a fast brokered turn still consumes it and it
-# can't linger to mute a later human turn. Old layouts lack the function → the
-# query fails → 0 → the banner fires exactly as it used to.
-if [[ -S "$SOCKET" ]]; then
-  _brokered=$(nvim --headless --server "$SOCKET" \
-    --remote-expr "v:lua.FrameTakeBrokeredFlag()" 2>/dev/null) || _brokered=0
-  if [[ "$_brokered" == 1 ]]; then
+# The next two gates are "done" heuristics — they silence the Stop banner when
+# the human doesn't need pulling back. A --blocked ping is the opposite: claude
+# is frozen mid-turn on the human, so both gates are skipped and the banner
+# always fires (subject only to the global/session mutes above). Crucially,
+# --blocked must NOT read-and-clear the brokered flag either — the eventual Stop
+# notify still needs to consume it, or that turn would double-banner.
+if [[ $_mode != blocked ]]; then
+  # Brokered turns get no banner: the client (frame claude / frame req) already
+  # received the answer over the socket, so a "come look" desktop ping is noise.
+  # Read-and-clear the flag the broker set at submit (FrameTakeBrokeredFlag) —
+  # BEFORE the quick-turn gate, so a fast brokered turn still consumes it and it
+  # can't linger to mute a later human turn. Old layouts lack the function → the
+  # query fails → 0 → the banner fires exactly as it used to.
+  if [[ -S "$SOCKET" ]]; then
+    _brokered=$(nvim --headless --server "$SOCKET" \
+      --remote-expr "v:lua.FrameTakeBrokeredFlag()" 2>/dev/null) || _brokered=0
+    if [[ "$_brokered" == 1 ]]; then
+      exit 0
+    fi
+  fi
+
+  # Quick-turn gate: sending a prompt stamps /tmp/<name>-<topic>.prompt (the
+  # UserPromptSubmit hook runs the bare `frame status` clear — see status.sh).
+  # A stamp this fresh means the human prompted seconds ago and is still
+  # looking at the frame — only turns long enough to have walked away from are
+  # banner-worthy. No stamp, or an old one → the banner fires. ms-11 = mtime
+  # within the last 10 seconds.
+  _recent=( "/tmp/$NAME-$TOPIC.prompt"(N.ms-11) )
+  if (( $#_recent )); then
     exit 0
   fi
-fi
-
-# Quick-turn gate: sending a prompt stamps /tmp/<name>-<topic>.prompt (the
-# UserPromptSubmit hook runs the bare `frame status` clear — see status.sh).
-# A stamp this fresh means the human prompted seconds ago and is still
-# looking at the frame — only turns long enough to have walked away from are
-# banner-worthy. No stamp, or an old one → the banner fires. ms-11 = mtime
-# within the last 10 seconds.
-_recent=( "/tmp/$NAME-$TOPIC.prompt"(N.ms-11) )
-if (( $#_recent )); then
-  exit 0
 fi
 
 # The session holds the banner mute switch (:FrameNotify off) — ask it over
