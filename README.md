@@ -7,7 +7,7 @@ per feature, parallel Claude sessions you can tell apart, and shared services
 across all your projects.
 
 <p align="center">
-  <img src="assets/frame-icon.png" alt="frame icon: a stack of overlapping windows" width="216">
+  <img src="assets/frame-icon.png" alt="frame icon: three tabs over a window with a neovim-style N" width="216">
 </p>
 
 <!-- Record with: vhs assets/demo.tape  (see assets/demo.tape) -->

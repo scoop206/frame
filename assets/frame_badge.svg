@@ -1,38 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <!-- frame notifier badge: neobrutalist vortex — six windows swirling around a
-       seventh on a cream macOS tile. Source of truth for assets/frame_badge.png
-       (render: qlmanage -t -s 1024, see commands/notifier.sh). -->
+  <!-- frame notifier badge: neobrutalist tab row — three tabs over one tidy
+       window on a terracotta tile, with a neovim-chamfered N inside. Source of
+       truth for assets/frame_badge.png (render: qlmanage -t -s 1024, see
+       commands/notifier.sh). -->
   <rect x="18" y="18" width="100" height="100" rx="26" fill="#171613"/>
-  <rect x="12" y="12" width="100" height="100" rx="26" fill="#FFF6E3" stroke="#171613" stroke-width="5"/>
-  <g transform="rotate(-8 43 33)">
-    <rect x="26" y="20" width="34" height="26" rx="4" fill="#FFFDF6" stroke="#171613" stroke-width="3.5"/>
-    <line x1="26" y1="29" x2="60" y2="29" stroke="#171613" stroke-width="3.5"/>
-  </g>
-  <g transform="rotate(7 77 35)">
-    <rect x="60" y="22" width="34" height="26" rx="4" fill="#FFD43B" stroke="#171613" stroke-width="3.5"/>
-    <line x1="60" y1="31" x2="94" y2="31" stroke="#171613" stroke-width="3.5"/>
-  </g>
-  <g transform="rotate(-5 85 61)">
-    <rect x="68" y="48" width="34" height="26" rx="4" fill="#FFFDF6" stroke="#171613" stroke-width="3.5"/>
-    <line x1="68" y1="57" x2="102" y2="57" stroke="#171613" stroke-width="3.5"/>
-  </g>
-  <g transform="rotate(6 73 87)">
-    <rect x="56" y="74" width="34" height="26" rx="4" fill="#FFD43B" stroke="#171613" stroke-width="3.5"/>
-    <line x1="56" y1="83" x2="90" y2="83" stroke="#171613" stroke-width="3.5"/>
-  </g>
-  <g transform="rotate(-6 43 89)">
-    <rect x="26" y="76" width="34" height="26" rx="4" fill="#FFFDF6" stroke="#171613" stroke-width="3.5"/>
-    <line x1="26" y1="85" x2="60" y2="85" stroke="#171613" stroke-width="3.5"/>
-  </g>
-  <g transform="rotate(5 37 59)">
-    <rect x="20" y="46" width="34" height="26" rx="4" fill="#FFD43B" stroke="#171613" stroke-width="3.5"/>
-    <line x1="20" y1="55" x2="54" y2="55" stroke="#171613" stroke-width="3.5"/>
-  </g>
-  <g transform="rotate(-3 64 61)">
-    <rect x="46" y="48" width="44" height="34" rx="5" fill="#171613"/>
-    <rect x="42" y="44" width="44" height="34" rx="5" fill="#23C3D8" stroke="#171613" stroke-width="3.5"/>
-    <line x1="42" y1="54" x2="86" y2="54" stroke="#171613" stroke-width="3.5"/>
-    <circle cx="49" cy="49" r="2.2" fill="#171613"/>
-    <circle cx="56" cy="49" r="2.2" fill="#171613"/>
-  </g>
+  <rect x="12" y="12" width="100" height="100" rx="26" fill="#D97757" stroke="#171613" stroke-width="5"/>
+  <!-- three tabs: yellow one active -->
+  <rect x="28" y="28" width="20" height="16" rx="4" fill="#FFD43B" stroke="#171613" stroke-width="3.5"/>
+  <rect x="54" y="28" width="20" height="16" rx="4" fill="#FFF6E3" stroke="#171613" stroke-width="3.5"/>
+  <rect x="80" y="28" width="20" height="16" rx="4" fill="#FFF6E3" stroke="#171613" stroke-width="3.5"/>
+  <!-- window body -->
+  <rect x="26" y="40" width="76" height="58" rx="5" fill="#FFFDF6" stroke="#171613" stroke-width="3.5"/>
+  <!-- N with neovim-style chamfered pillars and diagonal -->
+  <polygon points="46,58 52,52 57,52 57,90 46,90" fill="#D97757" stroke="#171613" stroke-width="3.5" stroke-linejoin="round"/>
+  <polygon points="57,52 71,74 71,90 57,68" fill="#D97757" stroke="#171613" stroke-width="3.5" stroke-linejoin="round"/>
+  <polygon points="71,52 82,52 82,84 76,90 71,90" fill="#A94F33" stroke="#171613" stroke-width="3.5" stroke-linejoin="round"/>
 </svg>
