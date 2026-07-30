@@ -31,9 +31,9 @@
 #   frame inbox [--wait [--timeout N] [--count K]]   show + clear this frame's
 #                              inbox; --wait blocks until a message arrives
 #   frame spawn shell TOPIC [--req TEXT] [--timeout N] [--ephemeral]
-#                              boot a worker frame in a NEW ghostty window;
-#                              --req sends it a request; --ephemeral reaps the
-#                              frame (dir, window, app) once its reply routes home
+#                              boot a worker frame as a tab in the shared
+#                              workers window; --req sends it a request;
+#                              --ephemeral reaps it once its reply routes home
 #   (`worktree` is accepted as a synonym for `wt`)
 #
 # A frame is a terminal window running neovim as its buffer management layer

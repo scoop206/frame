@@ -207,27 +207,30 @@ stdin, so `FrameRequest`'s deferred Enter registers as a real keypress. A
 first-run trust dialog never renders `❯`; spawn times out and points a human
 at the window.
 
-**The window-open line, pinned** (verified against Ghostty 1.3.1 — macOS has
-no CLI new-window action; `ghostty +new-window` refuses on this platform):
+**The window-open path, pinned** (verified against Ghostty 1.3.1): Ghostty
+≥1.3 ships an AppleScript dictionary (`Ghostty.sdef` in the app bundle), so
+`frame_open_window` (`lib/helpers.sh`) opens each worker as a **tab in one
+shared workers window** of the running Ghostty — head keeps its own window,
+workers congregate beside it. The workers window's id persists in
+`/tmp/frame-workers.window` (stale id → fresh window, re-recorded); the new
+surface runs `/bin/zsh -ic '<bootstrap>'` via the scripting `command`
+configuration and its window/tab ids are recorded to `/tmp/shell-<topic>.nvim.gtab`
+for `frame focus` (select tab by id — no System Events, no Accessibility) and
+reaping.
 
-```
-open -na Ghostty.app --args --quit-after-last-window-closed=true -e zsh -ic '<bootstrap>'
-```
+Bootstrap is `$FRAME_ROOT/bin/frame shell <topic>; $FRAME_ROOT/bin/frame
+spawn close-tab <topic>` (absolute paths — the surface command drops the
+caller's environment; `zsh -ic` sources zshrc so the worker's PATH comes up
+as a human's would). No `exec`: scripted surfaces do **not** auto-close when
+their command exits — they strand on `[Process exited]` even with
+`wait after command:false` — so the tab's zsh survives nvim and closes its own
+tab by recorded id, however the frame ended (`:FrameDown!` self-reap or plain
+quit). Everything above `frame_open_window` stays terminal-agnostic.
 
-with bootstrap `exec $FRAME_ROOT/bin/frame shell <topic>` (absolute path —
-`open` launches via launchd, which drops the caller's environment; `zsh -ic`
-sources zshrc so the worker's PATH comes up as a human's would). Findings:
-`open -n` starts a *second app instance* per spawn; without the
-`--quit-after-last-window-closed` config override that instance lingers
-windowless in the dock after its frame exits — with it, it quits cleanly.
-Isolated in `frame_open_window` (`lib/helpers.sh`) so everything above the
-helper stays terminal-agnostic, mirroring how `focus` is frame's lone
-AXRaise-coupled spot.
-
-**Known limitation:** while a spawned worker is alive there are two Ghostty
-processes, and `commands/focus.sh`'s `tell process "Ghostty"` may target the
-wrong one — `frame focus` on a spawned frame is unreliable until focus.sh
-iterates every process named Ghostty. Follow-up, not in this cut.
+Fallback (Ghostty <1.3 / no dictionary): the legacy separate-instance launch,
+`open -na Ghostty.app --args --quit-after-last-window-closed=true -e zsh -ic
+'<bootstrap>'` — no ids recorded, focus falls back to title matching, and the
+extra instance quits with its window.
 
 Open decisions:
 
@@ -239,9 +242,9 @@ Open decisions:
    flag rides into the worker as `FRAME_EPHEMERAL=1` in the window bootstrap —
    the frame is *born* ephemeral. Its reply router (`FrameOnTurnEnd`), right
    after routing its answer home, `jobwait`s the deliver jobs (they'd die with
-   nvim) and self-tears-down via `:FrameDown!` — dir, window, and the spawned
-   Ghostty instance (`--quit-after-last-window-closed`) vanish the instant it
-   has reported. Shell frames only for now: a worktree frame's `FrameDown!`
+   nvim) and self-tears-down via `:FrameDown!` — the dir vanishes, and the
+   tab's surviving shell closes the tab by recorded id (`frame spawn
+   close-tab`) the instant it has reported. Shell frames only for now: a worktree frame's `FrameDown!`
    force-deletes a branch, which no env var should be able to reach.
 
    **Ephemeral wt (future, rides on `spawn wt`): the merge-before-reply

@@ -211,14 +211,51 @@ set_title() {
 # ── window spawning ───────────────────────────────────────────────────────────
 
 frame_open_window() {
-  # frame_open_window CMD — open a NEW ghostty window running CMD (a zsh -ic
-  # command string), without replacing the caller's window. macOS Ghostty has
-  # no CLI new-window action (`ghostty +new-window` refuses on this platform —
-  # verified against 1.3.1), so this is the documented path: `open -na` starts
-  # a separate app instance whose window runs CMD via Ghostty's `-e`.
-  # --quit-after-last-window-closed makes that extra instance exit with its
-  # window — the macOS default is to linger in the dock windowless. Ghostty's
-  # one hook outside focus.sh; callers stay terminal-agnostic above this line.
+  # frame_open_window CMD — open a worker surface running CMD (a zsh -ic
+  # command string), without replacing the caller's window. Ghostty ≥1.3 has an
+  # AppleScript dictionary, so workers open as TABS congregating in one shared
+  # "workers window" inside the running Ghostty — head keeps its own window,
+  # workers stack beside it. $FRAME_WORKERS_WINDOW (default
+  # /tmp/frame-workers.window) remembers that window's id across spawns; a
+  # stale id (window closed) falls into the fresh `new window` branch, which
+  # re-records. Prints "WINDOW_ID TAB_ID" — callers record it for focus/reap
+  # (spawn.sh writes the .gtab). Scripted surfaces do NOT auto-close when CMD
+  # exits (they hold on [Process exited] even with wait after command:false —
+  # verified against 1.3.1), so callers must arrange an explicit close
+  # (`frame spawn close-tab`).
+  #
+  # Fallback when the dictionary is missing (Ghostty <1.3, script error):
+  # legacy separate app instance via `open -na` + `-e`, printing no ids —
+  # --quit-after-last-window-closed makes that instance exit with its window.
+  # Ghostty's launch hook; callers stay terminal-agnostic above this line.
+  local state="${FRAME_WORKERS_WINDOW:-/tmp/frame-workers.window}"
+  local prev="" ids=""
+  [[ -f "$state" ]] && prev=$(<"$state")
+  ids=$(osascript - "$prev" "/bin/zsh -ic ${(qq)1}" 2>/dev/null <<'APPLESCRIPT'
+on run argv
+  set wid to item 1 of argv
+  set cmd to item 2 of argv
+  tell application "Ghostty"
+    set cfg to {command:cmd, wait after command:false}
+    if wid is not "" then
+      try
+        set w to window id wid
+        set tb to new tab in w with configuration cfg
+        return (id of w) & " " & (id of tb)
+      end try
+    end if
+    set w to new window with configuration cfg
+    set tb to selected tab of w
+    return (id of w) & " " & (id of tb)
+  end tell
+end run
+APPLESCRIPT
+  ) || ids=""
+  if [[ -n "$ids" ]]; then
+    print -r -- "${ids%% *}" > "$state"
+    print -r -- "$ids"
+    return 0
+  fi
   open -na Ghostty.app --args --quit-after-last-window-closed=true \
     -e zsh -ic "$1"
 }

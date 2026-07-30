@@ -53,4 +53,28 @@ test_activate_fallback_reports_accessibility() {
   assert_contains "$OUT" "Accessibility"
 }
 
+test_recorded_ids_take_the_fast_path() {
+  # A spawned frame's .gtab recording → select the exact tab by id; the title
+  # matcher (and its System Events/Accessibility dependency) never runs.
+  setup_frame_env
+  print -r -- "w-9 t-9" > "/tmp/shell-$TNAME.nvim.gtab"
+  export FAKE_OSASCRIPT_RESULT=selected
+  run_frame focus $TNAME
+  assert_status 0
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - w-9 t-9"
+  assert_contains "$OUT" "focused $TNAME"
+}
+
+test_stale_recording_is_deleted_and_falls_back() {
+  # Recording points at a dead tab (script answers something ≠ "selected") →
+  # delete it so it can't misdirect again, fall through to the title matcher.
+  setup_frame_env
+  print -r -- "w-9 t-9" > "/tmp/shell-$TNAME.nvim.gtab"
+  export FAKE_OSASCRIPT_RESULT=raised
+  run_frame focus $TNAME
+  assert_status 0
+  assert_contains "$OUT" "focused $TNAME"
+  assert_file_absent "/tmp/shell-$TNAME.nvim.gtab"
+}
+
 run_tests "$0"

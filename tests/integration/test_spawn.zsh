@@ -1,11 +1,19 @@
 #!/usr/bin/env zsh
-# frame spawn — boot a worker frame in a NEW ghostty window. The window launch
-# is the `open` stub (FAKE_OPEN_LOG records it); readiness is the socket plus
-# FrameReady() over RPC, where a planted AF_UNIX socket with a `.ready`
-# companion stands in for a fully-booted session (without one the nvim stub
-# answers 0 — still booting). Worker topics are $TNAME so sandbox_down's
-# /tmp/*-$TNAME.nvim* patterns reap the plants.
+# frame spawn — boot a worker frame as a tab in the shared workers window. The
+# launch is the `osascript` stub (FAKE_OSASCRIPT_LOG records it,
+# FAKE_OSASCRIPT_RESULT stands in for the "WINDOW_ID TAB_ID" the dictionary
+# returns; without a result frame_open_window falls back to the legacy `open`
+# stub / FAKE_OPEN_LOG). Readiness is the socket plus FrameReady() over RPC,
+# where a planted AF_UNIX socket with a `.ready` companion stands in for a
+# fully-booted session (without one the nvim stub answers 0 — still booting).
+# Worker topics are $TNAME so sandbox_down's /tmp/*-$TNAME.nvim* patterns reap
+# the plants.
 source "${${(%):-%x}:A:h:h}/helpers/harness.zsh"
+
+_spawn_env() {
+  export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
+  export FAKE_OSASCRIPT_RESULT="fake-win fake-tab"
+}
 
 _mksock() { python3 -c 'import socket,sys
 s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$1"; }
@@ -61,17 +69,54 @@ test_rejects_non_numeric_timeout() {
 
 test_refuses_live_topic_before_opening_a_window() {
   # A live frame (socket answering FrameInfo via its .info companion) already
-  # owns the topic → refused, and `open` must never have fired.
+  # owns the topic → refused, and neither launch path may ever have fired.
   export FAKE_OPEN_LOG="$SANDBOX/open.log"
+  export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
   _mksock "/tmp/other-$TNAME.nvim"
   print -r -- "other	$TNAME		" > "/tmp/other-$TNAME.nvim.info"
   run_frame spawn shell $TNAME
   assert_status 1
   assert_contains "$OUT" "already live"
   assert_file_absent "$FAKE_OPEN_LOG"
+  assert_file_absent "$FAKE_OSASCRIPT_LOG"
 }
 
-test_happy_path_opens_window_and_reports_up() {
+test_happy_path_opens_tab_and_reports_up() {
+  _spawn_env
+  _plant_booted_worker
+  run_frame spawn shell $TNAME
+  assert_status 0
+  assert_contains "$OUT" "spawned tab for shell/$TNAME"
+  assert_contains "$OUT" "shell/$TNAME is up"
+  local log="$(<$FAKE_OSASCRIPT_LOG)"
+  assert_contains "$log" "/bin/zsh -ic"
+  assert_contains "$log" "frame shell $TNAME"
+  # The bootstrap must chain the tab closer — scripted surfaces never
+  # auto-close, the worker's shell closes its own tab once the frame exits.
+  assert_contains "$log" "frame spawn close-tab $TNAME"
+  assert_not_contains "$log" "FRAME_EPHEMERAL"
+  # The surface ids are recorded for focus/close-tab, and the workers window
+  # id persists for the next spawn to congregate into.
+  assert_eq "$(</tmp/shell-$TNAME.nvim.gtab)" "fake-win fake-tab"
+  assert_eq "$(<$FRAME_WORKERS_WINDOW)" "fake-win"
+}
+
+test_ephemeral_rides_into_the_bootstrap() {
+  # --ephemeral must reach the worker as FRAME_EPHEMERAL=1 in the tab's
+  # bootstrap command — the frame is born ephemeral; its reply router reads the
+  # env and self-reaps after routing its first reply home.
+  _spawn_env
+  _plant_booted_worker
+  run_frame spawn shell $TNAME --ephemeral
+  assert_status 0
+  assert_contains "$OUT" "shell/$TNAME is up"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "FRAME_EPHEMERAL=1 "
+}
+
+test_no_dictionary_falls_back_to_open() {
+  # osascript yielding no ids (Ghostty <1.3, script error) → the legacy
+  # separate-instance launch, and no surface recording is written.
+  export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
   export FAKE_OPEN_LOG="$SANDBOX/open.log"
   _plant_booted_worker
   run_frame spawn shell $TNAME
@@ -80,19 +125,31 @@ test_happy_path_opens_window_and_reports_up() {
   local log="$(<$FAKE_OPEN_LOG)"
   assert_contains "$log" "-na Ghostty.app --args --quit-after-last-window-closed=true -e zsh -ic"
   assert_contains "$log" "frame shell $TNAME"
-  assert_not_contains "$log" "FRAME_EPHEMERAL"
+  assert_file_absent "/tmp/shell-$TNAME.nvim.gtab"
 }
 
-test_ephemeral_rides_into_the_bootstrap() {
-  # --ephemeral must reach the worker as FRAME_EPHEMERAL=1 in the window's
-  # bootstrap command — the frame is born ephemeral; its reply router reads the
-  # env and self-reaps after routing its first reply home.
-  export FAKE_OPEN_LOG="$SANDBOX/open.log"
-  _plant_booted_worker
-  run_frame spawn shell $TNAME --ephemeral
+test_close_tab_closes_recorded_tab() {
+  export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
+  print -r -- "w-1 t-1" > "/tmp/shell-$TNAME.nvim.gtab"
+  run_frame spawn close-tab $TNAME
   assert_status 0
-  assert_contains "$OUT" "shell/$TNAME is up"
-  assert_contains "$(<$FAKE_OPEN_LOG)" "FRAME_EPHEMERAL=1 exec"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - w-1 t-1"
+  assert_file_absent "/tmp/shell-$TNAME.nvim.gtab"
+}
+
+test_close_tab_without_recording_is_silent() {
+  # No recording (legacy window, hand-booted frame) → clean no-op.
+  export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
+  run_frame spawn close-tab $TNAME
+  assert_status 0
+  assert_eq "$OUT" ""
+  assert_file_absent "$FAKE_OSASCRIPT_LOG"
+}
+
+test_close_tab_requires_topic() {
+  run_frame spawn close-tab
+  assert_status 2
+  assert_contains "$OUT" "usage: frame spawn close-tab TOPIC"
 }
 
 test_boot_timeout_exits_3() {
