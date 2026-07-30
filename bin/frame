@@ -1,43 +1,58 @@
 #!/usr/bin/env zsh
-# frame — shared dev-workflow harness. Run from inside a project checkout.
+# frame — a neovim + claude code harness within ghostty
 #
 # Usage:
-#   frame init                 scaffold integration into project (.frame/*
-#                              and .claude/settings.json hooks)
-#   frame wt TOPIC             create/reuse branch TOPIC + worktree, boot it
-#   frame wt                   boot the worktree you're already in
-#   frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
-#   frame shell TOPIC          casual frame in ~/frames/TOPIC — no repo, no
-#                              branch, just the claude + local buffers
-#   frame ls                   list every live frame (all projects), → marks
-#                              the one you're in; `list` is a synonym
-#   frame merge [TOPIC] [--push|--ff|-n]   merge TOPIC (default: current branch)
-#   frame services [up|down]   manage the shared postgres/minio stack
-#   frame status [TEXT…]       append "- TEXT" to this frame's window title
-#                              (no TEXT clears it back to the base title)
-#   frame notify               frame will send task complete notification
-#   frame notification on|off|init   on|off: global switch
-#                                    init: build/repair the banner icon
-#   frame yolo on|off          master switch: claude in every frame launches
-#                              with --dangerously-skip-permissions (default
-#                              off; bare `frame yolo` shows the state)
-#   frame focus [TOPIC|NAME/TOPIC]   raise that frame's ghostty window
-#                              (default: the frame you're in)
-#   frame req TOPIC|NAME/TOPIC TEXT…   send a request to that frame's Claude
-#                              (types TEXT into its prompt); arms a one-shot reply
-#   frame reply [TEXT…]        reply home to whoever last req'd this frame
-#                              (bare form is the Stop-hook sensor)
-#   frame deliver TOPIC|NAME/TOPIC TEXT…   drop a message in that frame's inbox
-#   frame inbox [--wait [--timeout N] [--count K]]   show + clear this frame's
-#                              inbox; --wait blocks until a message arrives
-#   frame spawn shell TOPIC [--req TEXT] [--timeout N] [--ephemeral]
-#                              boot a worker frame as a tab in the shared
-#                              workers window; --req sends it a request;
-#                              --ephemeral reaps it once its reply routes home
-#   frame spawn wt TOPIC [--cwd PATH] [--req TEXT] [--timeout N]
-#                              worktree worker as a tab — project resolved at
-#                              --cwd (default: the current directory)
-#   (`worktree` is accepted as a synonym for `wt`)
+#
+#     frame init                        scaffold integration into a project
+#
+#     frame wt TOPIC                    create/reuse branch + worktree, boot it
+#     frame wt                          boot the worktree you're already in
+#     frame wt -d [-f] [TOPIC]          tear down a frame (default: current)
+#
+#     frame shell TOPIC                 minimal frame in ~/frames/TOPIC — no repo,
+#                                       no branch, just the claude + local buffers
+#
+#     frame spawn shell TOPIC [--req TEXT] [--timeout N] [--ephemeral]
+#                                       boot a shell frame into a tab group
+#
+#     frame spawn wt TOPIC [--cwd PATH] [--req TEXT] [--timeout N]
+#                                       boot a worktree frame into a tab group
+#
+#     frame ls                          list frames
+#
+#     frame merge [TOPIC] [--push|--ff|-n]
+#                                       merge TOPIC (default: current branch)
+#
+#     frame req TOPIC|NAME/TOPIC TEXT…  send a request to that frame's Claude
+#                                       (types TEXT into its prompt); arms a
+#                                       one-shot reply
+#
+#     frame inbox [--wait [--timeout N] [--count K]]
+#                                       show + clear this frame's inbox;
+#                                       --wait blocks until a message arrives
+#
+#     frame reply [TEXT…]               frames use to reply to last req
+#
+#     frame deliver TOPIC|NAME/TOPIC TEXT…
+#                                       send a message to a frame's inbox
+#
+#     frame status [TEXT…]              append "- TEXT" to this frame's window
+#                                       title (no TEXT restores the base title)
+#
+#     frame focus [TOPIC|NAME/TOPIC]    raise that frame's ghostty window
+#                                       (default: the frame you're in)
+#
+#     frame notify                      set title to "waiting" + fire the
+#                                       task-complete banner (Stop-hook target)
+#
+#     frame services [up|down]          manage the shared postgres/minio stack
+#
+#     frame notification on|off|init    on|off: global switch;
+#                                       init: build/repair the banner icon
+#
+#     frame yolo on|off                 master switch: claude in every frame
+#                                       launches --dangerously-skip-permissions
+#                                       (default off; bare form shows the state)
 #
 # A frame is a terminal window running neovim as its buffer management layer
 # (multiplexer). This is usually one buffer running Claude and then whatever
@@ -70,7 +85,8 @@ case "$cmd" in
     source "$FRAME_ROOT/commands/notifier.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,46p' "$0" | sed 's/^# \{0,1\}//'
+    # print the header comment block verbatim (stops at the first non-comment line)
+    awk 'NR == 1 { next } !/^#/ { exit } { sub(/^# ?/, ""); print }' "$0"
     ;;
   *)
     echo "$X_MARK frame: unknown command '$cmd' (try: frame help)" >&2
