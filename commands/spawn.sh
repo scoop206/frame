@@ -23,13 +23,13 @@
 # rendered on screen — and only then reports up and sends --req. The rendered
 # prompt matters: text sent while claude's own process is still booting piles
 # up in the pty and is read as one pasted chunk, which swallows the submitting
-# Enter (see FrameRequest). --timeout N (default 30) bounds the wait; exit 3
+# Enter (see frame_submit). --timeout N (default 30) bounds the wait; exit 3
 # on timeout, mirroring `frame inbox --wait`.
 #
 # wt workers belong to a project: NAME comes from its .frame config (socket
 # /tmp/NAME-TOPIC.nvim), resolved at --cwd or the current directory. No
 # --ephemeral for wt — a worktree frame's self-reap would force-delete a
-# branch, which no spawn flag should reach (see FrameOnTurnEnd).
+# branch, which no spawn flag should reach (see FrameBrokerOnTurnEnd).
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 USAGE="usage: frame spawn shell TOPIC [--req TEXT] [--timeout SECONDS] [--ephemeral]
@@ -173,9 +173,9 @@ frame_assert_topic_free "$W_NAME" "$TOPIC" || exit 1
 # command. The absolute FRAME_ROOT pins this checkout's frame — the surface's
 # command does not carry the caller's environment; wt additionally cd's to the
 # project, which is how `frame wt` resolves it. --ephemeral rides in as
-# FRAME_EPHEMERAL=1: the worker is BORN ephemeral, and its reply router
-# (FrameOnTurnEnd) self-reaps the frame — dir, window — right after its first
-# reply routes home. No `exec` before the frame command: the tab's zsh must
+# FRAME_EPHEMERAL=1: the worker is BORN ephemeral, and its broker
+# (FrameBrokerOnTurnEnd) self-reaps the frame — dir, window — right after its
+# first reply routes home. No `exec` before the frame command: the tab's zsh must
 # survive nvim to run close-tab (`&&` — only after a clean exit; a failed boot
 # leaves the tab stranded on the error, readable).
 SOCKET="/tmp/$W_NAME-$TOPIC.nvim"

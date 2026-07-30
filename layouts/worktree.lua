@@ -42,13 +42,14 @@ vim.o.titlestring = base_title
 --   chan         per-buffer terminal job channels (name → channel), for send
 --   buf          per-buffer buffer handles (name → bufnr), so FrameReady can
 --                read claude's rendered screen
---   subscribers  return addresses awaiting a reply — Phase 3; empty for now
---   inbox        reports routed home to this frame — Phase 3; empty for now
+--   inbox        reports routed home here (frame deliver / remote broker replies)
+--   broker       the request queue in front of claude (docs/claude-broker.md)
 -- The notify mute switch is deliberately NOT a field here: it stays
 -- vim.g.frame_notify_muted because `frame notify` reads it over RPC as
 -- get(g:, 'frame_notify_muted', 0), so sessions predating it degrade to
 -- unmuted. Keeping it a g: var preserves that cheap, backward-compatible read.
-local FrameState = { status = '', chan = {}, buf = {}, subscribers = {}, inbox = {} }
+local FrameState = { status = '', chan = {}, buf = {}, inbox = {},
+  broker = { seq = 0, queue = {}, inflight = nil, reqs = {}, pump_scheduled = false } }
 
 -- Status suffix: appends " - TEXT" to the base title (which never changes).
 -- Global so `frame status` can call it over the socket from any terminal
@@ -77,7 +78,7 @@ end
 -- channel alone fires seconds too early — claude the process is still booting,
 -- so anything sent meanwhile piles up unread in the pty and arrives as ONE
 -- chunk when its TUI first reads stdin; paste-detection then eats the
--- submitting CR (see FrameRequest). A rendered prompt means claude is actively
+-- submitting CR (see frame_submit). A rendered prompt means claude is actively
 -- reading, so a deferred Enter lands as its own keypress. First-run chrome
 -- (trust dialog etc.) never renders '❯' — spawn times out and points at the
 -- window, which genuinely needs a human. `frame spawn` polls this after
@@ -95,75 +96,185 @@ end
 -- frame_submit(chan, text) — type TEXT into a claude terminal channel and
 -- submit it. Two writes with the Enter deferred ~200ms: claude's TUI
 -- paste-detection folds a CR arriving in the same rapid chunk into a newline
--- instead of a submit; a lone late '\r' registers as a real keypress. Shared by
--- FrameRequest (cross-frame) and FrameClaudeSend (this frame's own claude).
+-- instead of a submit; a lone late '\r' registers as a real keypress. Used by
+-- the broker's pump — the sole writer into claude.
 local function frame_submit(chan, text)
   vim.fn.chansend(chan, text)
   vim.defer_fn(function() vim.fn.chansend(chan, '\r') end, 200)
 end
 
--- _G.FrameRequest(from, text) — deliver a COMMAND: type TEXT into the `claude`
--- buffer and submit it, exactly as if the operator had typed it there, and arm a
--- one-shot reply for `from` (the sender's "name/topic" return address) so the
--- next turn-end routes the agent's answer home. `frame req <target> TEXT` calls
--- this over the target's socket. FrameState.chan['claude'] is the buffer's
--- terminal job channel (captured at boot, bottom of this file); chansend to it
--- writes to the pty exactly as if the keys were typed. Returns 'ok', or
--- 'no-claude-buffer' when this frame opened no claude buffer to message.
-_G.FrameRequest = function(from, text)
-  local chan = FrameState.chan['claude']
-  if not chan then return 'no-claude-buffer' end
-  -- Arm the gate: record the sender so FrameOnTurnEnd routes the reply back.
-  -- A set, not a list — messaging repeatedly before a reply must not stack
-  -- duplicate return addresses (the reply would be delivered N times).
-  if from ~= nil and from ~= '' then
-    local seen = false
-    for _, addr in ipairs(FrameState.subscribers) do
-      if addr == from then seen = true break end
-    end
-    if not seen then table.insert(FrameState.subscribers, from) end
+-- ── the claude broker ────────────────────────────────────────────────────────
+-- A queue with a single worker in front of the one serial claude, so many
+-- clients (local `frame claude`, cross-frame `frame req`, future consumers) can
+-- ask concurrently and each get THEIR answer. Only the broker writes into
+-- claude; clients submit requests and it feeds them one at a time. Because
+-- exactly one request is in flight, each Stop is unambiguously that request's
+-- answer — bound to its turn by being the sole in-flight job, to its client by
+-- its id. See docs/claude-broker.md.
+--
+-- A request: { id, text, ret, status, answer }. ret says where the answer goes:
+--   { kind = 'local' }           awaited over this socket by id (frame claude)
+--   { kind = 'inbox' }           dropped into THIS frame's inbox (detach/timeout)
+--   { kind = 'remote', addr=… }  delivered to a sender's inbox (frame req)
+--   { kind = 'drop' }            discarded (a hard cancel)
+
+-- route(req, text) — hand a finished turn's answer to req's return mailbox and
+-- return the deliver job handle (remote only; nil otherwise, so the ephemeral
+-- reaper can jobwait it). A 'local' request keeps its answer for the client to
+-- collect via Await; every other kind is terminal here, so the request is
+-- removed. An empty answer (a tool-only final turn) skips inbox/remote delivery
+-- — nothing to report — but still completes the request, keeping the queue
+-- aligned.
+local function route(req, text)
+  local k = req.ret.kind
+  if k == 'local' then
+    req.answer = text
+    req.status = 'done'
+    return nil
   end
-  frame_submit(chan, text)
+  local job = nil
+  if text ~= '' then
+    if k == 'inbox' then
+      table.insert(FrameState.inbox, { from = '', text = text })
+    elseif k == 'remote' then
+      local from = name .. '/' .. topic
+      local frame_bin = (vim.env.FRAME_ROOT or '') .. '/bin/frame'
+      job = vim.fn.jobstart({ frame_bin, 'deliver', req.ret.addr, '--from', from, text })
+    end
+  end -- 'drop': nothing
+  FrameState.broker.reqs[req.id] = nil
+  return job
+end
+
+-- pump(from_stop) — submit the next queued request if the worker is free. Never
+-- submits while one is in flight. from_stop=true means a turn just ended, so
+-- claude is idle by construction — submit straight away. from_stop=false is a
+-- cold nudge from Submit: only submit if claude's prompt is up (else re-arm a
+-- deferred pump while it boots) and no turn is already running (a human's — its
+-- Stop will re-pump). See the accepted assumption in docs/claude-broker.md.
+local function pump(from_stop)
+  local b = FrameState.broker
+  if b.inflight then return end
+  if #b.queue == 0 then return end
+  if not from_stop then
+    if _G.FrameReady() ~= 1 then
+      if not b.pump_scheduled then
+        b.pump_scheduled = true
+        vim.defer_fn(function()
+          FrameState.broker.pump_scheduled = false
+          pump(false)
+        end, 500)
+      end
+      return
+    end
+    if FrameState.status == 'working' then return end
+  end
+  local id = table.remove(b.queue, 1)
+  local req = b.reqs[id]
+  if not req then return pump(from_stop) end -- cancelled while queued; try the next
+  req.status = 'inflight'
+  b.inflight = id
+  frame_submit(FrameState.chan['claude'], req.text)
+end
+
+-- _G.FrameBrokerSubmit(text, ret_str) — enqueue a prompt; returns its id, or
+-- 'no-claude-buffer' / 'queue-full'. Busy is NOT a refusal: a request submitted
+-- while claude works simply waits its turn. ret_str is 'local' | 'inbox' |
+-- 'remote:name/topic'.
+_G.FrameBrokerSubmit = function(text, ret_str)
+  local b = FrameState.broker
+  if not FrameState.chan['claude'] then return 'no-claude-buffer' end
+  if #b.queue >= 32 then return 'queue-full' end
+  local ret
+  if ret_str == 'inbox' then ret = { kind = 'inbox' }
+  elseif type(ret_str) == 'string' and ret_str:sub(1, 7) == 'remote:' then
+    ret = { kind = 'remote', addr = ret_str:sub(8) }
+  else ret = { kind = 'local' } end
+  b.seq = b.seq + 1
+  local id = 'r' .. b.seq
+  b.reqs[id] = { id = id, text = text, ret = ret, status = 'queued', answer = nil }
+  table.insert(b.queue, id)
+  pump(false)
+  return id
+end
+
+-- _G.FrameBrokerAwait(id) — client poll. 'pending' while queued/in-flight,
+-- 'gone' for an unknown/evicted id, or 'done\n<answer>' once finished (which
+-- also collects the request so its mailbox doesn't leak). The answer may be
+-- empty (a tool-only final turn) or contain newlines.
+_G.FrameBrokerAwait = function(id)
+  local req = FrameState.broker.reqs[id]
+  if not req then return 'gone' end
+  if req.status == 'done' then
+    local ans = req.answer or ''
+    FrameState.broker.reqs[id] = nil
+    return 'done\n' .. ans
+  end
+  return 'pending'
+end
+
+-- _G.FrameBrokerCancel(id, mode) — abandon a request. Queued → drop it from the
+-- line. In-flight → can't unsend, so redirect where its answer lands when the
+-- turn ends: mode 'inbox' (detach — the answer waits in `frame inbox`) or 'drop'
+-- (discard). Done → discard the uncollected answer.
+_G.FrameBrokerCancel = function(id, mode)
+  local b = FrameState.broker
+  local req = b.reqs[id]
+  if not req then return 'ok' end
+  if req.status == 'queued' then
+    for i, q in ipairs(b.queue) do
+      if q == id then table.remove(b.queue, i) break end
+    end
+    b.reqs[id] = nil
+  elseif req.status == 'inflight' then
+    req.ret = (mode == 'inbox') and { kind = 'inbox' } or { kind = 'drop' }
+  else
+    b.reqs[id] = nil
+  end
   return 'ok'
 end
 
--- _G.FrameClaudeSend(text) — the send half of `frame claude`: a SYNCHRONOUS
--- round-trip to THIS frame's own claude. Unlike FrameRequest it (a) GATES on
--- claude being idle and ready; (b) uses this session's OWN identity as the
--- return address, so the arm and the drain that matches it (FrameInboxDrainSelf)
--- key off one source of truth — no shell-derived address to drift; and (c)
--- FLUSHES stale self-replies first, so an orphan from a prior aborted round-trip
--- can't be mistaken for this answer. Gate+flush+arm+submit happen in this one
--- RPC so the idle check and the send can't race. Returns:
---   'no-claude-buffer'  this frame opened no claude buffer
---   'not-ready'         claude's prompt isn't rendered (booting, or a dialog)
---   'busy'              mid-turn — refuse rather than misroute the PREVIOUS
---                       turn's answer (the arm binds to a return address, not a
---                       turn, so a turn already in flight would deliver first)
---   'ok'               armed + submitted; caller now polls FrameInboxDrainSelf
-_G.FrameClaudeSend = function(text)
-  local chan = FrameState.chan['claude']
-  if not chan then return 'no-claude-buffer' end
-  if _G.FrameReady() ~= 1 then return 'not-ready' end
-  if FrameState.status == 'working' then return 'busy' end
-  local me = name .. '/' .. topic
-  -- Flush stale self-addressed mail (an orphan from an aborted/timed-out prior
-  -- round-trip). Only our own — other frames' reports stay for `frame inbox`.
-  local kept = {}
-  for _, m in ipairs(FrameState.inbox) do
-    if m.from ~= me then table.insert(kept, m) end
+-- _G.FrameBrokerStatus() — one line per request, 'id<TAB>state', in-flight
+-- first: visibility for `frame claude status` and future clients.
+_G.FrameBrokerStatus = function()
+  local b = FrameState.broker
+  local out = {}
+  if b.inflight then table.insert(out, b.inflight .. '\tinflight') end
+  for i, id in ipairs(b.queue) do
+    table.insert(out, id .. '\tqueued#' .. i)
   end
-  FrameState.inbox = kept
-  -- Arm a one-shot reply to ourselves. Dedup like FrameRequest so a lingering
-  -- self-arm never stacks a duplicate delivery. (This is where a per-request
-  -- token would hang if same-frame concurrency ever needs Tier 2.)
-  local seen = false
-  for _, addr in ipairs(FrameState.subscribers) do
-    if addr == me then seen = true break end
+  return table.concat(out, '\n')
+end
+
+-- _G.FrameBrokerOnTurnEnd(text) — the pump, driven by the Stop hook: route the
+-- in-flight request's answer home, clear the slot, feed claude the next queued
+-- request. Advances on EVERY Stop (even empty text) to keep turn↔request binding
+-- aligned. No in-flight request → a turn nobody brokered just ended; still pump,
+-- in case a request queued while it ran.
+_G.FrameBrokerOnTurnEnd = function(text)
+  local b = FrameState.broker
+  local id = b.inflight
+  if id then
+    b.inflight = nil
+    local req = b.reqs[id]
+    if req then
+      local remote = req.ret.kind == 'remote'
+      local job = route(req, text or '')
+      -- An ephemeral worker (frame spawn --ephemeral) exists to report home
+      -- once; having done so, it self-reaps via :FrameDown! (its dir + window
+      -- die with it). Deferred so this RPC returns to the Stop hook first;
+      -- jobwait lets the deliver finish before teardown. Shell frames only — on
+      -- a worktree FrameDown! force-deletes a branch, which no env should reach.
+      if remote and vim.env.FRAME_EPHEMERAL == '1' and (vim.env.FRAME_MAIN_WT or '') == '' then
+        vim.defer_fn(function()
+          if job then vim.fn.jobwait({ job }, 10000) end
+          vim.cmd('FrameDown!')
+        end, 0)
+      end
+    end
   end
-  if not seen then table.insert(FrameState.subscribers, me) end
-  frame_submit(chan, text)
-  return 'ok'
+  pump(true)
+  return 0
 end
 
 -- last_assistant_text(path) — pull the last assistant message out of a Claude
@@ -200,46 +311,21 @@ local function last_assistant_text(path)
   return ''
 end
 
--- _G.FrameOnTurnEnd(text) — route a REPORT home: deliver `text` to every armed
--- return address (via `frame deliver`, decision B — one code path for all
--- cross-frame talk), then clear them (one-shot). No-op with no subscribers (the
--- gate: turns nobody asked about route nowhere) or empty text (a tool-only turn
--- keeps the gate armed for the next turn that actually speaks). Returns the
--- number of addresses notified. jobstart is fire-and-forget so a slow or dead
--- peer never blocks the Stop hook.
-_G.FrameOnTurnEnd = function(text)
-  if text == nil or text == '' then return 0 end
-  local subs = FrameState.subscribers
-  if #subs == 0 then return 0 end
-  local from = name .. '/' .. topic
-  local frame_bin = (vim.env.FRAME_ROOT or '') .. '/bin/frame'
-  local jobs = {}
-  for _, addr in ipairs(subs) do
-    table.insert(jobs, vim.fn.jobstart({ frame_bin, 'deliver', addr, '--from', from, text }))
-  end
-  FrameState.subscribers = {}
-  -- An ephemeral worker (frame spawn --ephemeral) exists to report home once.
-  -- Reply routed → self-reap via :FrameDown! (detached dir delete + qa!, the
-  -- window and its Ghostty instance die with us). Deferred so this RPC returns
-  -- to the Stop hook first; jobwait so the deliver jobs — killed with nvim if
-  -- still running — finish before teardown. Shell frames only: on a worktree
-  -- frame FrameDown! force-deletes a branch, which no env var should reach.
-  if vim.env.FRAME_EPHEMERAL == '1' and (vim.env.FRAME_MAIN_WT or '') == '' then
-    vim.defer_fn(function()
-      vim.fn.jobwait(jobs, 10000)
-      vim.cmd('FrameDown!')
-    end, 0)
-  end
-  return #subs
+-- _G.FrameOnStop(text) — the Stop-hook entry point: every turn-end flows here
+-- (via FrameReplyFromHook) into the broker, which routes the in-flight request's
+-- answer home and feeds claude the next queued one. The stable name the hook
+-- targets; the broker is the sole router now. See docs/claude-broker.md.
+_G.FrameOnStop = function(text)
+  return _G.FrameBrokerOnTurnEnd(text)
 end
 
 -- _G.FrameReplyFromTranscript(path) — pull the last assistant message out of a
 -- transcript and route it. _G.FrameReplyFromHook(payload_path) — the Stop-hook
 -- path: `frame reply` stashes Claude Code's hook JSON to a temp file and passes
 -- its path here, so all JSON parsing stays in Lua (vim.json), which frame
--- already trusts. Both return the count FrameOnTurnEnd notified.
+-- already trusts. Both return whatever the router returned.
 _G.FrameReplyFromTranscript = function(path)
-  return _G.FrameOnTurnEnd(last_assistant_text(path))
+  return _G.FrameOnStop(last_assistant_text(path))
 end
 _G.FrameReplyFromHook = function(payload_path)
   if vim.fn.filereadable(payload_path) ~= 1 then return 0 end
@@ -254,7 +340,7 @@ _G.FrameReplyFromHook = function(payload_path)
   -- backstop for payloads that lack the field.
   local msg = payload.last_assistant_message
   if type(msg) == 'string' and msg ~= '' then
-    return _G.FrameOnTurnEnd(msg)
+    return _G.FrameOnStop(msg)
   end
   if type(payload.transcript_path) == 'string' then
     return _G.FrameReplyFromTranscript(payload.transcript_path)
@@ -290,25 +376,6 @@ end
 _G.FrameInboxDrainAtLeast = function(n)
   if #FrameState.inbox < (tonumber(n) or 1) then return '' end
   return _G.FrameInboxDrain()
-end
-
--- _G.FrameInboxDrainSelf() — drain only the messages addressed from THIS frame
--- to itself (from == our own name/topic), leaving every other report untouched
--- for `frame inbox`. The receive half of `frame claude`: our own turn's answer
--- comes home stamped from=us (FrameOnTurnEnd sets from to name/topic), and this
--- picks it out without disturbing unrelated mail — so another frame's reply
--- landing mid-wait is never mistaken for our answer. '' when no self-mail is
--- present (the poll keeps waiting). The from header is dropped: a note from
--- yourself needs no return address.
-_G.FrameInboxDrainSelf = function()
-  local me = name .. '/' .. topic
-  local mine, kept = {}, {}
-  for _, m in ipairs(FrameState.inbox) do
-    if m.from == me then table.insert(mine, m.text) else table.insert(kept, m) end
-  end
-  if #mine == 0 then return '' end
-  FrameState.inbox = kept
-  return table.concat(mine, '\n\n──\n\n')
 end
 
 -- :FrameStatus TEXT — set the status suffix; no TEXT clears it.

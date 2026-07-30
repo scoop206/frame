@@ -6,7 +6,7 @@
 #   frame deliver hub "migration finished, tests green"
 #   frame deliver flipnem/hub --from flipnem/auth "done"
 #
-# The reply router (FrameOnTurnEnd) calls this to route an agent's turn home;
+# The broker (FrameBrokerOnTurnEnd) calls this to route an agent's turn home;
 # you can also call it directly to leave a note. --from records the sender for
 # display in the recipient's inbox. NAME/TOPIC reaches any project; a bare TOPIC
 # pairs with the current frame's own NAME. See docs/agent-messaging.md.
