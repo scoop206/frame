@@ -219,16 +219,19 @@ fresh window, re-recorded. Dragging a tab out of the workers window rehomes it
 under a new window id; focus and close-tab therefore fall back to scanning
 every window for the recorded tab id.
 
-**Recommended cockpit setup — boot head in place, spawn the rest.** Open a
-fresh window and type `frame shell head`: it takes that window over (`exec
-nvim`) — nothing spawned, nothing left behind. From inside head,
-`frame spawn shell <topic>` puts every worker in the separate workers window;
-tile the two side by side. Spawning head instead (`frame spawn shell head`)
-works but is worse UX twice over: head lands as a tab among the workers
-(spawn treats everything it boots as a worker — it can't know a topic is
-head-shaped), and the window you typed the spawn in is left behind. If you do
-end up there, dragging the head tab out recovers — the recorded ids follow a
-tab wherever it lives, so focus and reap keep working. The new
+**Recommended cockpit setup — a bare shell, until you need replies.** The
+dispatch-and-watch commands (`frame ls`, `frame spawn`, `frame focus`) work
+from any plain terminal — for a human-driven cockpit, head doesn't need to be
+a frame at all: keep a bare shell window, spawn workers, tile the workers
+window beside it. Head must BE a frame only for the reply half — `frame spawn
+--req` and `frame inbox --wait` need a frame's inbox to receive — i.e. when
+claude is the orchestrator. For that, open a fresh window and type `frame
+shell head`: it takes the window over in place (`exec nvim`), nothing
+spawned, nothing left behind. Avoid `frame spawn shell head` (head lands as a
+tab among the workers and the launcher window is orphaned — if you do end up
+there, drag the head tab out; recorded ids follow a tab wherever it lives),
+and avoid `frame shell` from inside a frame (nests nvim-in-nvim — guarded
+with a confirm/refusal, use spawn). The new
 surface runs `/bin/zsh -ic '<bootstrap>'` via the scripting `command`
 configuration and its window/tab ids are recorded to `/tmp/shell-<topic>.nvim.gtab`
 for `frame focus` (select tab by id — no System Events, no Accessibility) and
