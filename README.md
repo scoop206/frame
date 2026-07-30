@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/scoop206/frame/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/scoop206/frame/actions/workflows/test.yml)
 
-An AI harness built around **neovim** and **git worktrees** — a frame
+A Claude harness built around **neovim**, **ghostty**, **git worktrees** — a frame
 per feature, parallel Claude sessions you can tell apart, and shared services
 across all your projects.
 
@@ -109,11 +109,12 @@ frame --help
   it works, and `frame spawn` tells you when it fell back.
 
   **Automation permission:** Ghostty scripting itself needs no grant, so
-  frames spawning frames just works. Running frame commands from *another*
+  frames spawning frames just works. Running frame commands from _another_
   app (a different terminal, Raycast, the notify banner) makes macOS prompt
   once — "… wants to control Ghostty" — allow it. If it was dismissed or
   denied: System Settings → Privacy & Security → Automation, or
   `tccutil reset AppleEvents <bundle-id-of-the-caller>` to re-prompt.
+
 - **Raycast** — window fuzzy-find lets you leverage the waiting and TOPIC name of your frames.
 - **homebrew + terminal-notifier** — optional; `brew install terminal-notifier`,
   then `frame notification init` (or the first `frame init`) builds the frame-icon,
@@ -187,8 +188,8 @@ When frame instantiates the nvim instance it injects these user commands
 | `:FrameQuit`         | quit the session only — worktree and branch stay for a later `frame wt TOPIC` |
 | `:FrameDown`         | tear down the whole frame: quit nvim, remove the worktree, delete the branch  |
 | `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits             |
-| `:FrameMerge`        | merge this frame's branch into main (same safeguards as `frame merge`)         |
-| `:FrameMerge!`       | merge, then push main to origin (mirrors `frame merge --push`)                 |
+| `:FrameMerge`        | merge this frame's branch into main (same safeguards as `frame merge`)        |
+| `:FrameMerge!`       | merge, then push main to origin (mirrors `frame merge --push`)                |
 
 In a shell frame (`frame shell`) there is no worktree or branch, so
 `:FrameDown` simply quits and deletes the topic directory — the safeguards
