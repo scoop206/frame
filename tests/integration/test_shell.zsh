@@ -116,13 +116,31 @@ test_shell_reuses_existing_dir() {
   assert_contains "$OUT" "already exists — reusing"
 }
 
-test_shell_requires_exactly_one_topic() {
-  run_frame shell
-  assert_status 2
-  assert_contains "$OUT" "Usage: frame shell TOPIC"
+test_shell_rejects_extra_args_and_flags() {
+  # frame shell takes at most one TOPIC. Two args — or a leading-dash arg that
+  # would read as a flag — is a usage error. A BARE `frame shell` is NOT: it
+  # mints or infers a topic (see test_shell_no_arg_mints_dated_frame).
   run_frame shell a b
   assert_status 2
-  assert_contains "$OUT" "Usage: frame shell TOPIC"
+  assert_contains "$OUT" "Usage: frame shell [TOPIC]"
+  run_frame shell -x
+  assert_status 2
+  assert_contains "$OUT" "Usage: frame shell [TOPIC]"
+}
+
+test_shell_no_arg_mints_dated_frame() {
+  # No TOPIC and nowhere to infer one (the sandbox cwd isn't a shell-frame dir)
+  # → a fresh dated scratch topic is minted and booted, so a bare `frame shell`
+  # always lands you somewhere new. The old contract erred here; commit 24d7a7e
+  # made TOPIC optional (reuse the cwd if it's a shell frame dir, else mint).
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  run_frame shell
+  assert_status 0
+  assert_contains "$OUT" "new scratch frame '"
+  local log=$(<$FAKE_NVIM_LOG)
+  assert_contains "$log" "FRAME_NAME=shell"
+  assert_contains "$log" "FRAME_TOPIC=$(date +%Y-%m-%d)-"
 }
 
 test_shell_rejects_slash_in_topic() {
