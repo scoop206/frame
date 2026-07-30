@@ -60,6 +60,10 @@ frame notification on|off|init   on|off: global switch
 frame yolo on|off          master switch: claude in every frame launches with
                            --dangerously-skip-permissions (default off)
 frame focus [TOPIC|NAME/TOPIC]  raise that frame's ghostty window (default: the one you're in)
+frame claude [--timeout N] TEXT…   ask THIS frame's claude and block for its answer
+frame req <topic|name/topic> TEXT…   hand a request to ANOTHER frame's claude; async
+                           (returns once queued), the reply routes home to your frame inbox
+frame inbox [--wait]       read replies routed back by frame req (--wait blocks for the next)
 ```
 
 `worktree` is accepted as a synonym for `wt`; `list` for `ls`.
