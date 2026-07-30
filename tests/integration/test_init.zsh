@@ -41,11 +41,66 @@ test_init_warns_when_existing_settings_lacks_hooks() {
   local before=$(cksum "$REPO/.claude/settings.json")
   run_frame init
   assert_status 0
-  assert_contains "$OUT" "frame hooks missing, merge by hand"
+  assert_contains "$OUT" "frame hooks missing, re-sync with --force"
   assert_contains "$OUT" "frame's notification hooks"
   assert_contains "$OUT" "frame notify"
+  # the caution points at --force as the one-shot fix
+  assert_contains "$OUT" "frame init --force"
   # the existing file must be left byte-for-byte untouched
   assert_eq "$(cksum "$REPO/.claude/settings.json")" "$before" "settings.json was rewritten"
+}
+
+test_init_force_overwrites_frame_only_settings() {
+  # --force re-syncs a settings.json that holds nothing but stale/empty frame
+  # hooks: the file is rewritten to frame's canonical hooks, no caution printed.
+  command -v jq >/dev/null 2>&1 || { skip "jq not installed"; return; }
+  make_repo
+  mkdir -p "$REPO/.claude"
+  print -r -- '{"hooks":{}}' > "$REPO/.claude/settings.json"
+  run_frame init --force
+  assert_status 0
+  assert_contains "$OUT" "overwritten (--force)"
+  assert_contains "$(<$REPO/.claude/settings.json)" "frame notify --blocked"
+  assert_contains "$(<$REPO/.claude/settings.json)" "frame status --prompt"
+  # no hand-merge caution when --force did the job
+  if [[ "$OUT" == *"re-sync with --force"* ]]; then
+    fail "printed the missing-hooks caution after --force already fixed it"
+  fi
+}
+
+test_init_force_refuses_custom_content() {
+  # --force must NOT clobber a settings.json carrying the user's own content
+  # (here a top-level "permissions" key): it leaves the file byte-for-byte
+  # untouched and points the user at a hand-merge.
+  command -v jq >/dev/null 2>&1 || { skip "jq not installed"; return; }
+  make_repo
+  mkdir -p "$REPO/.claude"
+  print -r -- '{"permissions":{"allow":["Bash"]},"hooks":{}}' > "$REPO/.claude/settings.json"
+  local before=$(cksum "$REPO/.claude/settings.json")
+  run_frame init --force
+  assert_status 0
+  assert_contains "$OUT" "has custom content"
+  assert_contains "$OUT" "merge these in by hand"
+  assert_eq "$(cksum "$REPO/.claude/settings.json")" "$before" "--force clobbered custom content"
+}
+
+test_init_force_leaves_wired_settings_alone() {
+  # --force only rewrites when hooks are out of sync; an already-wired file is
+  # left byte-for-byte untouched.
+  make_repo
+  run_frame init            # writes frame's hooks
+  local before=$(cksum "$REPO/.claude/settings.json")
+  run_frame init --force    # nothing to re-sync
+  assert_status 0
+  assert_contains "$OUT" "already wired for frame"
+  assert_eq "$(cksum "$REPO/.claude/settings.json")" "$before" "wired settings.json was rewritten"
+}
+
+test_init_rejects_unknown_flag() {
+  make_repo
+  run_frame init --bogus
+  assert_status 2
+  assert_contains "$OUT" "unknown flag"
 }
 
 test_init_quiet_when_existing_settings_already_wired() {
@@ -80,7 +135,7 @@ test_init_flags_wiring_predating_notification_hook() {
     > "$REPO/.claude/settings.json"
   run_frame init
   assert_status 0
-  assert_contains "$OUT" "frame hooks missing, merge by hand"
+  assert_contains "$OUT" "frame hooks missing, re-sync with --force"
   assert_contains "$OUT" "frame notify --blocked"
 }
 
