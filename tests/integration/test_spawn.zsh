@@ -96,9 +96,10 @@ test_happy_path_opens_tab_and_reports_up() {
   assert_contains "$log" "frame spawn close-tab $TNAME"
   assert_not_contains "$log" "FRAME_EPHEMERAL"
   # The surface ids are recorded for focus/close-tab, and the workers window
-  # id persists for the next spawn to congregate into.
+  # persists as a WINDOW+TAB pair — reuse validates both, so a recycled
+  # window id alone can never pull workers into an unrelated window.
   assert_eq "$(</tmp/shell-$TNAME.nvim.gtab)" "fake-win fake-tab"
-  assert_eq "$(<$FRAME_WORKERS_WINDOW)" "fake-win"
+  assert_eq "$(<$FRAME_WORKERS_WINDOW)" "fake-win fake-tab"
 }
 
 test_ephemeral_rides_into_the_bootstrap() {

@@ -58,15 +58,29 @@ else
 fi
 if (( $#GTABS )); then
   read -r G_WID G_TID < "$GTABS[1]"
+  # Recorded window first; then every window — dragging a tab out of the
+  # workers window rehomes it under a NEW window id, but the tab id survives.
   R=$(osascript - "$G_WID" "$G_TID" 2>/dev/null <<'APPLESCRIPT'
 on run argv
   set wid to item 1 of argv
+  set tid to item 2 of argv
   tell application "Ghostty"
-    select tab (tab id (item 2 of argv) of window id wid)
-    activate window (window id wid)
-    activate
+    try
+      select tab (tab id tid of window id wid)
+      activate window (window id wid)
+      activate
+      return "selected"
+    end try
+    repeat with w in windows
+      try
+        select tab (tab id tid of w)
+        activate window w
+        activate
+        return "selected"
+      end try
+    end repeat
   end tell
-  return "selected"
+  return "gone"
 end run
 APPLESCRIPT
   ) || R=""
