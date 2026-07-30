@@ -51,8 +51,10 @@ frame ls                   list every live frame (all projects); → marks the o
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame services [up|down|ps]            manage the shared postgres/minio stack
 frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears;
-                           the claude hooks set "working" on prompt, "waiting" on Stop)
-frame notify               frame will send task complete notification
+                           the claude hooks set "working" on prompt, "waiting" on Stop,
+                           "blocked" when claude pauses mid-turn for permission/input)
+frame notify [--blocked]   send a notification: task-complete (Stop hook), or
+                           --blocked when claude needs your input (Notification hook)
 frame notification on|off|init   on|off: global switch
                            init: build/repair the banner app (needs `brew install terminal-notifier`)
 frame yolo on|off          master switch: claude in every frame launches with
