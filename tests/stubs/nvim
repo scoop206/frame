@@ -60,6 +60,10 @@ if [[ "${1:-}" == "--server" ]]; then
     *FrameBrokerStatus*)
       [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
       print -rn -- "${FAKE_BROKER_STATUS:-}"; exit 0 ;;
+    # `frame notify` reads-and-clears this to skip the banner for brokered turns.
+    # FAKE_BROKERED (default 0 = a human turn) stands in for the flag; a dedicated
+    # case so it doesn't collide with the mute switch's FAKE_NVIM_EXPR_RESULT.
+    *FrameTakeBrokeredFlag*) print -rn -- "${FAKE_BROKERED:-0}"; exit 0 ;;
   esac
   # Optional expr trace: append every remote-expr issued, so a test can assert
   # what was actually sent (e.g. --count threading into FrameInboxDrainAtLeast).

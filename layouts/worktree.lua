@@ -175,6 +175,13 @@ local function pump(from_stop)
   req.status = 'inflight'
   b.inflight = id
   frame_submit(FrameState.chan['claude'], req.text)
+  -- Mark this turn as brokered so the Stop hook's `frame notify` skips its
+  -- desktop banner — the client already has the answer, so a "come look" ping
+  -- is noise. Set at submit (not at Stop): the Stop hook runs `frame notify`
+  -- (which reads+clears this) before `frame reply` (which pumps the next
+  -- request and re-sets it), so each brokered turn's flag is consumed by its
+  -- own notify. FrameTakeBrokeredFlag below.
+  vim.g.frame_brokered_pending = 1
 end
 
 -- _G.FrameBrokerSubmit(text, ret_str) — enqueue a prompt; returns its id, or
@@ -275,6 +282,17 @@ _G.FrameBrokerOnTurnEnd = function(text)
   end
   pump(true)
   return 0
+end
+
+-- _G.FrameTakeBrokeredFlag() — read-and-clear "the turn that just ended was one
+-- the broker submitted". `frame notify` (the Stop hook) reads this to skip the
+-- banner for brokered turns. Consumed on read so it can't go stale and mute a
+-- later human-typed turn. A g: var like frame_notify_muted, so sessions
+-- predating it just read 0 (banner fires, as before). Set by pump().
+_G.FrameTakeBrokeredFlag = function()
+  local v = vim.g.frame_brokered_pending or 0
+  vim.g.frame_brokered_pending = 0
+  return v
 end
 
 -- last_assistant_text(path) — pull the last assistant message out of a Claude
