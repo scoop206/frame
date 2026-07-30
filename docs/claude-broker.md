@@ -122,8 +122,39 @@ Same `--headless --server … --remote-expr` + single-quote escaping as `req`.
 - **`frame reply`** (Stop hook, bare form) — rewired to `FrameBrokerOnTurnEnd`
   (pump). The explicit `frame reply TEXT` form is retired (its job is now the
   broker's routing).
-- **`frame deliver` / `frame inbox`** — unchanged. Remote answers arrive via
-  broker → `frame deliver` → inbox, indistinguishable to the reader.
+- **`frame deliver` / `frame inbox`** — remote answers arrive via broker →
+  `frame deliver` → inbox, indistinguishable to the reader. `deliver` now also
+  carries `--id <broker-id>`, and `inbox --for <token>` filters on it — see
+  Correlated fan-out below.
+
+## Correlated fan-out (reply tokens)
+
+The local path correlates answers by id (await binds `frame claude` to its exact
+request). The **cross-frame** path closes the same gap without minting anything
+new: the broker already has a per-request id on the *target*, and `frame req`
+already gets it back from `Submit` — so `<target-addr>#<id>` (e.g.
+`frame/comms2#r7`) is already a globally-unique correlation token. `frame req`
+prints it (`token: …`); the reply is delivered with that id and the inbox stores
+it, so the sender can match reply→request instead of guessing by order/content.
+
+- **route → deliver** threads `req.id`: `frame deliver <addr> --from <self> --id
+  <id> <text>`. `FrameInboxAdd(from, text, id)` stores `{from, text, id}` (id
+  defaults `''`; a hand-written note never carries one, so it never matches).
+- **`frame inbox --for <token>`** (repeatable) is the correlated fan-in barrier:
+  `FrameInboxDrainFor(tokens)` holds out until *every* requested `from#id` is
+  present, then drains **only** those, leaving unrelated mail. `--for` and
+  `--count` are mutually exclusive (two ways to say "how many"); `--for` works
+  with or without `--wait` (barrier vs drain-if-complete).
+- **Fan-out usage**: fire N `frame req`s, capture each `token:` line, then
+  `frame inbox --wait --for $t1 --for $t2 …` to collect exactly those N answers —
+  an unrelated `frame deliver` note landing mid-wait is left behind, not counted.
+
+Wire additions: `v:lua.FrameInboxAdd('<from>', '<text>', '<id>')` and
+`v:lua.FrameInboxDrainFor('<tab-joined tokens>')`. Additive and backward
+compatible — plain notes, untokened reqs, and `inbox` with no `--for` are
+unchanged. Not built: synchronous `frame req --wait` (submit + inline
+`inbox --wait --for`); the token machinery is its prerequisite, ~15 lines when
+wanted.
 
 ## Migration — sequenced so the suite stays green at each step
 
