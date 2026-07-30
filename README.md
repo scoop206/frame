@@ -192,11 +192,32 @@ When frame instantiates the nvim instance it injects these user commands
 | `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits             |
 | `:FrameMerge`        | merge this frame's branch into main (same safeguards as `frame merge`)        |
 | `:FrameMerge!`       | merge, then push main to origin (mirrors `frame merge --push`)                |
+| `:[range]FrameClaude [Q]` | ask this frame's claude about the current line / visual selection; answer opens in a `[FrameClaude]` scratch buffer |
 
 In a shell frame (`frame shell`) there is no worktree or branch, so
 `:FrameDown` simply quits and deletes the topic directory — the safeguards
 below don't apply, and the bang changes nothing. `:FrameQuit` keeps the
 directory for a later `frame shell TOPIC`.
+
+### Asking claude from the editor — `:FrameClaude`
+
+`:FrameClaude` is the in-editor sibling of `frame claude`: it asks **this
+frame's** claude about the code you're looking at, without leaving the buffer.
+
+- **Bare `:FrameClaude`** sends the current line; **`:'<,'>FrameClaude`** (or any
+  `:[range]`) sends the selected lines. The file and line range are attached as
+  context, so claude knows what it's looking at.
+- **`:FrameClaude <question>`** asks your own question about that code; with no
+  question it defaults to "Review this code and give feedback."
+- The reply renders in a reusable, read-only `[FrameClaude]` markdown scratch
+  buffer that opens in a right-hand split (your cursor stays in the code). It
+  shows a placeholder while claude works, then rewrites in place with the answer.
+
+It shares the same broker and the same single claude conversation as
+`frame claude` — so these turns enter that conversation like any other, and a
+question asked while claude is busy simply queues. Unlike the socket clients, the
+answer is pushed back in-process (no polling), so there's nothing to await. See
+[docs/claude-broker.md](docs/claude-broker.md).
 
 ## Frame Merge
 
