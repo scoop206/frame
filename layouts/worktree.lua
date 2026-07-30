@@ -197,6 +197,17 @@ _G.FrameInboxDrain = function()
   return table.concat(out, '\n\n──\n\n')
 end
 
+-- _G.FrameInboxDrainAtLeast(n) — drain only when the inbox holds at least `n`
+-- messages; otherwise leave it untouched and return ''. `frame inbox --wait`
+-- polls this over the socket, so the blocking lives in the CLI subprocess and
+-- this session's event loop never waits. Draining is all-or-nothing — a peek
+-- that consumed would lose messages if the client died between polls. n<=1
+-- means "any mail at all"; --count K holds out for K (a fan-in barrier).
+_G.FrameInboxDrainAtLeast = function(n)
+  if #FrameState.inbox < (tonumber(n) or 1) then return '' end
+  return _G.FrameInboxDrain()
+end
+
 -- :FrameStatus TEXT — set the status suffix; no TEXT clears it.
 vim.api.nvim_create_user_command('FrameStatus', function(opts)
   _G.FrameSetStatus(opts.args)

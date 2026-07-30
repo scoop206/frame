@@ -28,7 +28,8 @@
 #   frame reply [TEXT…]        reply home to whoever last req'd this frame
 #                              (bare form is the Stop-hook sensor)
 #   frame deliver TOPIC|NAME/TOPIC TEXT…   drop a message in that frame's inbox
-#   frame inbox                show + clear this frame's inbox
+#   frame inbox [--wait [--timeout N] [--count K]]   show + clear this frame's
+#                              inbox; --wait blocks until a message arrives
 #   (`worktree` is accepted as a synonym for `wt`)
 #
 # A frame is a terminal window running neovim as its buffer management layer
@@ -62,7 +63,7 @@ case "$cmd" in
     source "$FRAME_ROOT/commands/notifier.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,38p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,39p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "$X_MARK frame: unknown command '$cmd' (try: frame help)" >&2
