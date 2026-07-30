@@ -49,6 +49,8 @@ frame wt                   boot the worktree you're already in
 frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
 frame shell TOPIC          casual frame in ~/frames/TOPIC — no repo, no branch,
                            just the claude + local buffers
+frame shell                infer TOPIC from the cwd if it's a shell frame dir,
+                           else mint a fresh dated one (2026-07-30-a3f9)
 frame ls                   list every live frame (all projects); → marks the one
                            you're in. `frame focus` a topic you spot here
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree

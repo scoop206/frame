@@ -1,4 +1,9 @@
-# frame shell TOPIC — a casual frame: no repo, no branch, no worktree.
+# frame shell [TOPIC] — a casual frame: no repo, no branch, no worktree.
+#
+# With no TOPIC: if the cwd is a shell frame's own dir (a direct child of
+# $FRAME_SHELL_HOME) the dir name becomes the topic and it's re-fired in place
+# (like `frame wt` with no arg); otherwise a fresh dated topic (2026-07-30-a3f9)
+# is minted so a bare `frame shell` always lands you somewhere new.
 #
 # Creates (or reuses) $FRAME_SHELL_HOME/TOPIC (default ~/frames) and boots
 # the usual session there with just the claude + local buffers. Everything
@@ -9,11 +14,32 @@
 # branch or worktree here, so there are no git safeguards and no bang needed.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
-if (( $# != 1 )) || [[ "$1" == -* ]]; then
-  echo "Usage: frame shell TOPIC" >&2
+SHELL_HOME="${FRAME_SHELL_HOME:-$HOME/frames}"
+
+if (( $# > 1 )) || [[ "${1:-}" == -* ]]; then
+  echo "Usage: frame shell [TOPIC]  (no TOPIC: reuse the cwd if it's a shell frame dir, else a fresh dated one)" >&2
   exit 2
 fi
-TOPIC=$1
+
+if (( $# == 1 )); then
+  TOPIC=$1
+elif [[ "${PWD:h}" == "$SHELL_HOME" ]]; then
+  # No topic, but we're standing in a shell frame's own dir (a direct child of
+  # $FRAME_SHELL_HOME) — the dir name IS the topic. Re-fire it in place, the way
+  # `frame wt` with no arg reboots the worktree you're in.
+  TOPIC="${PWD:t}"
+  echo "$OK_MARK no topic given — inferring '$TOPIC' from the current directory"
+else
+  # No topic and nowhere to infer from — mint a fresh dated scratch topic so a
+  # bare `frame shell` always lands you somewhere. Regenerate on the (rare)
+  # collision with an existing dir so we never reuse someone else's scratch.
+  TOPIC="$(date +%Y-%m-%d)-$(printf '%04x' $RANDOM)"
+  while [[ -d "$SHELL_HOME/$TOPIC" ]]; do
+    TOPIC="$(date +%Y-%m-%d)-$(printf '%04x' $RANDOM)"
+  done
+  echo "$OK_MARK no topic given — new scratch frame '$TOPIC'"
+fi
+
 if [[ "$TOPIC" == */* ]]; then
   echo "$X_MARK frame shell: TOPIC becomes a directory name — no slashes" >&2
   exit 2
@@ -30,7 +56,7 @@ frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
 # Ask before any side effect — a nested boot aborted here leaves nothing behind.
 frame_guard_nested || exit 1
 
-DIR="${FRAME_SHELL_HOME:-$HOME/frames}/$TOPIC"
+DIR="$SHELL_HOME/$TOPIC"
 if [[ -d "$DIR" ]]; then
   echo "$OK_MARK directory $DIR already exists — reusing"
 else
