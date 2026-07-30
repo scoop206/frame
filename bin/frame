@@ -1,5 +1,8 @@
 #!/usr/bin/env zsh
-# frame — a neovim + claude code harness within ghostty
+# frame - an AI harness built on: ghostty, neovim, and claude code
+#
+# A frame is a terminal window running neovim as its buffer-management layer —
+# running Claude with supporting service buffers and a terminal (local).
 #
 # Usage:
 #
@@ -25,11 +28,11 @@
 #     frame ls                          list frames
 #
 #     frame view [TOPIC|NAME/TOPIC]     dump one frame's full state (default:
-#                                       the frame you're in) — the debug view
-#                                       behind `frame ls`
+#                                       the frame you're in)
 #
 #     frame merge [TOPIC] [--push|--ff|-n]
-#                                       merge TOPIC (default: current branch)
+#                                       merge TOPIC into main (default: current
+#                                       branch)
 #
 #     frame claude [--timeout N] TEXT…  talk to THIS frame's own claude: type
 #                                       TEXT into it and block until it answers,
@@ -51,15 +54,12 @@
 #
 #     frame status [TEXT…]              append "- TEXT" to this frame's window
 #                                       title (no TEXT restores the base title)
-#     frame status --prompt             UserPromptSubmit hook target: status
-#                                       "working" + the turn-start stamp
-#                                       notify's gate reads
 #
 #     frame focus [TOPIC|NAME/TOPIC]    raise that frame's ghostty window
 #                                       (default: the frame you're in)
 #
 #     frame notify                      set title to "waiting" + fire the
-#                                       task-complete banner (Stop-hook target)
+#                                       task-complete banner
 #
 #     frame services [up|down]          manage the shared postgres/minio stack
 #
@@ -70,13 +70,9 @@
 #                                       launches --dangerously-skip-permissions
 #                                       (default off; bare form shows the state)
 #
-# A frame is a terminal window running neovim as its buffer management layer
-# (multiplexer). This is usually one buffer running Claude and then whatever
-# else is appropriate. Frames assumes a 1:1:1 mapping between
-# a frame:worktree:branch.
-# `cd project && frame wt YOUR_TOPIC` once project is configured.
-#
-# Set project level config with `cd project && frame init`
+# Example:
+#     cd $YOUR_GIT_REPO && frame init
+#     frame wt TOPIC
 set -euo pipefail
 
 export FRAME_ROOT="${0:A:h:h}"
