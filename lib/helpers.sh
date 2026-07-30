@@ -170,6 +170,29 @@ frame_export_claude_flags() {
 
 # ── claude-code hooks ─────────────────────────────────────────────────────────
 
+frame_settings_is_frame_only() {
+  # Classify .claude/settings.json (path $1) for a `frame init --force`
+  # overwrite. Prints one word:
+  #   safe   — empty, or nothing but frame's own hooks; a rewrite loses nothing
+  #   custom — foreign hooks, non-frame hook events, or any top-level key besides
+  #            "hooks"; a rewrite would clobber the user's content
+  #   nojq   — jq isn't installed, so we can't prove the file is safe
+  # Proving "there's nothing here but frame's hooks" is a JSON-structure
+  # question, not a text one — grep can't tell a frame hook from a lookalike or
+  # notice an unknown top-level key a future claude-code adds — so we lean on jq
+  # and refuse (classify custom) rather than guess when it can't parse the file.
+  local _f=$1
+  command -v jq >/dev/null 2>&1 || { print -r -- nojq; return; }
+  jq -re '
+    def frame_ok:
+      (keys - ["hooks"] | length == 0)
+      and ((.hooks // {}) | keys - ["Stop","UserPromptSubmit","Notification"] | length == 0)
+      and ([(.hooks // {}) | to_entries[] | .value[]? | .hooks[]? | .command | select(. != null)]
+            | all(startswith("frame ")));
+    if frame_ok then "safe" else "custom" end
+  ' "$_f" 2>/dev/null || print -r -- custom
+}
+
 frame_write_claude_hooks() {
   # .claude/settings.json in cwd, wiring claude-code to frame's notification
   # channels: Stop → `frame notify` (banner + "- waiting" title status) and

@@ -41,6 +41,9 @@ Run from a project:
 ```
 frame init                 scaffold integration into project (.frame/* and
                            .claude/settings.json hooks)
+frame init --force         re-sync: overwrite an existing settings.json whose
+                           frame hooks are stale/missing (only when it holds no
+                           custom content; needs jq to verify that)
 frame wt TOPIC             create/reuse branch TOPIC + worktree ../_<name>-TOPIC, boot it
 frame wt                   boot the worktree you're already in
 frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
