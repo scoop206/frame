@@ -20,6 +20,24 @@ top-level commands — nothing hidden under a fake "hook" verb. The noun `agent`
 reserved for a future umbrella (`frame agent req|reply|…`) if the surface grows.
 See [The command surface](#the-command-surface--request--reply).*
 
+*Revised (v4): **the arm/subscriber gate is retired — replaced by the claude
+broker.** The routing this note describes (a `subscribers` set armed on the
+target, a `FrameOnTurnEnd` fan-out, one-shot arm-then-clear) assumed a single
+message in flight and couldn't safely serve several clients hitting one Claude
+at once. It's been replaced by a **single-writer request queue** in front of
+Claude: clients submit requests and the broker feeds them in one at a time, so
+each Stop is unambiguously one request's answer, routed back by request id. Both
+`frame req` (answer → the sender's inbox) and the new `frame claude` (answer
+awaited inline, on your own frame) are broker clients; `frame reply`'s explicit
+`TEXT` form is gone (the Stop hook just feeds the broker). **The conceptual model
+below still holds** — frames as the only endpoints, reports accumulating in an
+inbox, roles emergent, command=inject / report=inbox, the check-inbox pattern.
+What changed is the **routing internals**. Wherever the text below names the
+`subscribers` set, the arm/gate, `FrameRequest`, or `FrameOnTurnEnd` (including
+the command-surface table), that's the original mechanism, kept for history — see
+**[claude-broker.md](claude-broker.md)** for the broker that replaced it and how
+routing works today.*
+
 ## The command surface — request / reply
 
 Four top-level verbs. `req` and `reply` are the two ends of one round-trip and
@@ -282,9 +300,13 @@ Multiple concurrent commanders are never ambiguous: the return address is always
 
 ## Build phases
 
-*Status: phases 1–3 are implemented and shipped (`frame req` / `reply` /
-`deliver` / `inbox`, `FrameState`, the Stop-hook sensor, one-shot round-trip).
-Phases 4–5 are not yet built.*
+*Status: superseded by the claude broker — see
+[claude-broker.md](claude-broker.md). The `frame req` / `reply` / `deliver` /
+`inbox` surface, `FrameState`, and the Stop-hook sensor shipped as phases 1–3
+described; the arm/subscriber routing was then **replaced** by the broker's
+single-writer queue, and `frame claude` (a local synchronous client) plus safe
+concurrent access to one Claude were added on top. `--watch` (phase 5) never
+shipped — the broker's per-request return mailboxes cover the ground it aimed at.*
 
 1. **Send only.** `frame req name/topic TEXT` → `chansend` into the `claude`
    buffer. Stash the channel in `FrameState.chan` at boot. No reply yet — already
@@ -342,8 +364,14 @@ accepted limitation for a backstop that almost never runs.
   drives plans through workers, `frame inbox --wait`, and `frame spawn`.
 - [identity-model.md](identity-model.md) — the socket-is-identity rule this
   builds on; `FrameState` is its state counterpart.
-- `layouts/worktree.lua` — `FrameState` and the `FrameRequest` / `FrameOnTurnEnd`
-  / `FrameReplyFromHook` / `FrameInbox*` routing functions.
-- `commands/req.sh` · `reply.sh` · `deliver.sh` · `inbox.sh` — the four verbs.
-  `reply.sh` is the Stop-hook sensor; `notify.sh` is the sibling Stop hook it's
-  wired beside (`frame_write_claude_hooks` in `lib/helpers.sh`).
+- [claude-broker.md](claude-broker.md) — the request broker that replaced the
+  arm/subscriber routing described here; the current design of record.
+- `layouts/worktree.lua` — `FrameState` (now carrying the `broker` queue) and the
+  `FrameBrokerSubmit` / `FrameBrokerAwait` / `FrameBrokerOnTurnEnd` /
+  `FrameReplyFromHook` / `FrameInbox*` functions. The broker replaces the old
+  `FrameRequest` / `FrameOnTurnEnd` arm-and-fan-out.
+- `commands/req.sh` · `claude.sh` · `reply.sh` · `deliver.sh` · `inbox.sh` — the
+  verbs. `req` and `claude` are broker clients; `reply.sh` is the Stop-hook
+  sensor (bare form only — the explicit form is retired); `notify.sh` is the
+  sibling Stop hook it's wired beside (`frame_write_claude_hooks` in
+  `lib/helpers.sh`), and now skips its banner for brokered turns.
