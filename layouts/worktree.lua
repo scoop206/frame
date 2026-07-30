@@ -49,7 +49,8 @@ vim.o.titlestring = base_title
 -- get(g:, 'frame_notify_muted', 0), so sessions predating it degrade to
 -- unmuted. Keeping it a g: var preserves that cheap, backward-compatible read.
 local FrameState = { status = '', chan = {}, buf = {}, inbox = {},
-  broker = { seq = 0, queue = {}, inflight = nil, reqs = {}, pump_scheduled = false } }
+  broker = { seq = 0, queue = {}, inflight = nil, inflight_since = nil,
+    reqs = {}, pump_scheduled = false } }
 
 -- Status suffix: appends " - TEXT" to the base title (which never changes).
 -- Global so `frame status` can call it over the socket from any terminal
@@ -62,14 +63,30 @@ _G.FrameSetStatus = function(status)
 end
 
 -- _G.FrameInfo() — this session's identity as one tab-delimited record for
--- `frame ls`:   name<TAB>topic<TAB>port<TAB>status
+-- `frame ls`:   name<TAB>topic<TAB>port<TAB>status<TAB>health
 -- Queried over the socket exactly like FrameSetStatus, so ls reads clean fields
 -- straight from the session instead of parsing the window title (whose dashes
 -- make <name>-<topic> ambiguous). port and status are '' when absent — ls
 -- renders those as '-'. Sessions booted before this helper existed lack it; ls
 -- falls back to parsing &titlestring for those.
+--
+-- `health` is the broker-state signal behind ls's COMMS column, a
+-- comma-joined triple `<inflight_age>,<queue_depth>,<inbox_count>` read live
+-- off FrameState.broker/inbox — never draining anything (cf. FrameDebug):
+--   inflight_age  seconds the in-flight turn has been running (os.time now
+--                 minus its start stamp), or '' when nothing is in flight.
+--                 A large value with no matching long turn is the wedge signal.
+--   queue_depth   requests waiting behind the in-flight one.
+--   inbox_count   reports delivered but not yet drained by `frame inbox`.
+-- APPENDED, never reordered: pre-health sessions return the 4-field record and
+-- ls just renders a blank COMMS column for them (frame_live_frames tolerates a
+-- missing 5th field). ls owns the display policy (thresholds, formatting); we
+-- ship raw numbers so that stays in the presentation layer.
 _G.FrameInfo = function()
-  return table.concat({ name, topic, vite_port, FrameState.status }, '\t')
+  local b = FrameState.broker
+  local age = b.inflight_since and (os.time() - b.inflight_since) or ''
+  local health = table.concat({ age, #b.queue, #FrameState.inbox }, ',')
+  return table.concat({ name, topic, vite_port, FrameState.status, health }, '\t')
 end
 
 -- _G.FrameDebug() — the full attribute dump behind `frame view`: one
@@ -228,6 +245,7 @@ local function pump(from_stop)
   if not req then return pump(from_stop) end -- cancelled while queued; try the next
   req.status = 'inflight'
   b.inflight = id
+  b.inflight_since = os.time()   -- stamp turn start, for `frame ls`'s wedge age
   frame_submit(FrameState.chan['claude'], req.text)
   -- Mark this turn as brokered so the Stop hook's `frame notify` skips its
   -- desktop banner — the client already has the answer, so a "come look" ping
@@ -336,6 +354,7 @@ _G.FrameBrokerOnTurnEnd = function(text)
   local id = b.inflight
   if id then
     b.inflight = nil
+    b.inflight_since = nil
     local req = b.reqs[id]
     if req then
       local remote = req.ret.kind == 'remote'
