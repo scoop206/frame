@@ -31,12 +31,8 @@ elif [[ "${PWD:h}" == "$SHELL_HOME" ]]; then
   echo "$OK_MARK no topic given — inferring '$TOPIC' from the current directory"
 else
   # No topic and nowhere to infer from — mint a fresh dated scratch topic so a
-  # bare `frame shell` always lands you somewhere. Regenerate on the (rare)
-  # collision with an existing dir so we never reuse someone else's scratch.
-  TOPIC="$(date +%Y-%m-%d)-$(printf '%04x' $RANDOM)"
-  while [[ -d "$SHELL_HOME/$TOPIC" ]]; do
-    TOPIC="$(date +%Y-%m-%d)-$(printf '%04x' $RANDOM)"
-  done
+  # bare `frame shell` always lands you somewhere new (shared with spawn shell).
+  TOPIC="$(frame_mint_shell_topic)"
   echo "$OK_MARK no topic given — new scratch frame '$TOPIC'"
 fi
 

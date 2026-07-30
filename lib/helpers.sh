@@ -274,6 +274,22 @@ set_title() {
   printf '\e]2;%s\e\\' "$1"
 }
 
+# ── shell topics ──────────────────────────────────────────────────────────────
+
+frame_mint_shell_topic() {
+  # Mint a fresh dated scratch topic (2026-07-30-a3f9) that collides with no
+  # existing dir under $FRAME_SHELL_HOME (default ~/frames), and print it. Used
+  # by `frame shell` and `frame spawn shell` when no TOPIC is given, so a bare
+  # invocation always lands somewhere new instead of reusing someone else's
+  # scratch. Keep the two callers routed through here so the format can't drift.
+  local _home="${FRAME_SHELL_HOME:-$HOME/frames}" _topic
+  _topic="$(date +%Y-%m-%d)-$(printf '%04x' $RANDOM)"
+  while [[ -d "$_home/$_topic" ]]; do
+    _topic="$(date +%Y-%m-%d)-$(printf '%04x' $RANDOM)"
+  done
+  print -r -- "$_topic"
+}
+
 # ── window spawning ───────────────────────────────────────────────────────────
 
 frame_guard_nested() {

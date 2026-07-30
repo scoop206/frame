@@ -28,13 +28,13 @@ _plant_booted_worker() {
 test_no_args_shows_usage() {
   run_frame spawn
   assert_status 2
-  assert_contains "$OUT" "usage: frame spawn shell TOPIC"
+  assert_contains "$OUT" "usage: frame spawn shell [TOPIC]"
 }
 
 test_unknown_kind_shows_usage() {
   run_frame spawn banana calc
   assert_status 2
-  assert_contains "$OUT" "usage: frame spawn shell TOPIC"
+  assert_contains "$OUT" "usage: frame spawn shell [TOPIC]"
 }
 
 test_spawn_wt_needs_a_project() {
@@ -103,10 +103,25 @@ test_close_tab_accepts_name_topic_form() {
   assert_file_absent "/tmp/stompy-$TNAME.nvim.gtab"
 }
 
-test_missing_topic_shows_usage() {
-  run_frame spawn shell
+test_no_topic_shell_mints_dated_worker() {
+  # A bare `frame spawn shell` — no TOPIC — mints a fresh dated scratch topic
+  # (like `frame shell`) and dispatches a worker on it instead of erroring. The
+  # topic is random, so its socket can't be planted ahead of time: assert the
+  # mint message and that the boot command carries the dated topic; the
+  # readiness poll then times out (exit 3), which is enough to prove the launch.
+  _spawn_env
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  run_frame spawn shell --timeout 1
+  assert_status 3
+  assert_contains "$OUT" "new scratch worker '"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "frame shell $(date +%Y-%m-%d)-"
+}
+
+test_no_topic_wt_shows_usage() {
+  # wt still requires a TOPIC — it names a branch, nothing to mint from.
+  run_frame spawn wt
   assert_status 2
-  assert_contains "$OUT" "usage: frame spawn shell TOPIC"
+  assert_contains "$OUT" "usage: frame spawn shell [TOPIC]"
 }
 
 test_rejects_slash_in_topic() {
