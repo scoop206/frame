@@ -68,6 +68,29 @@ frame inbox [--wait]       read replies routed back by frame req (--wait blocks 
 
 `worktree` is accepted as a synonym for `wt`; `list` for `ls`.
 
+### Inbox filtering
+
+When you send a `frame req`, Frame prints a **token** (`token: frame/topic#id`) — a
+globally-unique id for that request. Your inbox is shared: replies from every
+`frame req` you've fired land there together, so reading in order can't guarantee
+you're looking at the answer to a *specific* request.
+
+Pass `--for <token>` to `frame inbox` to retrieve only the reply for that request:
+
+```bash
+frame inbox --for frame/comms2#r7        # just that one answer
+```
+
+`--for` is repeatable, which makes it a fan-in barrier for correlated fan-out:
+fire N reqs, capture each `token:` line, then wait for exactly those N answers —
+unrelated mail landing mid-wait is left behind, not counted:
+
+```bash
+frame inbox --wait --for $t1 --for $t2   # blocks until both r1 and r2 arrive
+```
+
+See [docs/claude-broker.md](docs/claude-broker.md) for the full model.
+
 ## Features
 
 - A frame per feature
