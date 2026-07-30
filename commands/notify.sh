@@ -13,7 +13,11 @@
 #   --blocked  the Notification hook — claude paused MID-turn for input: a
 #              permission prompt, or an idle/needs-input stall. Neither Stop nor
 #              UserPromptSubmit fires here, so without this the frame would keep
-#              reading "working" while it's actually frozen on the human.
+#              reading "working" while it's actually frozen on the human. But the
+#              same hook ALSO fires an idle ping ~60s after a turn ENDS; that one
+#              lands on an already-"waiting" frame, so a status-gate below drops
+#              it — otherwise a finished, unattended frame would flip to a
+#              phantom "blocked". See the gate for the full story.
 #
 # Two channels, both best-effort: the window-title status (frame status —
 # needs the session's nvim socket) and a macOS banner (the Frame notifier
@@ -53,15 +57,8 @@ else
   TEXT="task complete"
 fi
 
-"$FRAME_ROOT/bin/frame" status "$STATUS" 2>/dev/null || true
-
-# Globally off → no banner from any frame. The title status above still
-# ran — same contract as the session mute.
-if [[ "$(frame_global_get notify)" == off ]]; then
-  exit 0
-fi
-
-# Identity for the banner's title, best-effort like everything here: a shell
+# Identity for the banner's title, the blocked status-gate just below, and the
+# socket every RPC here rides on — best-effort like everything else: a shell
 # frame (frame shell — no git repo) carries it in the session env; a checkout
 # derives it as status.sh does (guarded: HEAD is unresolvable in a repo with
 # no commits yet); anywhere else fall back to ?/? — the banner still fires.
@@ -83,6 +80,35 @@ fi
 # without it.
 TITLE=$(frame_base_title "$NAME" "$TOPIC")
 SOCKET="/tmp/$NAME-$TOPIC.nvim"
+
+# Blocked status-gate — the fix for the "phantom blocked" ping. Claude Code's
+# Notification hook (this --blocked path) fires for TWO things: a genuine
+# mid-turn block (a permission/plan prompt), and an idle "waiting for your
+# input" ping it emits ~60s after a turn ENDS. The idle one lands on an
+# already-finished frame — Stop has run, so the title status reads "waiting" —
+# and must NOT masquerade as blocked (title flip + "needs your input" banner)
+# when claude is merely done and unattended. A real mid-turn block still reads
+# "working" (no Stop since the prompt), so it falls through untouched. Gate
+# BEFORE the title flip below — otherwise the phantom would still repaint it
+# "blocked". Best-effort: FrameInfo → name<TAB>topic<TAB>port<TAB>status (status
+# is the last field); no socket / session predating FrameInfo / no answer →
+# empty → err toward firing, the pre-fix behaviour. This matters most for shell
+# frames: they run bypass-permissions, so their ONLY Notifications are these
+# idle ones — without the gate the banner is almost always a false alarm.
+if [[ $_mode == blocked && -S "$SOCKET" ]]; then
+  _info=$(frame_rpc_expr "$SOCKET" 'v:lua.FrameInfo()') || _info=""
+  if [[ "${_info##*$'\t'}" == waiting ]]; then
+    exit 0
+  fi
+fi
+
+"$FRAME_ROOT/bin/frame" status "$STATUS" 2>/dev/null || true
+
+# Globally off → no banner from any frame. The title status above still
+# ran — same contract as the session mute.
+if [[ "$(frame_global_get notify)" == off ]]; then
+  exit 0
+fi
 
 # The next two gates are "done" heuristics — they silence the Stop banner when
 # the human doesn't need pulling back. A --blocked ping is the opposite: claude
