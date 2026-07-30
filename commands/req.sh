@@ -34,19 +34,10 @@ if ! frame_self_identity; then
 fi
 FROM="$SELF_NAME/$SELF_TOPIC"
 
-if [[ "$TARGET_SPEC" == */* ]]; then
-  NAME="${TARGET_SPEC%%/*}" TOPIC="${TARGET_SPEC#*/}"
-else
-  # Bare topic — pair it with this frame's own NAME (a sibling in the same
-  # project). NAME/TOPIC is the cross-project form.
-  NAME=$SELF_NAME TOPIC="$TARGET_SPEC"
-fi
-
-SOCKET="/tmp/$NAME-$TOPIC.nvim"
-if [[ ! -S "$SOCKET" ]]; then
-  echo "$X_MARK no frame session for $NAME/$TOPIC (no socket at $SOCKET)" >&2
-  exit 1
-fi
+# Resolve the target to a live session (sets NAME / TOPIC / SOCKET). A bare
+# topic pairs with our own NAME first, then falls back to the unique live frame
+# with that topic — so a head frame reaches `comms2` without naming its project.
+frame_resolve_target "$TARGET_SPEC" || exit 1
 
 # Vimscript single-quoted strings: only ' needs escaping, as ''.
 TEXT="$*"

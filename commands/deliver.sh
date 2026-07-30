@@ -30,22 +30,11 @@ if (( $# == 0 )); then
   exit 2
 fi
 
-if [[ "$TARGET_SPEC" == */* ]]; then
-  NAME="${TARGET_SPEC%%/*}" TOPIC="${TARGET_SPEC#*/}"
-else
-  # Bare topic — pair with the caller's own NAME (a sibling frame).
-  if ! frame_self_identity; then
-    echo "$X_MARK bare topic '$TARGET_SPEC' needs a project — run from a frame, or pass NAME/TOPIC" >&2
-    exit 1
-  fi
-  NAME=$SELF_NAME TOPIC="$TARGET_SPEC"
-fi
-
-SOCKET="/tmp/$NAME-$TOPIC.nvim"
-if [[ ! -S "$SOCKET" ]]; then
-  echo "$X_MARK no frame session for $NAME/$TOPIC (no socket at $SOCKET)" >&2
-  exit 1
-fi
+# Best-effort identity so a bare topic can try our own project first; the
+# resolver falls back to a unique live frame with that topic regardless. Sets
+# NAME / TOPIC / SOCKET (a bare topic that matches nothing / is ambiguous exits).
+frame_self_identity 2>/dev/null || true
+frame_resolve_target "$TARGET_SPEC" || exit 1
 
 # Vimscript single-quoted strings: only ' needs escaping, as ''.
 TEXT="$*"
