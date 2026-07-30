@@ -31,7 +31,7 @@ EOF
   export TNAME="proj$RANDOM$RANDOM"
   unset FAKE_NVIM_LOG FAKE_BUSY_PORTS FAKE_OSASCRIPT_LOG FAKE_NVIM_EXPR_RESULT \
         FAKE_OSASCRIPT_RESULT FAKE_NVIM_EXPR_LOG FAKE_NVIM_EXPR_EMPTY_POLLS \
-        FAKE_NVIM_POLL_COUNT_FILE
+        FAKE_NVIM_POLL_COUNT_FILE FAKE_OPEN_LOG
   # The suite may itself be running inside a frame session, whose exports
   # (PORT_PREFIX, FRAME_*, SERVER_CMD, <PREFIX>_*_PORT, …) would leak into
   # frame_load_config's ${VAR:=default} lines. Strip them. FRAME_ROOT is
@@ -52,6 +52,7 @@ sandbox_down() {
   [[ -n "${TNAME:-}" ]] && rm -f /tmp/$TNAME-*.teardown.log(N) \
                                  /tmp/*-$TNAME.nvim(N) /tmp/$TNAME-*.nvim(N) \
                                  /tmp/*-$TNAME.nvim.info(N) /tmp/$TNAME-*.nvim.info(N) \
+                                 /tmp/*-$TNAME.nvim.ready(N) /tmp/$TNAME-*.nvim.ready(N) \
                                  /tmp/*-$TNAME.prompt(N) /tmp/$TNAME-*.prompt(N)
   return 0
 }

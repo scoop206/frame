@@ -21,6 +21,10 @@ if [[ "${1:-}" == "--server" ]]; then
   # socket would, and ls skips it.
   case "$_expr" in
     *FrameInfo*) [[ -f "$_sock.info" ]] && { cat "$_sock.info"; exit 0; }; exit 1 ;;
+    # `frame spawn` polls FrameReady() while a worker boots. A test marks the
+    # planted socket "booted" with a <sock>.ready companion; without one the
+    # session answers 0 (still booting) and spawn keeps polling to its timeout.
+    *FrameReady*) [[ -f "$_sock.ready" ]] && print -rn -- 1 || print -rn -- 0; exit 0 ;;
   esac
   # Optional expr trace: append every remote-expr issued, so a test can assert
   # what was actually sent (e.g. --count threading into FrameInboxDrainAtLeast).

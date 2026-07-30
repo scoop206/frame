@@ -69,6 +69,15 @@ _G.FrameInfo = function()
   return table.concat({ name, topic, vite_port, FrameState.status }, '\t')
 end
 
+-- _G.FrameReady() — 1 once this session can accept a `frame req`: the claude
+-- buffer's terminal channel is captured (the last step of boot, bottom of this
+-- file), else 0. `frame spawn` polls this after opening a worker's window so a
+-- request sent on "ready" lands in a live prompt instead of racing the boot —
+-- the socket alone is not readiness (serverstart runs before the buffers open).
+_G.FrameReady = function()
+  return FrameState.chan['claude'] ~= nil and 1 or 0
+end
+
 -- _G.FrameRequest(from, text) — deliver a COMMAND: type TEXT into the `claude`
 -- buffer and submit it, exactly as if the operator had typed it there, and arm a
 -- one-shot reply for `from` (the sender's "name/topic" return address) so the

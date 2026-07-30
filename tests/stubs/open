@@ -1,4 +1,10 @@
 #!/usr/bin/env zsh
-# Test stub tripwire — ensure_docker's `open -a OrbStack` must never fire.
+# Test stub for open. With FAKE_OPEN_LOG set: record the invocation and exit 0
+# (frame spawn's window launch). Without it: tripwire — ensure_docker's
+# `open -a OrbStack` and any other unexpected launch must never fire.
+if [[ -n "${FAKE_OPEN_LOG:-}" ]]; then
+  print -r -- "open $*" >> "$FAKE_OPEN_LOG"
+  exit 0
+fi
 print -r -- "✗ test stub: unexpected open invocation: open $*" >&2
 exit 97

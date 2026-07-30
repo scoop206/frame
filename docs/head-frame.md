@@ -180,16 +180,27 @@ open); key on the claude channel, set at the *end* of boot:
 _G.FrameReady = function() return FrameState.chan['claude'] ~= nil and 1 or 0 end
 ```
 
-**The window-open line is the one unverified piece.** Isolate it in a single
-helper (`frame_open_window` in `lib/helpers.sh`) so the rest of spawn is
-terminal-agnostic — mirroring how `focus` is frame's lone AXRaise-coupled spot.
-Candidates, to be pinned by testing against the installed Ghostty (`open -n`
-may spawn a second app instance rather than a new window in the running one):
+**The window-open line, pinned** (verified against Ghostty 1.3.1 — macOS has
+no CLI new-window action; `ghostty +new-window` refuses on this platform):
 
-- `open -na Ghostty --args -e zsh -ic '<bootstrap>'`
-- Ghostty's own CLI new-window action, if the running instance accepts one
+```
+open -na Ghostty.app --args --quit-after-last-window-closed=true -e zsh -ic '<bootstrap>'
+```
 
-with bootstrap `cd <cwd>; exec frame <wt|shell> <topic>`.
+with bootstrap `exec $FRAME_ROOT/bin/frame shell <topic>` (absolute path —
+`open` launches via launchd, which drops the caller's environment; `zsh -ic`
+sources zshrc so the worker's PATH comes up as a human's would). Findings:
+`open -n` starts a *second app instance* per spawn; without the
+`--quit-after-last-window-closed` config override that instance lingers
+windowless in the dock after its frame exits — with it, it quits cleanly.
+Isolated in `frame_open_window` (`lib/helpers.sh`) so everything above the
+helper stays terminal-agnostic, mirroring how `focus` is frame's lone
+AXRaise-coupled spot.
+
+**Known limitation:** while a spawned worker is alive there are two Ghostty
+processes, and `commands/focus.sh`'s `tell process "Ghostty"` may target the
+wrong one — `frame focus` on a spawned frame is unreliable until focus.sh
+iterates every process named Ghostty. Follow-up, not in this cut.
 
 Open decisions:
 
@@ -206,9 +217,12 @@ Open decisions:
 
 ## Build order
 
+*Status: 1 and 2 are implemented and shipped; 3–5 are not yet built.*
+
 1. **`frame inbox --wait`** — self-contained, no external uncertainty, testable
-   by hand with two frames.
+   by hand with two frames. ✅ shipped
 2. **`frame spawn shell`** — pin the Ghostty line, wire readiness + `--req`.
+   ✅ shipped (`frame spawn wt` refuses with a pointer here)
 3. **`--ephemeral` reaping.**
 4. **`frame spawn wt --cwd`.**
 5. **`frame head`** — `frame shell` + orchestrator prompt + plan file, riding on
