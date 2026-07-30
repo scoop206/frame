@@ -210,6 +210,27 @@ set_title() {
 
 # ── window spawning ───────────────────────────────────────────────────────────
 
+frame_guard_nested() {
+  # frame shell / frame wt end in `exec nvim` — run from a terminal buffer of
+  # an existing frame's nvim ($NVIM set), that nests a frame INSIDE this one:
+  # same window, child process (it dies with its host), and a keyboard that's
+  # ambiguous about which nvim your ex-commands reach. Almost always the
+  # caller wanted `frame spawn`. Interactive: confirm. Non-interactive (an
+  # agent or script inside the frame): refuse outright — a prompt would hang.
+  [[ -n "${NVIM:-}" ]] || return 0
+  if [[ ! -t 0 ]]; then
+    echo "$X_MARK refusing to boot a frame inside this frame's nvim —" >&2
+    echo "  use \`frame spawn\`, or run this in a fresh terminal window" >&2
+    return 1
+  fi
+  local _reply
+  print -n "you are about to open a NESTED instance of a Frame — it lives inside this frame's window and dies with it (\`frame spawn\` gives it its own). Continue? (y/N) "
+  read -r _reply || _reply=""
+  [[ "$_reply" == [yY]* ]] && return 0
+  echo "$X_MARK aborted — try \`frame spawn\`, or a fresh terminal window" >&2
+  return 1
+}
+
 frame_open_window() {
   # frame_open_window CMD — open a worker surface running CMD (a zsh -ic
   # command string), without replacing the caller's window. Ghostty ≥1.3 has an

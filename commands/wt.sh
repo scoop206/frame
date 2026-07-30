@@ -123,6 +123,9 @@ if [[ "${1:-}" == -* ]]; then
   exit 2
 fi
 
+# Ask before any side effect — a nested boot aborted here creates no worktree.
+frame_guard_nested || exit 1
+
 # BUFFERS is required to boot a frame, and authoritative even when empty:
 # BUFFERS=() opens no buffers. Definitions live in $FRAME_ROOT/buffers.json;
 # BUFFERS says which of them this project's frames open.
