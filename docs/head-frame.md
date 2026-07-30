@@ -169,13 +169,17 @@ Decisions:
 ## Spec: `frame spawn`
 
 ```
-frame spawn shell TOPIC [--req TEXT] [--timeout N] [--ephemeral]  projectless worker
-frame spawn wt    TOPIC [--cwd PATH] [--req TEXT] [--timeout N]   code worker in a project
+frame spawn shell [TOPIC] [--req TEXT] [--timeout N] [--ephemeral]  projectless worker
+frame spawn wt    TOPIC   [--cwd PATH] [--req TEXT] [--timeout N]   code worker in a project
 ```
 
 A distinct verb, not a flag on `wt`: `wt`/`shell` *take over* the current
 window (`exec nvim`) by design; spawn's intent is the opposite — new window,
 don't replace me.
+
+`shell`'s TOPIC is optional, same as `frame shell`: omit it and spawn mints a
+fresh dated scratch topic (`2026-07-30-a3f9`) so a bare `frame spawn shell`
+always dispatches a new worker. `wt` still needs a TOPIC — it names a branch.
 
 The composition with `--wait` is one round-trip:
 

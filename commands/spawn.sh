@@ -5,6 +5,7 @@
 # anywhere, keeps its own session, and follows up with `frame req` / blocks
 # on `frame inbox --wait` for the answer.
 #
+#   frame spawn shell                           worker in a fresh dated ~/frames dir
 #   frame spawn shell calc                      worker frame in ~/frames/calc
 #   frame spawn shell calc --req "what is 2+2? reply with just the number"
 #   frame spawn shell calc --req "…" --ephemeral    reaps itself after replying
@@ -32,7 +33,7 @@
 # branch, which no spawn flag should reach (see FrameBrokerOnTurnEnd).
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
-USAGE="usage: frame spawn shell TOPIC [--req TEXT] [--timeout SECONDS] [--ephemeral]
+USAGE="usage: frame spawn shell [TOPIC] [--req TEXT] [--timeout SECONDS] [--ephemeral]
        frame spawn wt TOPIC [--cwd PATH] [--req TEXT] [--timeout SECONDS]"
 
 KIND="${1:-}"
@@ -85,14 +86,23 @@ APPLESCRIPT
     exit 2 ;;
 esac
 
-TOPIC="${1:-}"
-if [[ -z "$TOPIC" || "$TOPIC" == -* ]]; then
+# TOPIC is the frame's dir/handle. A shell worker may omit it — like `frame
+# shell`, spawn then mints a fresh dated scratch topic so a bare `frame spawn
+# shell` always dispatches a new worker. wt still needs one (it names a branch).
+# Spawn must know the topic up front regardless: the socket it polls, the gtab
+# it records, and the --req return address are all keyed on it, so the minting
+# happens HERE rather than deferring to `frame shell` inside the tab.
+if [[ -n "${1:-}" && "$1" != -* ]]; then
+  TOPIC=$1; shift
+  if [[ "$TOPIC" == */* ]]; then
+    echo "$X_MARK frame spawn: TOPIC becomes a directory name — no slashes" >&2
+    exit 2
+  fi
+elif [[ "$KIND" == shell ]]; then
+  TOPIC="$(frame_mint_shell_topic)"
+  echo "$OK_MARK no topic given — new scratch worker '$TOPIC'"
+else
   echo "$X_MARK $USAGE" >&2
-  exit 2
-fi
-shift
-if [[ "$TOPIC" == */* ]]; then
-  echo "$X_MARK frame spawn: TOPIC becomes a directory name — no slashes" >&2
   exit 2
 fi
 
