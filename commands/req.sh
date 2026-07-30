@@ -34,6 +34,16 @@ if ! frame_self_identity; then
 fi
 FROM="$SELF_NAME/$SELF_TOPIC"
 
+# The reply comes home to FROM's inbox — but only if FROM is itself a live
+# session. From a bare shell in a checkout, frame_self_identity resolves FROM
+# from git yet no session exists there, so the answer would land nowhere. Warn
+# (don't refuse — the request still reaches the target, and a caller may not
+# need the reply) and point at the fix.
+if [[ ! -S "/tmp/$SELF_NAME-$SELF_TOPIC.nvim" ]]; then
+  echo "$WARN_MARK reply address $FROM has no live session — its answer will have nowhere to land." >&2
+  frame_session_down_hint "$SELF_NAME" "$SELF_TOPIC"
+fi
+
 # Resolve the target to a live session (sets NAME / TOPIC / SOCKET). A bare
 # topic pairs with our own NAME first, then falls back to the unique live frame
 # with that topic — so a head frame reaches `comms2` without naming its project.
