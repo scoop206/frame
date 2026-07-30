@@ -42,6 +42,17 @@ test_bare_topic_pairs_with_own_name() {
   assert_contains "$OUT" "sent to $TNAME/alpha"
 }
 
+test_emits_correlation_token_from_the_returned_id() {
+  # The broker returns 'r7'; req composes <target-addr>#<id> so a fan-out caller
+  # can `frame inbox --wait --for` exactly this reply.
+  in_hub
+  _mksock "/tmp/$TNAME-alpha.nvim"
+  export FAKE_BROKER_SUBMIT=r7
+  run_frame req "$TNAME/alpha" "question"
+  assert_status 0
+  assert_contains "$OUT" "token: $TNAME/alpha#r7"
+}
+
 test_refuses_when_not_in_a_frame() {
   # No FRAME_NAME and a non-git sandbox cwd → no return address → refuse.
   _mksock "/tmp/$TNAME-alpha.nvim"

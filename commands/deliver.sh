@@ -8,25 +8,31 @@
 #
 # The broker (FrameBrokerOnTurnEnd) calls this to route an agent's turn home;
 # you can also call it directly to leave a note. --from records the sender for
-# display in the recipient's inbox. NAME/TOPIC reaches any project; a bare TOPIC
-# pairs with the current frame's own NAME. See docs/agent-messaging.md.
+# display in the recipient's inbox; --id carries the answering request's broker
+# id so the reply forms a `from#id` correlation token (see `frame inbox --for` and
+# docs/claude-broker.md) — the broker sets it, a hand-written note omits it.
+# NAME/TOPIC reaches any project; a bare TOPIC pairs with the current frame's own
+# NAME. See docs/agent-messaging.md.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 if (( $# < 1 )); then
-  echo "$X_MARK usage: frame deliver <topic|name/topic> [--from NAME/TOPIC] MESSAGE…" >&2
+  echo "$X_MARK usage: frame deliver <topic|name/topic> [--from NAME/TOPIC] [--id ID] MESSAGE…" >&2
   exit 2
 fi
 
 TARGET_SPEC="$1"; shift
 
-FROM=""
-if [[ "${1:-}" == "--from" ]]; then
-  FROM="${2:-}"; shift 2
-fi
+FROM="" ID=""
+while [[ "${1:-}" == --from || "${1:-}" == --id ]]; do
+  case "$1" in
+    --from) FROM="${2:-}"; shift 2 ;;
+    --id)   ID="${2:-}";   shift 2 ;;
+  esac
+done
 
 if (( $# == 0 )); then
   echo "$X_MARK frame deliver: nothing to deliver" >&2
-  echo "  usage: frame deliver <topic|name/topic> [--from NAME/TOPIC] MESSAGE…" >&2
+  echo "  usage: frame deliver <topic|name/topic> [--from NAME/TOPIC] [--id ID] MESSAGE…" >&2
   exit 2
 fi
 
@@ -40,8 +46,9 @@ frame_resolve_target "$TARGET_SPEC" || exit 1
 TEXT="$*"
 _esc=${TEXT//\'/\'\'}
 _from=${FROM//\'/\'\'}
+_id=${ID//\'/\'\'}
 if _n=$(nvim --headless --server "$SOCKET" \
-    --remote-expr "v:lua.FrameInboxAdd('$_from', '$_esc')"); then
+    --remote-expr "v:lua.FrameInboxAdd('$_from', '$_esc', '$_id')"); then
   echo "$OK_MARK delivered to $NAME/$TOPIC inbox ($_n waiting)"
 else
   echo "$X_MARK session at $SOCKET didn't accept the delivery — layout may predate" >&2

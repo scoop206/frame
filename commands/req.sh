@@ -54,7 +54,11 @@ if ! _result=$(nvim --headless --server "$SOCKET" \
 fi
 case "$_result" in
   r<->)
-    echo "$OK_MARK sent to $NAME/$TOPIC (reply → $FROM inbox)" ;;
+    echo "$OK_MARK sent to $NAME/$TOPIC (reply → $FROM inbox)"
+    # Correlation token: the reply lands tagged `from#id` (from = the target we
+    # resolved, id = the broker id it just returned). Emit it machine-parseably so
+    # a fan-out caller can `frame inbox --wait --for $token` for exactly this reply.
+    echo "token: $NAME/$TOPIC#$_result" ;;
   no-claude-buffer)
     echo "$X_MARK $NAME/$TOPIC has no 'claude' buffer to message" >&2
     exit 1 ;;

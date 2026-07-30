@@ -116,4 +116,82 @@ test_wait_refuses_when_not_in_a_frame() {
   assert_contains "$OUT" "must be run from inside a frame"
 }
 
+# ── --for (correlated fan-in) ─────────────────────────────────────────────────
+
+test_for_barrier_reaches_session_by_token() {
+  in_hub
+  _mksock "/tmp/$TNAME-hub.nvim"
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
+  export FAKE_NVIM_EXPR_RESULT="from $TNAME/calc:
+4"
+  run_frame inbox --wait --for "$TNAME/calc#r7"
+  assert_status 0
+  assert_contains "$OUT" "from $TNAME/calc:"
+  assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameInboxDrainFor('$TNAME/calc#r7')"
+}
+
+test_for_joins_tokens_with_tab() {
+  # Two --for → an exact both-present barrier; tokens ride tab-joined in one call.
+  in_hub
+  _mksock "/tmp/$TNAME-hub.nvim"
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
+  export FAKE_NVIM_EXPR_RESULT="two replies"
+  run_frame inbox --wait --for "$TNAME/a#r1" --for "$TNAME/b#r2"
+  assert_status 0
+  _log="$(<$FAKE_NVIM_EXPR_LOG)"
+  assert_contains "$_log" "FrameInboxDrainFor("
+  assert_contains "$_log" "$TNAME/a#r1"
+  assert_contains "$_log" "$TNAME/b#r2"
+}
+
+test_for_without_wait_drains_when_all_present() {
+  in_hub
+  _mksock "/tmp/$TNAME-hub.nvim"
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
+  export FAKE_NVIM_EXPR_RESULT="from $TNAME/calc:
+4"
+  run_frame inbox --for "$TNAME/calc#r7"
+  assert_status 0
+  assert_contains "$OUT" "from $TNAME/calc:"
+  assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameInboxDrainFor('$TNAME/calc#r7')"
+}
+
+test_for_without_wait_none_present_says_so() {
+  # The barrier is unmet (stub returns '') and we're not waiting → a clear message
+  # distinct from "inbox empty" (other mail may well be sitting there).
+  in_hub
+  _mksock "/tmp/$TNAME-hub.nvim"
+  export FAKE_NVIM_EXPR_RESULT=""
+  run_frame inbox --for "$TNAME/calc#r7"
+  assert_status 0
+  assert_contains "$OUT" "none of the requested replies have arrived yet"
+}
+
+test_for_polls_until_reply_arrives() {
+  in_hub
+  _mksock "/tmp/$TNAME-hub.nvim"
+  export FAKE_NVIM_EXPR_RESULT="from $TNAME/calc:
+done"
+  export FAKE_NVIM_EXPR_EMPTY_POLLS=2
+  export FAKE_NVIM_POLL_COUNT_FILE="$SANDBOX/polls"
+  run_frame inbox --wait --for "$TNAME/calc#r7" --timeout 10
+  assert_status 0
+  assert_contains "$OUT" "done"
+  assert_eq "$(<$FAKE_NVIM_POLL_COUNT_FILE)" "3"
+}
+
+test_for_and_count_are_mutually_exclusive() {
+  in_hub
+  run_frame inbox --wait --for "$TNAME/a#r1" --count 2
+  assert_status 2
+  assert_contains "$OUT" "--for and --count can't be combined"
+}
+
+test_for_needs_a_token() {
+  in_hub
+  run_frame inbox --wait --for
+  assert_status 2
+  assert_contains "$OUT" "--for needs a TOKEN"
+}
+
 run_tests "$0"

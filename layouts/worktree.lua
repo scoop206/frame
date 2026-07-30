@@ -139,7 +139,7 @@ local function route(req, text)
     elseif k == 'remote' then
       local from = name .. '/' .. topic
       local frame_bin = (vim.env.FRAME_ROOT or '') .. '/bin/frame'
-      job = vim.fn.jobstart({ frame_bin, 'deliver', req.ret.addr, '--from', from, text })
+      job = vim.fn.jobstart({ frame_bin, 'deliver', req.ret.addr, '--from', from, '--id', req.id, text })
     end
   end -- 'drop': nothing
   FrameState.broker.reqs[req.id] = nil
@@ -366,12 +366,15 @@ _G.FrameReplyFromHook = function(payload_path)
   return 0
 end
 
--- _G.FrameInboxAdd(from, text) — `frame deliver` calls this over the socket to
--- append a report to this frame's inbox; returns the new inbox length.
+-- _G.FrameInboxAdd(from, text, id) — `frame deliver` calls this over the socket
+-- to append a report to this frame's inbox; returns the new inbox length. `id`
+-- is the answering request's broker id (present on brokered `frame req` replies,
+-- '' for plain notes); with `from` it forms the `from#id` correlation token that
+-- FrameInboxDrainFor matches on.
 -- _G.FrameInboxDrain() — `frame inbox` reads AND clears the inbox, returning it
 -- as human-readable text ('' when empty).
-_G.FrameInboxAdd = function(from, text)
-  table.insert(FrameState.inbox, { from = from or '', text = text or '' })
+_G.FrameInboxAdd = function(from, text, id)
+  table.insert(FrameState.inbox, { from = from or '', text = text or '', id = id or '' })
   return #FrameState.inbox
 end
 _G.FrameInboxDrain = function()
@@ -394,6 +397,43 @@ end
 _G.FrameInboxDrainAtLeast = function(n)
   if #FrameState.inbox < (tonumber(n) or 1) then return '' end
   return _G.FrameInboxDrain()
+end
+
+-- _G.FrameInboxDrainFor(tokens) — token-keyed sibling of DrainAtLeast for the
+-- fan-out fan-in barrier. `tokens` is a TAB-separated set of `from#id` strings.
+-- Returns '' until EVERY requested token is present (so `frame inbox --wait --for
+-- a --for b` blocks for exactly those replies); once all are present, drains ONLY
+-- the matching messages (leaving unrelated notes/replies in the box) and returns
+-- them as human-readable text. Split each token on the LAST '#': addresses hold
+-- '/' but never '#', so the id is whatever follows it.
+_G.FrameInboxDrainFor = function(tokens)
+  local want = {}
+  local n = 0
+  for tok in tostring(tokens or ''):gmatch('[^\t]+') do
+    if not want[tok] then want[tok] = true; n = n + 1 end
+  end
+  if n == 0 then return '' end
+  -- present[] = which wanted tokens are currently in the box
+  local present = {}
+  for _, m in ipairs(FrameState.inbox) do
+    local tok = (m.from or '') .. '#' .. (m.id or '')
+    if want[tok] then present[tok] = true end
+  end
+  for tok in pairs(want) do
+    if not present[tok] then return '' end -- not all arrived yet
+  end
+  -- all present: partition the box, keeping non-matching messages
+  local out, keep = {}, {}
+  for _, m in ipairs(FrameState.inbox) do
+    local tok = (m.from or '') .. '#' .. (m.id or '')
+    if want[tok] then
+      table.insert(out, (m.from ~= '' and ('from ' .. m.from .. ':\n') or '') .. m.text)
+    else
+      table.insert(keep, m)
+    end
+  end
+  FrameState.inbox = keep
+  return table.concat(out, '\n\n──\n\n')
 end
 
 -- :FrameStatus TEXT — set the status suffix; no TEXT clears it.

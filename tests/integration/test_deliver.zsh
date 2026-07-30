@@ -24,6 +24,37 @@ test_from_flag_is_accepted() {
   assert_contains "$OUT" "delivered to $TNAME/hub inbox (2 waiting)"
 }
 
+test_id_flag_is_threaded_to_inbox_add() {
+  # --id rides alongside --from and lands as the 3rd FrameInboxAdd arg — the
+  # correlation id that lets the recipient's `frame inbox --for` match this reply.
+  _mksock "/tmp/$TNAME-hub.nvim"
+  export FAKE_NVIM_EXPR_RESULT=1
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
+  run_frame deliver "$TNAME/hub" --from "$TNAME/auth" --id r7 "done"
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameInboxAdd('$TNAME/auth', 'done', 'r7')"
+}
+
+test_id_before_from_also_accepted() {
+  # The broker emits --from then --id, but order shouldn't matter.
+  _mksock "/tmp/$TNAME-hub.nvim"
+  export FAKE_NVIM_EXPR_RESULT=1
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
+  run_frame deliver "$TNAME/hub" --id r7 --from "$TNAME/auth" "done"
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameInboxAdd('$TNAME/auth', 'done', 'r7')"
+}
+
+test_plain_note_has_empty_id() {
+  # A hand-written note (no --id) → empty id, so it never matches a --for token.
+  _mksock "/tmp/$TNAME-hub.nvim"
+  export FAKE_NVIM_EXPR_RESULT=1
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
+  run_frame deliver "$TNAME/hub" "just a note"
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameInboxAdd('', 'just a note', '')"
+}
+
 test_dead_target_fails() {
   run_frame deliver "$TNAME/ghost" "anyone?"
   assert_status 1
