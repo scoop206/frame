@@ -40,13 +40,15 @@ vim.o.titlestring = base_title
 -- re-parses the title).
 --   status       window-title status suffix (frame status / :FrameStatus)
 --   chan         per-buffer terminal job channels (name → channel), for send
+--   buf          per-buffer buffer handles (name → bufnr), so FrameReady can
+--                read claude's rendered screen
 --   subscribers  return addresses awaiting a reply — Phase 3; empty for now
 --   inbox        reports routed home to this frame — Phase 3; empty for now
 -- The notify mute switch is deliberately NOT a field here: it stays
 -- vim.g.frame_notify_muted because `frame notify` reads it over RPC as
 -- get(g:, 'frame_notify_muted', 0), so sessions predating it degrade to
 -- unmuted. Keeping it a g: var preserves that cheap, backward-compatible read.
-local FrameState = { status = '', chan = {}, subscribers = {}, inbox = {} }
+local FrameState = { status = '', chan = {}, buf = {}, subscribers = {}, inbox = {} }
 
 -- Status suffix: appends " - TEXT" to the base title (which never changes).
 -- Global so `frame status` can call it over the socket from any terminal
@@ -71,11 +73,23 @@ end
 
 -- _G.FrameReady() — 1 once this session can accept a `frame req`: the claude
 -- buffer's terminal channel is captured (the last step of boot, bottom of this
--- file), else 0. `frame spawn` polls this after opening a worker's window so a
--- request sent on "ready" lands in a live prompt instead of racing the boot —
--- the socket alone is not readiness (serverstart runs before the buffers open).
+-- file) AND claude's TUI has rendered its input prompt ('❯' on screen). The
+-- channel alone fires seconds too early — claude the process is still booting,
+-- so anything sent meanwhile piles up unread in the pty and arrives as ONE
+-- chunk when its TUI first reads stdin; paste-detection then eats the
+-- submitting CR (see FrameRequest). A rendered prompt means claude is actively
+-- reading, so a deferred Enter lands as its own keypress. First-run chrome
+-- (trust dialog etc.) never renders '❯' — spawn times out and points at the
+-- window, which genuinely needs a human. `frame spawn` polls this after
+-- opening a worker's window; the socket alone is not readiness either
+-- (serverstart runs before the buffers open).
 _G.FrameReady = function()
-  return FrameState.chan['claude'] ~= nil and 1 or 0
+  local chan, buf = FrameState.chan['claude'], FrameState.buf['claude']
+  if not chan or not buf then return 0 end
+  for _, s in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+    if s:find('❯', 1, true) then return 1 end
+  end
+  return 0
 end
 
 -- _G.FrameRequest(from, text) — deliver a COMMAND: type TEXT into the `claude`
@@ -84,8 +98,7 @@ end
 -- next turn-end routes the agent's answer home. `frame req <target> TEXT` calls
 -- this over the target's socket. FrameState.chan['claude'] is the buffer's
 -- terminal job channel (captured at boot, bottom of this file); chansend to it
--- writes to the pty exactly as if the keys were typed — the trailing '\r' is the
--- Enter key (a pty in raw mode delivers Return as CR). Returns 'ok', or
+-- writes to the pty exactly as if the keys were typed. Returns 'ok', or
 -- 'no-claude-buffer' when this frame opened no claude buffer to message.
 _G.FrameRequest = function(from, text)
   local chan = FrameState.chan['claude']
@@ -100,7 +113,12 @@ _G.FrameRequest = function(from, text)
     end
     if not seen then table.insert(FrameState.subscribers, from) end
   end
-  vim.fn.chansend(chan, text .. '\r')
+  -- Two writes, and the Enter deferred: claude's TUI paste-detection treats a
+  -- single rapid chunk as pasted content, so a CR in the same write becomes a
+  -- newline in the input box instead of a submit. A lone '\r' arriving ~200ms
+  -- later registers as a real keypress and submits what was typed.
+  vim.fn.chansend(chan, text)
+  vim.defer_fn(function() vim.fn.chansend(chan, '\r') end, 200)
   return 'ok'
 end
 
@@ -143,18 +161,31 @@ end
 -- cross-frame talk), then clear them (one-shot). No-op with no subscribers (the
 -- gate: turns nobody asked about route nowhere) or empty text (a tool-only turn
 -- keeps the gate armed for the next turn that actually speaks). Returns the
--- number of addresses notified. jobstart is detached and fire-and-forget so a
--- slow or dead peer never blocks the Stop hook.
+-- number of addresses notified. jobstart is fire-and-forget so a slow or dead
+-- peer never blocks the Stop hook.
 _G.FrameOnTurnEnd = function(text)
   if text == nil or text == '' then return 0 end
   local subs = FrameState.subscribers
   if #subs == 0 then return 0 end
   local from = name .. '/' .. topic
   local frame_bin = (vim.env.FRAME_ROOT or '') .. '/bin/frame'
+  local jobs = {}
   for _, addr in ipairs(subs) do
-    vim.fn.jobstart({ frame_bin, 'deliver', addr, '--from', from, text })
+    table.insert(jobs, vim.fn.jobstart({ frame_bin, 'deliver', addr, '--from', from, text }))
   end
   FrameState.subscribers = {}
+  -- An ephemeral worker (frame spawn --ephemeral) exists to report home once.
+  -- Reply routed → self-reap via :FrameDown! (detached dir delete + qa!, the
+  -- window and its Ghostty instance die with us). Deferred so this RPC returns
+  -- to the Stop hook first; jobwait so the deliver jobs — killed with nvim if
+  -- still running — finish before teardown. Shell frames only: on a worktree
+  -- frame FrameDown! force-deletes a branch, which no env var should reach.
+  if vim.env.FRAME_EPHEMERAL == '1' and (vim.env.FRAME_MAIN_WT or '') == '' then
+    vim.defer_fn(function()
+      vim.fn.jobwait(jobs, 10000)
+      vim.cmd('FrameDown!')
+    end, 0)
+  end
   return #subs
 end
 
@@ -425,8 +456,10 @@ for _, b in ipairs(picked) do
   elseif mode == 'prefill' then term_prefill(b.name, cmd)
   else term(b.name, '') end
   -- Right after term*(), the new terminal is the current buffer — record its
-  -- job channel so FrameAgentSend can type into it later (see FrameState above).
+  -- job channel so FrameAgentSend can type into it later, and its buffer so
+  -- FrameReady can read the rendered screen (see FrameState above).
   FrameState.chan[b.name] = vim.b.terminal_job_id
+  FrameState.buf[b.name] = vim.api.nvim_get_current_buf()
   launched = launched + 1
   if b.focus then focus = b.name end
   for _, e in ipairs(b.env or {}) do

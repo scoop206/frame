@@ -7,21 +7,23 @@
 #
 #   frame spawn shell calc                      worker frame in ~/frames/calc
 #   frame spawn shell calc --req "what is 2+2? reply with just the number"
+#   frame spawn shell calc --req "…" --ephemeral    reaps itself after replying
 #
 # The launch is `open -na Ghostty.app` (frame_open_window — macOS Ghostty has
 # no CLI new-window action) with --quit-after-last-window-closed=true so the
 # extra app instance exits with its window instead of lingering in the dock.
 # After launching, spawn polls the worker's socket for FrameReady — the claude
-# buffer's channel is captured as boot's LAST step — and only then reports up
-# and sends --req, so a request on "ready" lands in a live prompt instead of
-# racing the boot. (claude's own TUI may still be drawing when ready fires;
-# earlier keystrokes queue in the pty, same as typing into a just-booted
-# frame.) --timeout N (default 30) bounds the wait; exit 3 on timeout,
+# buffer's channel captured (boot's LAST step) AND claude's input prompt
+# rendered on screen — and only then reports up and sends --req. The rendered
+# prompt matters: text sent while claude's own process is still booting piles
+# up in the pty and is read as one pasted chunk, which swallows the submitting
+# Enter (see FrameRequest). --timeout N (default 30) bounds the wait; exit 3 on
+# timeout,
 # mirroring `frame inbox --wait`. `frame spawn wt` (a code worker in a project
 # checkout) is scoped but not yet built — see docs/head-frame.md.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
-USAGE="usage: frame spawn shell TOPIC [--req TEXT] [--timeout SECONDS]"
+USAGE="usage: frame spawn shell TOPIC [--req TEXT] [--timeout SECONDS] [--ephemeral]"
 
 KIND="${1:-}"
 case "$KIND" in
@@ -45,9 +47,11 @@ if [[ "$TOPIC" == */* ]]; then
   exit 2
 fi
 
-REQ="" TIMEOUT=30
+REQ="" TIMEOUT=30 EPHEMERAL=""
 while (( $# )); do
   case "$1" in
+    --ephemeral)
+      EPHEMERAL=1; shift ;;
     --req)
       if [[ -z "${2:-}" ]]; then
         echo "$X_MARK frame spawn: --req needs the request text" >&2
@@ -68,9 +72,11 @@ while (( $# )); do
   esac
 done
 
-# A worker booted by `frame shell` is owned by NAME=shell (commands/shell.sh);
-# its socket is /tmp/shell-TOPIC.nvim.
-NAME=shell
+# A worker booted by `frame shell` is owned by name `shell` (commands/shell.sh);
+# its socket is /tmp/shell-TOPIC.nvim. W_NAME, not NAME: frame_self_identity
+# (below) may source the surrounding checkout's .frame/config.sh, which assigns
+# NAME — spawn's worker name must survive that.
+W_NAME=shell
 
 # --req means a reply will route home — same rule as `frame req`: refuse before
 # opening any window when there's no frame here to receive it.
@@ -83,19 +89,22 @@ fi
 # window it would flash and die unread. (shell.sh re-checks at boot; that
 # check's same-frame exemption can't mask a real collision we'd care about,
 # since we just proved no live frame owns this topic.)
-frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
+frame_assert_topic_free "$W_NAME" "$TOPIC" || exit 1
 
 # zsh -ic (inside frame_open_window) sources ~/.zshrc, so the worker's PATH and
 # env come up exactly as when a human opens a window and types `frame shell
 # TOPIC`. The absolute FRAME_ROOT pins this checkout's frame — `open` launches
-# via launchd, which does not carry the caller's environment.
-if ! frame_open_window "exec ${(q)FRAME_ROOT}/bin/frame shell ${(q)TOPIC}"; then
+# via launchd, which does not carry the caller's environment. --ephemeral rides
+# in as FRAME_EPHEMERAL=1: the worker is BORN ephemeral, and its reply router
+# (FrameOnTurnEnd) self-reaps the frame — dir, window, Ghostty instance — right
+# after its first reply routes home.
+if ! frame_open_window "${EPHEMERAL:+FRAME_EPHEMERAL=1 }exec ${(q)FRAME_ROOT}/bin/frame shell ${(q)TOPIC}"; then
   echo "$X_MARK couldn't open a ghostty window (is Ghostty installed?)" >&2
   exit 1
 fi
 
-echo "$RUN_MARK spawned window for $NAME/$TOPIC — waiting for it to boot…"
-SOCKET="/tmp/$NAME-$TOPIC.nvim"
+echo "$RUN_MARK spawned window for $W_NAME/$TOPIC — waiting for it to boot…"
+SOCKET="/tmp/$W_NAME-$TOPIC.nvim"
 DEADLINE=$(( SECONDS + TIMEOUT ))
 while :; do
   if [[ -S "$SOCKET" ]]; then
@@ -104,14 +113,14 @@ while :; do
     [[ "$_ready" == 1 ]] && break
   fi
   if (( SECONDS >= DEADLINE )); then
-    echo "$X_MARK spawn: $NAME/$TOPIC didn't come up within ${TIMEOUT}s —" >&2
+    echo "$X_MARK spawn: $W_NAME/$TOPIC didn't come up within ${TIMEOUT}s —" >&2
     echo "  check the new window: still booting (retry with --timeout), or died mid-boot" >&2
     exit 3
   fi
   sleep 0.5
 done
-echo "$OK_MARK $NAME/$TOPIC is up"
+echo "$OK_MARK $W_NAME/$TOPIC is up"
 
 if [[ -n "$REQ" ]]; then
-  "$FRAME_ROOT/bin/frame" req "$NAME/$TOPIC" "$REQ"
+  "$FRAME_ROOT/bin/frame" req "$W_NAME/$TOPIC" "$REQ"
 fi

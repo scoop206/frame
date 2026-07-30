@@ -80,6 +80,19 @@ test_happy_path_opens_window_and_reports_up() {
   local log="$(<$FAKE_OPEN_LOG)"
   assert_contains "$log" "-na Ghostty.app --args --quit-after-last-window-closed=true -e zsh -ic"
   assert_contains "$log" "frame shell $TNAME"
+  assert_not_contains "$log" "FRAME_EPHEMERAL"
+}
+
+test_ephemeral_rides_into_the_bootstrap() {
+  # --ephemeral must reach the worker as FRAME_EPHEMERAL=1 in the window's
+  # bootstrap command — the frame is born ephemeral; its reply router reads the
+  # env and self-reaps after routing its first reply home.
+  export FAKE_OPEN_LOG="$SANDBOX/open.log"
+  _plant_booted_worker
+  run_frame spawn shell $TNAME --ephemeral
+  assert_status 0
+  assert_contains "$OUT" "shell/$TNAME is up"
+  assert_contains "$(<$FAKE_OPEN_LOG)" "FRAME_EPHEMERAL=1 exec"
 }
 
 test_boot_timeout_exits_3() {
@@ -115,6 +128,26 @@ test_req_is_sent_once_ready() {
   assert_contains "$OUT" "shell/$TNAME is up"
   assert_contains "$OUT" "sent to shell/$TNAME"
   assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameRequest('$TNAME/head', 'compute 2+2')"
+}
+
+test_worker_name_survives_checkout_config() {
+  # Regression: run spawn from inside a git checkout whose .frame/config.sh
+  # assigns NAME (frame_self_identity sources it for the --req return address).
+  # That assignment must not redirect the readiness poll or the req target away
+  # from shell/TOPIC — it once did, and spawn polled a socket that never appears.
+  export FAKE_OPEN_LOG="$SANDBOX/open.log"
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
+  export FAKE_NVIM_EXPR_RESULT="ok"
+  _plant_booted_worker
+  make_repo "checkout-$TNAME"
+  write_config <<'EOF'
+NAME=stompy
+EOF
+  run_frame spawn shell $TNAME --req "compute 2+2" --timeout 2
+  assert_status 0
+  assert_contains "$OUT" "shell/$TNAME is up"
+  assert_contains "$OUT" "sent to shell/$TNAME"
+  assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameRequest('stompy/main', 'compute 2+2')"
 }
 
 run_tests "$0"

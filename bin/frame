@@ -30,8 +30,10 @@
 #   frame deliver TOPIC|NAME/TOPIC TEXT…   drop a message in that frame's inbox
 #   frame inbox [--wait [--timeout N] [--count K]]   show + clear this frame's
 #                              inbox; --wait blocks until a message arrives
-#   frame spawn shell TOPIC [--req TEXT] [--timeout N]   boot a worker frame in
-#                              a NEW ghostty window; --req sends it a request
+#   frame spawn shell TOPIC [--req TEXT] [--timeout N] [--ephemeral]
+#                              boot a worker frame in a NEW ghostty window;
+#                              --req sends it a request; --ephemeral reaps the
+#                              frame (dir, window, app) once its reply routes home
 #   (`worktree` is accepted as a synonym for `wt`)
 #
 # A frame is a terminal window running neovim as its buffer management layer
@@ -65,7 +67,7 @@ case "$cmd" in
     source "$FRAME_ROOT/commands/notifier.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,41p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "$X_MARK frame: unknown command '$cmd' (try: frame help)" >&2

@@ -62,11 +62,14 @@ head:   frame inbox                 → reads the reply, verifies, next step
    answers which step when several are outstanding. `--from` covers correlation
    by sender for v1; `--ephemeral` reaping is a fast follow (below). Deferred
    while v1 is sequential.
-4. **A result contract** — replies are free-text `last_assistant_message`;
-   there is no headless `claude -p` path, so the reply *is* the result channel.
-   A light convention (`RESULT: …` / `STATUS: ok|fail` lines in the worker's
-   final message) makes "verify the answer" parseable rather than vibes.
-   Convention-only; lives in the head's orchestrator prompt.
+4. **A result contract** — a frame worker's reply is free-text
+   `last_assistant_message`, so the reply *is* the result channel. A light
+   convention (`RESULT: …` / `STATUS: ok|fail` lines in the worker's final
+   message) makes "verify the answer" parseable rather than vibes.
+   Convention-only; lives in the head's orchestrator prompt. (Headless
+   `claude -p --output-format json` returns structured results natively —
+   one more reason it's the right rung for answer-only steps; see the tiers
+   below.)
 
 ## The atomicity convention
 
@@ -74,21 +77,42 @@ Which pieces of a plan deserve their own frame is non-obvious — resolve it wit
 two axes, **author-declared with a fallback heuristic**, not guessed fresh each
 run:
 
-- **Axis 1 — inline vs. spin-out.** Inline = the head does it in its own Claude
-  turn (verification, glue, cheap reasoning, passing data between steps).
-  Spin-out = a self-contained deliverable another agent could produce without
-  the head's running context. Every spin-out pays a full window + nvim + Claude
-  boot — and with no headless claude, "inline" never means shelling out to a
-  quick one-shot; it means *no worker at all*. "Determine 2+2" is inline.
+- **Axis 1 — how much machinery the step earns.** Four rungs:
+  - **Inline** — the head does it in its own Claude turn (verification, glue,
+    cheap reasoning, passing data between steps). No process spawned at all.
+    "Determine 2+2" is inline.
+  - **Subagent** — the Task-tool fan-out *inside* a claude (the head's or a
+    worker's): fresh context, parallel, reports land in-context. Free — but
+    the spawner frames the question and receives the answer, so it's an arm
+    of its spawner, not an independent voice. Every worker frame has this for
+    free, which raises the bar for giving a step its own sibling frame.
+  - **Headless spin-out** — `claude -p "…"` from the head's own shell: a full
+    agentic turn, tools included, but no window, no frame, no reply routing —
+    stdout is the result, `--output-format json` makes it structured (and
+    carries a session id, so a surprising verdict can be interrogated later
+    with `--resume`). The rung for a self-contained *answer* nobody needs to
+    watch or interrupt. Pays a claude boot; saves the window, nvim, readiness
+    dance, and inbox entirely.
+  - **Windowed worker** — `frame spawn` (ephemeral or not): a visible frame
+    you can watch, focus, jump into, and `req` mid-task. Pays the full window
+    + nvim + claude boot. The rung for work that runs long, touches a repo,
+    or benefits from a glance.
+
+  **QA belongs on the headless rung.** Verification is answer-only work where
+  *independence of the asker* matters: a worker checking itself — even via a
+  fresh subagent — grades its own homework, while the head probing a worker's
+  output with `claude -p` (a prompt the worker never saw, a verdict the head
+  parses) is an independent gate cheap enough to run after every step.
 - **Axis 2 — branchless vs. branch-bearing worker.** Maps onto existing tools:
   a worker producing **committable code** is a `frame wt TOPIC` (survives to
   merge); a worker producing an **answer/artifact with nothing to merge** is a
   `frame shell TOPIC` (ephemeral, reaped after reply).
 
-Default heuristic for the head's prompt: *spin a worker when the step is a
-self-contained deliverable; do it inline when it's judgment or glue.
-Branch-bearing when the deliverable is code, branchless when it's an answer.*
-Plan authors can override per step: `[inline]`, `[worker]`, `[worker:branch]`.
+Default heuristic for the head's prompt: *inline for judgment and glue;
+`claude -p` for a self-contained answer nobody needs to watch; a frame when
+the deliverable is code or the work is worth a window. Branch-bearing when
+there's something to merge, branchless when there isn't.* Plan authors can
+override per step: `[inline]`, `[headless]`, `[worker]`, `[worker:branch]`.
 Frames earn their weight on isolatable code work you can see, focus, and jump
 into — never spin a window to add two numbers.
 
@@ -145,8 +169,8 @@ Decisions:
 ## Spec: `frame spawn`
 
 ```
-frame spawn shell TOPIC [--req TEXT] [--timeout N]            projectless worker
-frame spawn wt    TOPIC --cwd PATH [--req TEXT] [--timeout N] code worker in a project
+frame spawn shell TOPIC [--req TEXT] [--timeout N] [--ephemeral]  projectless worker
+frame spawn wt    TOPIC --cwd PATH [--req TEXT] [--timeout N]     code worker in a project
 ```
 
 A distinct verb, not a flag on `wt`: `wt`/`shell` *take over* the current
@@ -174,11 +198,14 @@ Flow inside `commands/spawn.sh`:
    boot timeout, `1` launch failed / topic taken.
 
 **Readiness RPC** — `FrameInfo()` answers too early (defined before buffers
-open); key on the claude channel, set at the *end* of boot:
-
-```lua
-_G.FrameReady = function() return FrameState.chan['claude'] ~= nil and 1 or 0 end
-```
+open), and the claude *channel* (captured at the end of boot) is still too
+early: claude's own process takes seconds more to boot, and anything sent
+meanwhile queues in the pty and arrives as one pasted chunk whose CR gets
+swallowed. `FrameReady` therefore requires both the captured channel *and*
+claude's input prompt (`❯`) rendered in the buffer — proof the TUI is reading
+stdin, so `FrameRequest`'s deferred Enter registers as a real keypress. A
+first-run trust dialog never renders `❯`; spawn times out and points a human
+at the window.
 
 **The window-open line, pinned** (verified against Ghostty 1.3.1 — macOS has
 no CLI new-window action; `ghostty +new-window` refuses on this platform):
@@ -208,22 +235,39 @@ Open decisions:
    head is projectless and frame has no name→path registry; `--cwd` keeps the
    head honest and defers the registry. Head-driven examples so far are all
    `shell` workers, so this doesn't gate the first cut.
-2. **Reaping: `frame spawn … --ephemeral` as a fast follow.** A `wt` worker
-   reaps with `frame wt -d TOPIC`; a shell frame today tears down only from
-   *inside* (`:FrameDown!`), so a head can't clean up throwaway compute workers
-   and windows pile up. `--ephemeral`: the worker's reply router
-   (`FrameOnTurnEnd`), right after routing its answer home, self-tears-down the
-   frame — throwaway workers vanish the instant they've reported.
+2. **Reaping: `frame spawn … --ephemeral`. ✅ shipped (shell frames).** The
+   flag rides into the worker as `FRAME_EPHEMERAL=1` in the window bootstrap —
+   the frame is *born* ephemeral. Its reply router (`FrameOnTurnEnd`), right
+   after routing its answer home, `jobwait`s the deliver jobs (they'd die with
+   nvim) and self-tears-down via `:FrameDown!` — dir, window, and the spawned
+   Ghostty instance (`--quit-after-last-window-closed`) vanish the instant it
+   has reported. Shell frames only for now: a worktree frame's `FrameDown!`
+   force-deletes a branch, which no env var should be able to reach.
+
+   **Ephemeral wt (future, rides on `spawn wt`): the merge-before-reply
+   contract.** The worker's job is "do X, commit, `frame merge`, *then*
+   reply" — so at reply-time the branch is merged and the reap can use the
+   *plain* `frame wt -d`, no force anywhere. Teardown-success then IS the
+   merged-ness gate: a worker that finished cleanly vanishes; one that ended
+   its turn early (question, conflict, red tests) still routes its reply home
+   but the reap refuses, leaving a live, inspectable frame as the attention
+   flag. Self-merge trusts the worker's own done-judgment — the head can
+   interpose a headless `claude -p` QA probe as the merge gate when that
+   trust needs a check. Note the whole contract presumes **one claude per
+   frame**: reply-means-done and reply routing assume the frame has a single
+   mouth. A multi-claude frame (e.g. an adversarial pair sharing a worktree)
+   needs buffer-qualified addresses, per-buffer arming, and an explicit
+   completion act — its own design session, deferred.
 
 ## Build order
 
-*Status: 1 and 2 are implemented and shipped; 3–5 are not yet built.*
+*Status: 1–3 are implemented and shipped; 4–5 are not yet built.*
 
 1. **`frame inbox --wait`** — self-contained, no external uncertainty, testable
    by hand with two frames. ✅ shipped
 2. **`frame spawn shell`** — pin the Ghostty line, wire readiness + `--req`.
    ✅ shipped (`frame spawn wt` refuses with a pointer here)
-3. **`--ephemeral` reaping.**
+3. **`--ephemeral` reaping.** ✅ shipped
 4. **`frame spawn wt --cwd`.**
 5. **`frame head`** — `frame shell` + orchestrator prompt + plan file, riding on
    all of the above. Sequential v1; fan-out (correlation ids, `--count`
