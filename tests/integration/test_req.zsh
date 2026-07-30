@@ -10,6 +10,13 @@ source "${${(%):-%x}:A:h:h}/helpers/harness.zsh"
 _mksock() { python3 -c 'import socket,sys
 s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$1"; }
 
+# A live FrameInfo session: socket + <sock>.info companion the nvim stub serves,
+# so frame_live_frames (the bare-topic fallback) sees it as a real frame.
+plant_live() {  # plant_live SOCK NAME TOPIC PORT STATUS
+  _mksock "$1"
+  printf '%s\t%s\t%s\t%s\n' "$2" "$3" "$4" "$5" > "$1.info"
+}
+
 # Stand in for "running inside the hub frame" — identity from the session env.
 in_hub() { export FRAME_NAME=$TNAME FRAME_TOPIC=hub; }
 
@@ -80,6 +87,45 @@ test_full_queue_is_retryable() {
   run_frame req "$TNAME/alpha" "one more"
   assert_status 4
   assert_contains "$OUT" "queue is full"
+}
+
+# ── bare-topic fallback across projects ───────────────────────────────────────
+
+test_bare_topic_falls_back_to_a_unique_live_frame() {
+  # A `shell` head frame (no shell/<topic> sibling) reaching a frame in another
+  # project by bare topic — resolves to the sole live match. Topic == $TNAME so
+  # the planted socket gets swept.
+  export FRAME_NAME=shell FRAME_TOPIC=headv2
+  plant_live "/tmp/webproj-$TNAME.nvim" webproj "$TNAME" '' waiting
+  run_frame req "$TNAME" "ping"
+  assert_status 0
+  assert_contains "$OUT" "sent to webproj/$TNAME"
+}
+
+test_same_project_sibling_wins_over_the_search() {
+  # Our own NAME/topic is preferred even when another project shares the topic.
+  export FRAME_NAME=shell FRAME_TOPIC=headv2
+  _mksock "/tmp/shell-$TNAME.nvim"                       # our sibling
+  plant_live "/tmp/webproj-$TNAME.nvim" webproj "$TNAME" '' waiting
+  run_frame req "$TNAME" "ping"
+  assert_status 0
+  assert_contains "$OUT" "sent to shell/$TNAME"
+}
+
+test_bare_topic_ambiguous_refuses() {
+  export FRAME_NAME=shell FRAME_TOPIC=headv2
+  plant_live "/tmp/aa-$TNAME.nvim" aa "$TNAME" '' waiting
+  plant_live "/tmp/bb-$TNAME.nvim" bb "$TNAME" '' waiting
+  run_frame req "$TNAME" "which one?"
+  assert_status 1
+  assert_contains "$OUT" "ambiguous topic '$TNAME'"
+}
+
+test_bare_topic_no_match_asks_for_name_topic() {
+  export FRAME_NAME=shell FRAME_TOPIC=headv2
+  run_frame req "$TNAME" "anyone?"
+  assert_status 1
+  assert_contains "$OUT" "no live frame with topic '$TNAME'"
 }
 
 run_tests "$0"

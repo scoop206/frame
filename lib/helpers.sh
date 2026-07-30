@@ -363,6 +363,57 @@ frame_live_frames() {
   done
 }
 
+frame_resolve_target() {
+  # frame_resolve_target SPEC — resolve a `frame req` / `frame deliver` target to
+  # a live session, setting NAME / TOPIC / SOCKET. An explicit NAME/TOPIC resolves
+  # directly. A bare TOPIC tries the caller's own project first (SELF_NAME/TOPIC —
+  # the same-project sibling shortcut), then falls back to the unique LIVE frame
+  # carrying that topic, so a head frame (say shell/headv2) reaches `comms2`
+  # without naming its project. The fallback's identity comes from FrameInfo
+  # (frame_live_frames), never the dash-ambiguous filename. More than one match
+  # refuses and lists them; none → not found. Prints the reason and returns 1 on
+  # failure. SELF_NAME (set by frame_self_identity) enables the sibling shortcut;
+  # unset just falls straight through to the search.
+  local spec="$1"
+  if [[ "$spec" == */* ]]; then
+    NAME="${spec%%/*}" TOPIC="${spec#*/}"
+    SOCKET="/tmp/$NAME-$TOPIC.nvim"
+    if [[ ! -S "$SOCKET" ]]; then
+      echo "$X_MARK no frame session for $NAME/$TOPIC (no socket at $SOCKET)" >&2
+      return 1
+    fi
+    return 0
+  fi
+
+  TOPIC="$spec"
+  # 1. Same-project sibling — our own NAME. Cheap, unambiguous, matches the
+  #    historical bare-topic behavior.
+  if [[ -n "${SELF_NAME:-}" && -S "/tmp/$SELF_NAME-$TOPIC.nvim" ]]; then
+    NAME=$SELF_NAME SOCKET="/tmp/$SELF_NAME-$TOPIC.nvim"
+    return 0
+  fi
+
+  # 2. The unique live frame with this topic, across projects.
+  local -a hits
+  local _n _t _rest
+  while IFS=$'\t' read -r _n _t _rest; do
+    if [[ "$_t" == "$TOPIC" ]]; then hits+=("$_n"); fi
+  done < <(frame_live_frames)
+
+  if (( ${#hits} == 1 )); then
+    NAME="${hits[1]}" SOCKET="/tmp/${hits[1]}-$TOPIC.nvim"
+    return 0
+  fi
+  if (( ${#hits} > 1 )); then
+    echo "$X_MARK ambiguous topic '$TOPIC' — it names ${#hits} live frames; use NAME/TOPIC:" >&2
+    local _h
+    for _h in $hits; do echo "    $_h/$TOPIC" >&2; done
+    return 1
+  fi
+  echo "$X_MARK no live frame with topic '$TOPIC' — pass NAME/TOPIC to be explicit" >&2
+  return 1
+}
+
 frame_assert_topic_free() {
   # frame_assert_topic_free NAME TOPIC — refuse (return 1, message on stderr) if
   # any OTHER live frame already carries TOPIC. Topics are the handle
