@@ -28,13 +28,32 @@ if [[ "${1:-}" == "--server" ]]; then
       # before this returns, so the exit code never matters.
       [[ -f "$_sock.hang" ]] && { sleep 30; exit 0; }
       [[ -f "$_sock.info" ]] && { cat "$_sock.info"; exit 0; }; exit 1 ;;
+    # `frame spawn` polls FrameReady() while a worker boots. A test marks the
+    # planted socket "booted" with a <sock>.ready companion; without one the
+    # session answers 0 (still booting) and spawn keeps polling to its timeout.
+    *FrameReady*) [[ -f "$_sock.ready" ]] && print -rn -- 1 || print -rn -- 0; exit 0 ;;
   esac
+  # Optional expr trace: append every remote-expr issued, so a test can assert
+  # what was actually sent (e.g. --count threading into FrameInboxDrainAtLeast).
+  [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
   # Other exprs (frame status / notify / req / deliver / inbox …): a test opts in
   # via FAKE_NVIM_EXPR_RESULT, which becomes the answer to any such query. The
   # +x test means set-BUT-empty still answers (empty string) — an empty inbox
   # returns '' successfully, distinct from "unset" which falls through to the
   # tripwire like everything else.
   if [[ -n "${FAKE_NVIM_EXPR_RESULT+x}" ]]; then
+    # FAKE_NVIM_EXPR_EMPTY_POLLS=N: answer '' for the first N queries (count
+    # kept across invocations in FAKE_NVIM_POLL_COUNT_FILE) before serving the
+    # result — lets a test watch `inbox --wait` genuinely poll before the mail
+    # "arrives", instead of hitting it on the first drain.
+    if [[ -n "${FAKE_NVIM_EXPR_EMPTY_POLLS:-}" ]]; then
+      _n=0
+      [[ -f "${FAKE_NVIM_POLL_COUNT_FILE:?set with FAKE_NVIM_EXPR_EMPTY_POLLS}" ]] \
+        && _n=$(<"$FAKE_NVIM_POLL_COUNT_FILE")
+      _n=$((_n + 1))
+      print -rn -- "$_n" > "$FAKE_NVIM_POLL_COUNT_FILE"
+      (( _n <= FAKE_NVIM_EXPR_EMPTY_POLLS )) && exit 0
+    fi
     print -rn -- "$FAKE_NVIM_EXPR_RESULT"
     exit 0
   fi

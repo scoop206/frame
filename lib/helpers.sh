@@ -208,6 +208,21 @@ set_title() {
   printf '\e]2;%s\e\\' "$1"
 }
 
+# ── window spawning ───────────────────────────────────────────────────────────
+
+frame_open_window() {
+  # frame_open_window CMD — open a NEW ghostty window running CMD (a zsh -ic
+  # command string), without replacing the caller's window. macOS Ghostty has
+  # no CLI new-window action (`ghostty +new-window` refuses on this platform —
+  # verified against 1.3.1), so this is the documented path: `open -na` starts
+  # a separate app instance whose window runs CMD via Ghostty's `-e`.
+  # --quit-after-last-window-closed makes that extra instance exit with its
+  # window — the macOS default is to linger in the dock windowless. Ghostty's
+  # one hook outside focus.sh; callers stay terminal-agnostic above this line.
+  open -na Ghostty.app --args --quit-after-last-window-closed=true \
+    -e zsh -ic "$1"
+}
+
 # ── live-frame discovery ──────────────────────────────────────────────────────
 
 frame_rpc_expr() {

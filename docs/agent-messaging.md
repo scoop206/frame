@@ -338,6 +338,8 @@ accepted limitation for a backstop that almost never runs.
 
 ## Related
 
+- [head-frame.md](head-frame.md) — phase 4 made concrete: the head frame that
+  drives plans through workers, `frame inbox --wait`, and `frame spawn`.
 - [identity-model.md](identity-model.md) — the socket-is-identity rule this
   builds on; `FrameState` is its state counterpart.
 - `layouts/worktree.lua` — `FrameState` and the `FrameRequest` / `FrameOnTurnEnd`
