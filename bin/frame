@@ -23,9 +23,14 @@
 #     frame merge [TOPIC] [--push|--ff|-n]
 #                                       merge TOPIC (default: current branch)
 #
-#     frame req TOPIC|NAME/TOPIC TEXT…  send a request to that frame's Claude
+#     frame claude [--timeout N] TEXT…  talk to THIS frame's own claude: type
+#                                       TEXT into it and block until it answers,
+#                                       then print the answer. Needs it idle;
+#                                       refuses (exit 4) mid-turn
+#
+#     frame req TOPIC|NAME/TOPIC TEXT…  send a request to ANOTHER frame's Claude
 #                                       (types TEXT into its prompt); arms a
-#                                       one-shot reply
+#                                       one-shot reply to your inbox
 #
 #     frame inbox [--wait [--timeout N] [--count K]]
 #                                       show + clear this frame's inbox;
@@ -79,7 +84,7 @@ case "$cmd" in
   ls|list)
     source "$FRAME_ROOT/commands/ls.sh" "$@"
     ;;
-  init|shell|merge|services|status|notify|notification|focus|yolo|req|reply|deliver|inbox|spawn)
+  init|shell|merge|services|status|notify|notification|focus|yolo|claude|req|reply|deliver|inbox|spawn)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   notifier)

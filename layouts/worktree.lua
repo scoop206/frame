@@ -92,6 +92,16 @@ _G.FrameReady = function()
   return 0
 end
 
+-- frame_submit(chan, text) — type TEXT into a claude terminal channel and
+-- submit it. Two writes with the Enter deferred ~200ms: claude's TUI
+-- paste-detection folds a CR arriving in the same rapid chunk into a newline
+-- instead of a submit; a lone late '\r' registers as a real keypress. Shared by
+-- FrameRequest (cross-frame) and FrameClaudeSend (this frame's own claude).
+local function frame_submit(chan, text)
+  vim.fn.chansend(chan, text)
+  vim.defer_fn(function() vim.fn.chansend(chan, '\r') end, 200)
+end
+
 -- _G.FrameRequest(from, text) — deliver a COMMAND: type TEXT into the `claude`
 -- buffer and submit it, exactly as if the operator had typed it there, and arm a
 -- one-shot reply for `from` (the sender's "name/topic" return address) so the
@@ -113,12 +123,46 @@ _G.FrameRequest = function(from, text)
     end
     if not seen then table.insert(FrameState.subscribers, from) end
   end
-  -- Two writes, and the Enter deferred: claude's TUI paste-detection treats a
-  -- single rapid chunk as pasted content, so a CR in the same write becomes a
-  -- newline in the input box instead of a submit. A lone '\r' arriving ~200ms
-  -- later registers as a real keypress and submits what was typed.
-  vim.fn.chansend(chan, text)
-  vim.defer_fn(function() vim.fn.chansend(chan, '\r') end, 200)
+  frame_submit(chan, text)
+  return 'ok'
+end
+
+-- _G.FrameClaudeSend(text) — the send half of `frame claude`: a SYNCHRONOUS
+-- round-trip to THIS frame's own claude. Unlike FrameRequest it (a) GATES on
+-- claude being idle and ready; (b) uses this session's OWN identity as the
+-- return address, so the arm and the drain that matches it (FrameInboxDrainSelf)
+-- key off one source of truth — no shell-derived address to drift; and (c)
+-- FLUSHES stale self-replies first, so an orphan from a prior aborted round-trip
+-- can't be mistaken for this answer. Gate+flush+arm+submit happen in this one
+-- RPC so the idle check and the send can't race. Returns:
+--   'no-claude-buffer'  this frame opened no claude buffer
+--   'not-ready'         claude's prompt isn't rendered (booting, or a dialog)
+--   'busy'              mid-turn — refuse rather than misroute the PREVIOUS
+--                       turn's answer (the arm binds to a return address, not a
+--                       turn, so a turn already in flight would deliver first)
+--   'ok'               armed + submitted; caller now polls FrameInboxDrainSelf
+_G.FrameClaudeSend = function(text)
+  local chan = FrameState.chan['claude']
+  if not chan then return 'no-claude-buffer' end
+  if _G.FrameReady() ~= 1 then return 'not-ready' end
+  if FrameState.status == 'working' then return 'busy' end
+  local me = name .. '/' .. topic
+  -- Flush stale self-addressed mail (an orphan from an aborted/timed-out prior
+  -- round-trip). Only our own — other frames' reports stay for `frame inbox`.
+  local kept = {}
+  for _, m in ipairs(FrameState.inbox) do
+    if m.from ~= me then table.insert(kept, m) end
+  end
+  FrameState.inbox = kept
+  -- Arm a one-shot reply to ourselves. Dedup like FrameRequest so a lingering
+  -- self-arm never stacks a duplicate delivery. (This is where a per-request
+  -- token would hang if same-frame concurrency ever needs Tier 2.)
+  local seen = false
+  for _, addr in ipairs(FrameState.subscribers) do
+    if addr == me then seen = true break end
+  end
+  if not seen then table.insert(FrameState.subscribers, me) end
+  frame_submit(chan, text)
   return 'ok'
 end
 
@@ -246,6 +290,25 @@ end
 _G.FrameInboxDrainAtLeast = function(n)
   if #FrameState.inbox < (tonumber(n) or 1) then return '' end
   return _G.FrameInboxDrain()
+end
+
+-- _G.FrameInboxDrainSelf() — drain only the messages addressed from THIS frame
+-- to itself (from == our own name/topic), leaving every other report untouched
+-- for `frame inbox`. The receive half of `frame claude`: our own turn's answer
+-- comes home stamped from=us (FrameOnTurnEnd sets from to name/topic), and this
+-- picks it out without disturbing unrelated mail — so another frame's reply
+-- landing mid-wait is never mistaken for our answer. '' when no self-mail is
+-- present (the poll keeps waiting). The from header is dropped: a note from
+-- yourself needs no return address.
+_G.FrameInboxDrainSelf = function()
+  local me = name .. '/' .. topic
+  local mine, kept = {}, {}
+  for _, m in ipairs(FrameState.inbox) do
+    if m.from == me then table.insert(mine, m.text) else table.insert(kept, m) end
+  end
+  if #mine == 0 then return '' end
+  FrameState.inbox = kept
+  return table.concat(mine, '\n\n──\n\n')
 end
 
 -- :FrameStatus TEXT — set the status suffix; no TEXT clears it.
