@@ -57,7 +57,7 @@ test_shell_wires_claude_hooks() {
   local settings="$SANDBOX/frames/jam/.claude/settings.json"
   assert_file_exists "$settings"
   assert_contains "$(<$settings)" "frame notify"
-  assert_contains "$(<$settings)" "frame status"
+  assert_contains "$(<$settings)" "frame status --prompt"
 }
 
 test_shell_leaves_existing_claude_settings_alone() {
@@ -89,7 +89,22 @@ test_shell_refreshes_stale_frame_hooks() {
   local settings="$SANDBOX/frames/jam/.claude/settings.json"
   assert_contains "$(<$settings)" "frame reply"
   assert_contains "$(<$settings)" "frame notify"
-  assert_contains "$(<$settings)" "frame status"
+  assert_contains "$(<$settings)" "frame status --prompt"
+}
+
+test_shell_refreshes_pre_prompt_status_hook() {
+  # The full hook set as written before `frame status --prompt` existed:
+  # UserPromptSubmit → bare `frame status`. Recognizably frame-authored, but
+  # its frames never show "working" — a reboot must rewrite it.
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  mkdir -p "$SANDBOX/frames/jam/.claude"
+  print -r -- '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"frame notify >/dev/null 2>&1 || true"},{"type":"command","command":"frame reply >/dev/null 2>&1 || true"}]}],"UserPromptSubmit":[{"hooks":[{"type":"command","command":"frame status >/dev/null 2>&1 || true"}]}]}}' \
+    > "$SANDBOX/frames/jam/.claude/settings.json"
+  run_frame shell jam
+  assert_status 0
+  assert_contains "$OUT" "refreshed claude hooks"
+  assert_contains "$(<$SANDBOX/frames/jam/.claude/settings.json)" "frame status --prompt"
 }
 
 test_shell_reuses_existing_dir() {

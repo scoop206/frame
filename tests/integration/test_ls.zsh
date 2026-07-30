@@ -44,6 +44,19 @@ test_empty_port_and_status_render_as_dash() {
   assert_contains "$row" "-"
 }
 
+test_portless_status_stays_in_status_column() {
+  # A port-less frame with a status returns `name\ttopic\t\twaiting` — a run
+  # of tabs that `read` (tab = IFS whitespace) merges, sliding the status left
+  # into the PORT column. ls splits with (ps:\t:) to keep the empty field:
+  # the row must read "- waiting" (port dash, then status), not "waiting -".
+  plant_live "/tmp/$TNAME-portless.nvim" "$TNAME" portless '' waiting
+  run_frame ls
+  assert_status 0
+  local row=$(print -r -- "$OUT" | grep portless)
+  [[ "$row" == *portless*-*waiting ]] \
+    || fail "status not in STATUS column, got row: $row"
+}
+
 test_current_frame_is_marked() {
   plant_live "/tmp/$TNAME-alpha.nvim" "$TNAME" alpha 5173 WAITING
   plant_live "/tmp/$TNAME-beta.nvim"  "$TNAME" beta  5175 ''

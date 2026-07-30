@@ -2,9 +2,14 @@
 #
 #   $ frame ls
 #      NAME     TOPIC              PORT   STATUS
-#    → shell    show-hacker-news   5173   WAITING
-#      flipnem  schema             5175   -
+#    → shell    show-hacker-news   5173   waiting
+#      flipnem  schema             5175   working
 #      pactduo  billing-fix        -      deploying
+#
+# STATUS is the same free-text field as the window-title suffix (frame
+# status); the claude hooks drive it through the turn lifecycle — "working"
+# from prompt (UserPromptSubmit → frame status --prompt) to "waiting" at
+# Stop (frame notify).
 #
 # A dashboard for the shared harness: one row per running frame on this
 # machine, so you can spot one and `frame focus` it. Read-only — it never
@@ -40,9 +45,13 @@ fi
 # The socket sweep + FrameInfo query lives in lib/helpers.sh (frame_live_frames),
 # shared with the creation paths' topic-collision guard so the two can't drift.
 # It prints one `name<TAB>topic<TAB>port<TAB>status` row per live frame; here we
-# just mark the current frame and shape the columns.
+# just mark the current frame and shape the columns. Split with (ps:\t:), which
+# keeps empty fields — `read` treats the tab as IFS whitespace and merges runs
+# of it, so a port-less frame's status would slide left into the PORT column.
 typeset -a _rows _f
-while IFS=$'\t' read -r _name _topic _port _status; do
+while IFS= read -r _line; do
+  _f=("${(@ps:\t:)_line}")
+  _name=$_f[1] _topic=$_f[2] _port=$_f[3] _status=$_f[4]
   [[ -n "$_name" ]] || continue
   _mark=' '
   [[ "$_name" == "$_cur_name" && "$_topic" == "$_cur_topic" ]] && _mark='→'

@@ -4,13 +4,32 @@
 #     → "<name> [ <topic> :<port> ] - DEPLOYED. Waiting verification"
 #   frame status
 #     → back to the base "<name> [ <topic> :<port> ]" title
+#   frame status --prompt
+#     → "<name> [ <topic> :<port> ] - working", plus the turn-start stamp
 #
 # The base name/topic part never changes — the status is purely appended.
 # nvim owns the title for the whole session, so this works by RPC over the
 # frame's named socket (calls FrameSetStatus in layouts/worktree.lua). Run it
 # from any terminal buffer inside the session — including claude marking a
 # milestone — or from outside the frame while its session is up.
+#
+# --prompt is the UserPromptSubmit hook target: the human just handed claude a
+# turn, so the frame is now working — mark it. Together with the Stop hook
+# (frame notify → "waiting") the title and `frame ls` carry claude's whole
+# lifecycle: working while it runs, waiting once it wants the human. Its own
+# spelling rather than `frame status working` because the hook also stamps the
+# turn start (notify's quick-turn gate below), and a milestone that merely
+# *says* working mustn't stamp.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
+
+_prompt=0
+if [[ "${1:-}" == --prompt ]]; then
+  if (( $# > 1 )); then
+    echo "$X_MARK frame status --prompt takes no further arguments" >&2
+    exit 2
+  fi
+  _prompt=1
+fi
 
 # A shell frame (frame shell) has no git repo to derive identity from — its
 # buffers inherit FRAME_NAME/FRAME_TOPIC from the session instead. Inside a
@@ -29,12 +48,17 @@ else
   fi
 fi
 
-# Turn-start stamp for notify's quick-turn gate: the UserPromptSubmit hook
-# calls the bare clear form, so "cleared just now" ≡ "the human prompted just
+# Turn-start stamp for notify's quick-turn gate: --prompt IS the
+# UserPromptSubmit hook, so "stamped just now" ≡ "the human prompted just
 # now". notify.sh reads the stamp's age to skip banners for fast turns.
 # Before the socket check on purpose — the stamp must land even when the
-# session is down and the RPC can't.
-if (( $# == 0 )); then
+# session is down and the RPC can't. The bare clear form still stamps too:
+# it was the hook's spelling before --prompt existed, and projects wired back
+# then keep their gate until their settings.json is refreshed.
+if (( _prompt )); then
+  touch "/tmp/$NAME-$TOPIC.prompt" 2>/dev/null || true
+  set -- working
+elif (( $# == 0 )); then
   touch "/tmp/$NAME-$TOPIC.prompt" 2>/dev/null || true
 fi
 

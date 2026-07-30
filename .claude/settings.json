@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "frame status >/dev/null 2>&1 || true"
+            "command": "frame status --prompt >/dev/null 2>&1 || true"
           }
         ]
       }

@@ -15,6 +15,8 @@
 #   frame services [up|down]   manage the shared postgres/minio stack
 #   frame status [TEXT…]       append "- TEXT" to this frame's window title
 #                              (no TEXT clears it back to the base title)
+#   frame status --prompt      UserPromptSubmit hook target: status "working"
+#                              + the turn-start stamp notify's gate reads
 #   frame notify               frame will send task complete notification
 #   frame notification on|off|init   on|off: global switch
 #                                    init: build/repair the banner icon
@@ -70,7 +72,7 @@ case "$cmd" in
     source "$FRAME_ROOT/commands/notifier.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,46p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,48p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "$X_MARK frame: unknown command '$cmd' (try: frame help)" >&2

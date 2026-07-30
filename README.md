@@ -50,7 +50,8 @@ frame ls                   list every live frame (all projects); → marks the o
                            you're in. `frame focus` a topic you spot here
 frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
 frame services [up|down|ps]            manage the shared postgres/minio stack
-frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears)
+frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears;
+                           the claude hooks set "working" on prompt, "waiting" on Stop)
 frame notify               frame will send task complete notification
 frame notification on|off|init   on|off: global switch
                            init: build/repair the banner app (needs `brew install terminal-notifier`)
