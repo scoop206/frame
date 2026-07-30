@@ -122,6 +122,8 @@ test_no_dictionary_falls_back_to_open() {
   _plant_booted_worker
   run_frame spawn shell $TNAME
   assert_status 0
+  assert_contains "$OUT" "AppleScript launch unavailable"
+  assert_contains "$OUT" "spawned window for shell/$TNAME"
   assert_contains "$OUT" "shell/$TNAME is up"
   local log="$(<$FAKE_OPEN_LOG)"
   assert_contains "$log" "-na Ghostty.app --args --quit-after-last-window-closed=true -e zsh -ic"

@@ -100,7 +100,19 @@ frame --help
 
 ### Recommended extras
 
-- **Ghostty** — the terminal Frame was built with; on others your YMMV.
+- **Ghostty ≥ 1.3** — the terminal Frame was built with; on others your YMMV.
+  1.3+ ships an AppleScript dictionary that Frame uses for the good spawn
+  UX: workers congregate as tabs in a shared window, `frame focus` selects
+  the exact tab by id, and ephemeral workers reap their own tabs. On older
+  Ghostty (or if scripting fails) every spawn opens a separate app instance —
+  it works, and `frame spawn` tells you when it fell back.
+
+  **Automation permission:** Ghostty scripting itself needs no grant, so
+  frames spawning frames just works. Running frame commands from *another*
+  app (a different terminal, Raycast, the notify banner) makes macOS prompt
+  once — "… wants to control Ghostty" — allow it. If it was dismissed or
+  denied: System Settings → Privacy & Security → Automation, or
+  `tccutil reset AppleEvents <bundle-id-of-the-caller>` to re-prompt.
 - **Raycast** — window fuzzy-find lets you leverage the waiting and TOPIC name of your frames.
 - **homebrew + terminal-notifier** — optional; `brew install terminal-notifier`,
   then `frame notification init` (or the first `frame init`) builds the frame-icon,
