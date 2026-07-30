@@ -429,18 +429,27 @@ frame_live_frames() {
   # `frame ls` (renders the rows) and the creation paths (topic-collision guard).
   #
   # (N) = null_glob for this one pattern, so an empty /tmp expands to nothing
-  # rather than the literal. Port/status are printed raw ('' when absent);
-  # callers render the empty case however they like.
-  local _sock _rec _name _topic _port _status
+  # rather than the literal. Port/status/health are printed raw ('' when absent);
+  # callers render the empty case however they like. `health` is FrameInfo's
+  # appended 5th field (broker signal for ls's COMMS column); sessions predating
+  # it return only 4 fields, so we peel status off as a bounded field and default
+  # health to '' when no 5th field is present — never re-emitting status as
+  # health (a bare ${_rec#*sep} returns the string unchanged when sep is absent).
+  local _sock _rec _name _topic _port _status _health
   for _sock in /tmp/*.nvim(N); do
     [[ -S "$_sock" ]] || continue
     _rec=$(frame_rpc_expr "$_sock" 'v:lua.FrameInfo()') || continue
     [[ -n "$_rec" ]] || continue
     _name=${_rec%%$'\t'*};  _rec=${_rec#*$'\t'}
     _topic=${_rec%%$'\t'*}; _rec=${_rec#*$'\t'}
-    _port=${_rec%%$'\t'*};  _status=${_rec#*$'\t'}
+    _port=${_rec%%$'\t'*};  _rec=${_rec#*$'\t'}
+    if [[ "$_rec" == *$'\t'* ]]; then   # 5-field (with health) vs. legacy 4-field
+      _status=${_rec%%$'\t'*}; _health=${_rec#*$'\t'}
+    else
+      _status=$_rec; _health=''
+    fi
     [[ -n "$_name" ]] || continue
-    print -r -- "$_name	$_topic	$_port	$_status"
+    print -r -- "$_name	$_topic	$_port	$_status	$_health"
   done
 }
 
