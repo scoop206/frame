@@ -23,6 +23,7 @@ _resolve_socket() {
   SOCKET="/tmp/$SELF_NAME-$SELF_TOPIC.nvim"
   if [[ ! -S "$SOCKET" ]]; then
     echo "$X_MARK no frame session for $SELF_NAME/$SELF_TOPIC (no socket at $SOCKET)" >&2
+    frame_session_down_hint "$SELF_NAME" "$SELF_TOPIC"
     exit 1
   fi
 }

@@ -65,6 +65,7 @@ fi
 SOCKET="/tmp/$NAME-$TOPIC.nvim"
 if [[ ! -S "$SOCKET" ]]; then
   echo "$X_MARK no frame session for $NAME/$TOPIC (no socket at $SOCKET)" >&2
+  frame_session_down_hint "$NAME" "$TOPIC"
   exit 1
 fi
 

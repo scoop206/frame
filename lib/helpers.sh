@@ -10,8 +10,10 @@ FRAME_SERVICES_COMPOSE="$FRAME_ROOT/services/docker-compose.yml"
 # teardown watcher keep seeing the bare characters.
 if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then
   X_MARK=$'\e[1;31m✗\e[0m'
+  WARN_MARK=$'\e[1;33m⚠\e[0m'
 else
   X_MARK='✗'
+  WARN_MARK='⚠'
 fi
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   OK_MARK=$'\e[32m✓\e[0m'
@@ -84,6 +86,32 @@ frame_self_identity() {
       || return 1
   fi
   return 0
+}
+
+frame_session_down_hint() {
+  # frame_session_down_hint NAME TOPIC — print a diagnostic second line (stderr)
+  # after a "no socket at …" error, naming the LIKELY CAUSE and its fix. A
+  # frame's inbox, broker and title all live in its nvim session; the commands
+  # that read them (inbox, claude, status, view, req's return address) resolve an
+  # identity and then find no socket — but "no socket" has two very different
+  # causes, and the raw line doesn't say which. The tell is the session env:
+  # frame shell (shell.sh) and frame wt (wt.sh) both export FRAME_NAME/FRAME_TOPIC
+  # at boot, so every terminal INSIDE a live frame carries them. Absent → the
+  # caller is at a bare shell that merely cd'd into the NAME/TOPIC checkout, so
+  # frame_self_identity derived NAME/TOPIC from git and there was never a session
+  # here to hold anything (the common "doing comms from a bare CLI" mistake, and
+  # the one docs/head-frame.md warns against — the operator commands from inside
+  # a frame, not a bare shell). Present → a real session that has since exited.
+  local _name=$1 _topic=$2
+  if [[ -z "${FRAME_NAME:-}" || -z "${FRAME_TOPIC:-}" ]]; then
+    echo "  You're at a bare shell in the $_name/$_topic checkout, not inside a" >&2
+    echo "  running frame — a frame's inbox and broker live in its nvim session," >&2
+    echo "  and there isn't one here. Boot one for this checkout (frame wt), or a" >&2
+    echo "  branchless home frame to command from (frame shell <topic>), then run" >&2
+    echo "  this from inside it." >&2
+  else
+    echo "  This frame's session isn't running — reboot it (frame wt $_topic)." >&2
+  fi
 }
 
 # ── machine-global config ─────────────────────────────────────────────────────
