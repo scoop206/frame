@@ -1,9 +1,9 @@
 #!/usr/bin/env zsh
-# frame reply — route this frame's answer home to whoever req'd it. Explicit
-# form (`frame reply TEXT`) calls FrameOnTurnEnd; bare form reads Claude Code's
-# hook JSON on stdin (transcript path) and calls FrameReplyFromHook. Identity
-# comes from a shell-frame env; a planted socket + FAKE_NVIM_EXPR_RESULT stand in
-# for the live session's routing count.
+# frame reply — the Stop-hook sensor. Bare form reads Claude Code's hook JSON on
+# stdin (transcript path) and hands it to the broker (FrameReplyFromHook →
+# FrameOnStop). The old explicit `frame reply TEXT` form is retired — routing is
+# the broker's job now. Identity comes from a shell-frame env; a planted socket +
+# FAKE_NVIM_EXPR_RESULT stand in for the live session's answer.
 source "${${(%):-%x}:A:h:h}/helpers/harness.zsh"
 
 _mksock() { python3 -c 'import socket,sys
@@ -11,26 +11,12 @@ s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$1"; }
 
 as_work() { export FRAME_NAME=$TNAME FRAME_TOPIC=work; }
 
-test_explicit_reply_routes_and_reports_count() {
+test_explicit_form_is_retired() {
   as_work
   _mksock "/tmp/$TNAME-work.nvim"
-  export FAKE_NVIM_EXPR_RESULT=1
   run_frame reply "widget built, tests green"
-  assert_status 0
-  assert_contains "$OUT" "replied to 1 waiting"
-}
-
-test_explicit_reply_refuses_when_not_in_a_frame() {
-  run_frame reply "who am I even talking to"
-  assert_status 1
-  assert_contains "$OUT" "must be run from inside a frame"
-}
-
-test_explicit_reply_no_session_fails() {
-  as_work   # identity resolves, but no socket planted
-  run_frame reply "hello?"
-  assert_status 1
-  assert_contains "$OUT" "no frame session"
+  assert_status 2
+  assert_contains "$OUT" "takes no arguments"
 }
 
 test_hook_form_reads_stdin_payload_and_exits_zero() {
@@ -45,6 +31,15 @@ test_hook_form_reads_stdin_payload_and_exits_zero() {
   st=$?
   assert_eq "$st" "0" "bare hook form must exit 0"
   assert_eq "$out" "" "bare hook form must stay silent"
+}
+
+test_bare_form_outside_a_frame_exits_zero() {
+  # No frame identity, but the Stop hook must never fail on our account.
+  local out st
+  out=$(print -r -- '{"transcript_path":"/nonexistent"}' | "$FRAME_BIN" reply 2>&1)
+  st=$?
+  assert_eq "$st" "0" "bare form outside a frame must still exit 0"
+  assert_eq "$out" "" "bare form outside a frame must stay silent"
 }
 
 run_tests "$0"

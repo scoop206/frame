@@ -241,13 +241,14 @@ test_req_is_sent_once_ready() {
   in_head
   export FAKE_OPEN_LOG="$SANDBOX/open.log"
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
-  export FAKE_NVIM_EXPR_RESULT="ok"   # answers FrameRequest (FrameReady is case-matched first)
+  # FrameReady is case-matched first (booted worker); the --req then lands as a
+  # broker submit carrying a remote return address to this frame.
   _plant_booted_worker
   run_frame spawn shell $TNAME --req "compute 2+2"
   assert_status 0
   assert_contains "$OUT" "shell/$TNAME is up"
   assert_contains "$OUT" "sent to shell/$TNAME"
-  assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameRequest('$TNAME/head', 'compute 2+2')"
+  assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameBrokerSubmit('compute 2+2', 'remote:$TNAME/head')"
 }
 
 test_worker_name_survives_checkout_config() {
@@ -257,7 +258,6 @@ test_worker_name_survives_checkout_config() {
   # from shell/TOPIC — it once did, and spawn polled a socket that never appears.
   export FAKE_OPEN_LOG="$SANDBOX/open.log"
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
-  export FAKE_NVIM_EXPR_RESULT="ok"
   _plant_booted_worker
   make_repo "checkout-$TNAME"
   write_config <<'EOF'
@@ -267,7 +267,7 @@ EOF
   assert_status 0
   assert_contains "$OUT" "shell/$TNAME is up"
   assert_contains "$OUT" "sent to shell/$TNAME"
-  assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameRequest('stompy/main', 'compute 2+2')"
+  assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameBrokerSubmit('compute 2+2', 'remote:stompy/main')"
 }
 
 run_tests "$0"

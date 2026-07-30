@@ -32,14 +32,34 @@ if [[ "${1:-}" == "--server" ]]; then
     # planted socket "booted" with a <sock>.ready companion; without one the
     # session answers 0 (still booting) and spawn keeps polling to its timeout.
     *FrameReady*) [[ -f "$_sock.ready" ]] && print -rn -- 1 || print -rn -- 0; exit 0 ;;
-    # `frame claude` gates + sends in one RPC. FAKE_CLAUDE_SEND is the verdict
-    # ('ok' default | 'busy' | 'not-ready' | 'no-claude-buffer'); the literal
-    # 'FAIL' makes the RPC exit non-zero, standing in for a layout too old to
-    # define FrameClaudeSend. Logged like other exprs when a trace is wanted.
-    *FrameClaudeSend*)
+    # The claude broker (docs/claude-broker.md). Submit returns a request id
+    # (FAKE_BROKER_SUBMIT, default 'r1'; 'FAIL' → RPC errors, as an old layout
+    # would; or a verdict like 'no-claude-buffer'/'queue-full'). Await polls:
+    # 'pending' for the first FAKE_NVIM_EXPR_EMPTY_POLLS calls, then
+    # FAKE_BROKER_AWAIT (default 'done' = empty answer; set $'done\n<text>' for
+    # a real one, or 'gone'). Cancel/Status echo ok / FAKE_BROKER_STATUS. All
+    # logged when a trace is wanted, so a test can assert what was sent.
+    *FrameBrokerSubmit*)
       [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
-      [[ "${FAKE_CLAUDE_SEND:-}" == FAIL ]] && exit 1
-      print -rn -- "${FAKE_CLAUDE_SEND:-ok}"; exit 0 ;;
+      [[ "${FAKE_BROKER_SUBMIT:-}" == FAIL ]] && exit 1
+      print -rn -- "${FAKE_BROKER_SUBMIT:-r1}"; exit 0 ;;
+    *FrameBrokerAwait*)
+      [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
+      if [[ -n "${FAKE_NVIM_EXPR_EMPTY_POLLS:-}" ]]; then
+        _n=0
+        [[ -f "${FAKE_NVIM_POLL_COUNT_FILE:?set with FAKE_NVIM_EXPR_EMPTY_POLLS}" ]] \
+          && _n=$(<"$FAKE_NVIM_POLL_COUNT_FILE")
+        _n=$((_n + 1))
+        print -rn -- "$_n" > "$FAKE_NVIM_POLL_COUNT_FILE"
+        (( _n <= FAKE_NVIM_EXPR_EMPTY_POLLS )) && { print -rn -- pending; exit 0; }
+      fi
+      print -rn -- "${FAKE_BROKER_AWAIT:-done}"; exit 0 ;;
+    *FrameBrokerCancel*)
+      [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
+      print -rn -- ok; exit 0 ;;
+    *FrameBrokerStatus*)
+      [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
+      print -rn -- "${FAKE_BROKER_STATUS:-}"; exit 0 ;;
   esac
   # Optional expr trace: append every remote-expr issued, so a test can assert
   # what was actually sent (e.g. --count threading into FrameInboxDrainAtLeast).
