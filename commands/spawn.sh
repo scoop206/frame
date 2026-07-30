@@ -149,10 +149,15 @@ if ! IDS=$(frame_open_window "$BOOT"); then
 fi
 # Record the surface for `frame focus` (select by id) and close-tab. Empty IDS
 # = the legacy `open -na` fallback fired — no recording, focus falls back to
-# title matching and the extra instance reaps its own window.
-[[ -n "$IDS" ]] && print -r -- "$IDS" > "$SOCKET.gtab"
-
-echo "$RUN_MARK spawned tab for $W_NAME/$TOPIC — waiting for it to boot…"
+# title matching and the extra instance reaps its own window. Say so: a user
+# whose Automation grant is missing should learn why spawns aren't tabbing.
+if [[ -n "$IDS" ]]; then
+  print -r -- "$IDS" > "$SOCKET.gtab"
+  echo "$RUN_MARK spawned tab for $W_NAME/$TOPIC — waiting for it to boot…"
+else
+  echo "⚠ AppleScript launch unavailable (needs Ghostty ≥1.3 + macOS Automation grant — see README) — separate window instead"
+  echo "$RUN_MARK spawned window for $W_NAME/$TOPIC — waiting for it to boot…"
+fi
 DEADLINE=$(( SECONDS + TIMEOUT ))
 while :; do
   if [[ -S "$SOCKET" ]]; then
