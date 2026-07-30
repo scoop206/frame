@@ -34,6 +34,9 @@
 #                              boot a worker frame as a tab in the shared
 #                              workers window; --req sends it a request;
 #                              --ephemeral reaps it once its reply routes home
+#   frame spawn wt TOPIC [--cwd PATH] [--req TEXT] [--timeout N]
+#                              worktree worker as a tab — project resolved at
+#                              --cwd (default: the current directory)
 #   (`worktree` is accepted as a synonym for `wt`)
 #
 # A frame is a terminal window running neovim as its buffer management layer
@@ -67,7 +70,7 @@ case "$cmd" in
     source "$FRAME_ROOT/commands/notifier.sh" "$@"
     ;;
   ""|-h|--help|help)
-    sed -n '2,43p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,46p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   *)
     echo "$X_MARK frame: unknown command '$cmd' (try: frame help)" >&2

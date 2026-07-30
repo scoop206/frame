@@ -37,10 +37,70 @@ test_unknown_kind_shows_usage() {
   assert_contains "$OUT" "usage: frame spawn shell TOPIC"
 }
 
-test_spawn_wt_not_built_yet() {
-  run_frame spawn wt calc
+test_spawn_wt_needs_a_project() {
+  run_frame spawn wt calc   # sandbox root is not a git repo
+  assert_status 1
+  assert_contains "$OUT" "no project at"
+}
+
+test_spawn_wt_rejects_ephemeral() {
+  run_frame spawn wt calc --ephemeral
   assert_status 2
-  assert_contains "$OUT" "not built yet"
+  assert_contains "$OUT" "no --ephemeral"
+}
+
+test_spawn_shell_rejects_cwd() {
+  run_frame spawn shell calc --cwd /tmp
+  assert_status 2
+  assert_contains "$OUT" "--cwd is a wt flag"
+}
+
+test_spawn_wt_boots_project_worker_as_tab() {
+  # Project NAME comes from the target checkout's .frame config; the bootstrap
+  # cd's there, boots `frame wt`, and chains close-tab as NAME/TOPIC. Readiness
+  # polls the project-named socket.
+  _spawn_env
+  make_repo "checkout-$TNAME"
+  write_config <<'EOF'
+NAME=stompy
+EOF
+  _mksock "/tmp/stompy-$TNAME.nvim"
+  touch "/tmp/stompy-$TNAME.nvim.ready"
+  run_frame spawn wt $TNAME
+  assert_status 0
+  assert_contains "$OUT" "spawned tab for stompy/$TNAME"
+  assert_contains "$OUT" "stompy/$TNAME is up"
+  local log="$(<$FAKE_OSASCRIPT_LOG)"
+  assert_contains "$log" "cd $REPO"
+  assert_contains "$log" "frame wt $TNAME"
+  assert_contains "$log" "frame spawn close-tab stompy/$TNAME"
+  assert_eq "$(</tmp/stompy-$TNAME.nvim.gtab)" "fake-win fake-tab"
+}
+
+test_spawn_wt_cwd_targets_another_project() {
+  # From anywhere, --cwd points spawn at the project; relative paths land
+  # absolute in the bootstrap (the surface's shell starts elsewhere).
+  _spawn_env
+  make_repo "checkout-$TNAME"
+  write_config <<'EOF'
+NAME=stompy
+EOF
+  _mksock "/tmp/stompy-$TNAME.nvim"
+  touch "/tmp/stompy-$TNAME.nvim.ready"
+  cd "$SANDBOX"
+  run_frame spawn wt $TNAME --cwd "checkout-$TNAME"
+  assert_status 0
+  assert_contains "$OUT" "stompy/$TNAME is up"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "cd $REPO"
+}
+
+test_close_tab_accepts_name_topic_form() {
+  export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
+  print -r -- "w-7 t-7" > "/tmp/stompy-$TNAME.nvim.gtab"
+  run_frame spawn close-tab stompy/$TNAME
+  assert_status 0
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - w-7 t-7"
+  assert_file_absent "/tmp/stompy-$TNAME.nvim.gtab"
 }
 
 test_missing_topic_shows_usage() {
@@ -152,7 +212,7 @@ test_close_tab_without_recording_is_silent() {
 test_close_tab_requires_topic() {
   run_frame spawn close-tab
   assert_status 2
-  assert_contains "$OUT" "usage: frame spawn close-tab TOPIC"
+  assert_contains "$OUT" "usage: frame spawn close-tab [NAME/]TOPIC"
 }
 
 test_boot_timeout_exits_3() {

@@ -170,7 +170,7 @@ Decisions:
 
 ```
 frame spawn shell TOPIC [--req TEXT] [--timeout N] [--ephemeral]  projectless worker
-frame spawn wt    TOPIC --cwd PATH [--req TEXT] [--timeout N]     code worker in a project
+frame spawn wt    TOPIC [--cwd PATH] [--req TEXT] [--timeout N]   code worker in a project
 ```
 
 A distinct verb, not a flag on `wt`: `wt`/`shell` *take over* the current
@@ -253,10 +253,13 @@ extra instance quits with its window.
 
 Open decisions:
 
-1. **Project resolution for `wt` workers: explicit `--cwd PATH` in v1.** The
-   head is projectless and frame has no name→path registry; `--cwd` keeps the
-   head honest and defers the registry. Head-driven examples so far are all
-   `shell` workers, so this doesn't gate the first cut.
+1. **Project resolution for `wt` workers: `--cwd PATH`, defaulting to the
+   current directory. ✅ shipped.** Frame has no name→path registry; `--cwd`
+   (or standing in the project) keeps the caller honest and defers the
+   registry. The worker's NAME comes from the target project's `.frame`
+   config, resolved in a subshell so it can't pollute the caller. No
+   `--ephemeral` for wt — a worktree frame's self-reap would force-delete a
+   branch, which no spawn flag should reach.
 2. **Reaping: `frame spawn … --ephemeral`. ✅ shipped (shell frames).** The
    flag rides into the worker as `FRAME_EPHEMERAL=1` in the window bootstrap —
    the frame is *born* ephemeral. Its reply router (`FrameOnTurnEnd`), right
@@ -283,14 +286,14 @@ Open decisions:
 
 ## Build order
 
-*Status: 1–3 are implemented and shipped; 4–5 are not yet built.*
+*Status: 1–4 are implemented and shipped; 5 is not yet built.*
 
 1. **`frame inbox --wait`** — self-contained, no external uncertainty, testable
    by hand with two frames. ✅ shipped
 2. **`frame spawn shell`** — pin the Ghostty line, wire readiness + `--req`.
-   ✅ shipped (`frame spawn wt` refuses with a pointer here)
+   ✅ shipped
 3. **`--ephemeral` reaping.** ✅ shipped
-4. **`frame spawn wt --cwd`.**
+4. **`frame spawn wt [--cwd]`.** ✅ shipped
 5. **`frame head`** — `frame shell` + orchestrator prompt + plan file, riding on
    all of the above. Sequential v1; fan-out (correlation ids, `--count`
    barriers) after.
