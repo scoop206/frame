@@ -35,6 +35,29 @@ test_unmuted_session_still_banners() {
   assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - task complete shell [ $TNAME ]"
 }
 
+test_brokered_turn_suppresses_banner() {
+  # The broker answered a client directly (FrameTakeBrokeredFlag → 1), so no
+  # banner even though the session is unmuted and it's not a quick turn.
+  (( $+commands[python3] )) || { skip "python3 not found"; return }
+  setup_shell_frame
+  export FAKE_BROKERED=1
+  export FAKE_NVIM_EXPR_RESULT=0   # not muted — suppression is the brokered flag
+  run_frame notify
+  assert_status 0
+  assert_file_absent "$FAKE_OSASCRIPT_LOG"
+}
+
+test_non_brokered_turn_still_banners() {
+  # A human-typed turn (flag 0) banners as before.
+  (( $+commands[python3] )) || { skip "python3 not found"; return }
+  setup_shell_frame
+  export FAKE_BROKERED=0
+  export FAKE_NVIM_EXPR_RESULT=0
+  run_frame notify
+  assert_status 0
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - task complete shell [ $TNAME ]"
+}
+
 test_unanswerable_session_defaults_to_banner() {
   # Socket exists but the query fails (session predates the switch, or nvim
   # is wedged) — the banner must err toward firing. Without

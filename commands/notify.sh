@@ -61,6 +61,21 @@ fi
 # title). Port omitted — notify doesn't compute it, and the identity reads fine
 # without it.
 TITLE=$(frame_base_title "$NAME" "$TOPIC")
+SOCKET="/tmp/$NAME-$TOPIC.nvim"
+
+# Brokered turns get no banner: the client (frame claude / frame req) already
+# received the answer over the socket, so a "come look" desktop ping is noise.
+# Read-and-clear the flag the broker set at submit (FrameTakeBrokeredFlag) —
+# BEFORE the quick-turn gate, so a fast brokered turn still consumes it and it
+# can't linger to mute a later human turn. Old layouts lack the function → the
+# query fails → 0 → the banner fires exactly as it used to.
+if [[ -S "$SOCKET" ]]; then
+  _brokered=$(nvim --headless --server "$SOCKET" \
+    --remote-expr "v:lua.FrameTakeBrokeredFlag()" 2>/dev/null) || _brokered=0
+  if [[ "$_brokered" == 1 ]]; then
+    exit 0
+  fi
+fi
 
 # Quick-turn gate: sending a prompt stamps /tmp/<name>-<topic>.prompt (the
 # UserPromptSubmit hook runs the bare `frame status` clear — see status.sh).
@@ -76,7 +91,6 @@ fi
 # The session holds the banner mute switch (:FrameNotify off) — ask it over
 # the socket. No session, or no/odd answer → unmuted: the banner errs toward
 # firing, and sessions predating the switch just don't have g:frame_notify_muted.
-SOCKET="/tmp/$NAME-$TOPIC.nvim"
 if [[ -S "$SOCKET" ]]; then
   # --headless: without it a piped-stdout nvim client (0.10+) sends the
   # result to /dev/tty instead of stdout and leaks terminal-probe replies
