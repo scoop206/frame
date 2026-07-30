@@ -211,8 +211,13 @@ at the window.
 ≥1.3 ships an AppleScript dictionary (`Ghostty.sdef` in the app bundle), so
 `frame_open_window` (`lib/helpers.sh`) opens each worker as a **tab in one
 shared workers window** of the running Ghostty — head keeps its own window,
-workers congregate beside it. The workers window's id persists in
-`/tmp/frame-workers.window` (stale id → fresh window, re-recorded); the new
+workers congregate beside it. The last spawn's "WINDOW_ID TAB_ID" persists in
+`/tmp/frame-workers.window`; reuse requires that exact pair to still exist —
+Ghostty ids are address-based and recycle, and a bare window id once resolved
+to the head window after a restart, piling workers in as tabs. Invalid pair →
+fresh window, re-recorded. Dragging a tab out of the workers window rehomes it
+under a new window id; focus and close-tab therefore fall back to scanning
+every window for the recorded tab id. The new
 surface runs `/bin/zsh -ic '<bootstrap>'` via the scripting `command`
 configuration and its window/tab ids are recorded to `/tmp/shell-<topic>.nvim.gtab`
 for `frame focus` (select tab by id — no System Events, no Accessibility) and

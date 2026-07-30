@@ -50,10 +50,23 @@ case "$KIND" in
     [[ -f "$GTAB" ]] || exit 0
     read -r G_WID G_TID < "$GTAB"
     rm -f "$GTAB"
+    # Recorded window first; then every window — dragging a tab out of the
+    # workers window rehomes it under a NEW window id, but the tab id survives.
     osascript - "$G_WID" "$G_TID" >/dev/null 2>&1 <<'APPLESCRIPT' || true
 on run argv
+  set wid to item 1 of argv
+  set tid to item 2 of argv
   tell application "Ghostty"
-    close tab (tab id (item 2 of argv) of window id (item 1 of argv))
+    try
+      close tab (tab id tid of window id wid)
+      return
+    end try
+    repeat with w in windows
+      try
+        close tab (tab id tid of w)
+        return
+      end try
+    end repeat
   end tell
 end run
 APPLESCRIPT
