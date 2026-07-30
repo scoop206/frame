@@ -69,9 +69,12 @@ cp -R "$_apps[1]" "$APP"
 
 # Icon: iconset rendered from the badge art, written over the bundle's own
 # Terminal.icns so the plist's icon reference stays untouched. The PNG is
-# pre-rendered from assets/frame_badge.svg (the editable source):
-#   qlmanage -t -s 1024 -o assets assets/frame_badge.svg
-#   mv assets/frame_badge.svg.png assets/frame_badge.png
+# pre-rendered from assets/frame_badge.svg (the editable source). Use headless
+# Chrome, not qlmanage — qlmanage flattens the transparent corners to white:
+#   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
+#     --disable-gpu --screenshot=assets/frame_badge.png \
+#     --window-size=1024,1024 --default-background-color=00000000 \
+#     "file://$PWD/assets/frame_badge.svg"
 _tmp=$(mktemp -d)
 mkdir "$_tmp/frame.iconset"
 for _s in 16 32 64 128 256 512; do

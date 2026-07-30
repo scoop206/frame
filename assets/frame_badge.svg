@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <!-- frame notifier badge: neobrutalist tab row — three tabs over one tidy
        window on a terracotta tile, with a neovim-chamfered N inside. Source of
-       truth for assets/frame_badge.png (render: qlmanage -t -s 1024, see
-       commands/notifier.sh). -->
+       truth for assets/frame_badge.png (render with transparent background —
+       qlmanage flattens to white; see commands/notifier.sh). -->
   <rect x="18" y="18" width="100" height="100" rx="26" fill="#171613"/>
   <rect x="12" y="12" width="100" height="100" rx="26" fill="#D97757" stroke="#171613" stroke-width="5"/>
   <!-- three tabs: yellow one active -->
