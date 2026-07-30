@@ -177,6 +177,15 @@ local function route(req, text)
     req.status = 'done'
     return nil
   end
+  if k == 'callback' then
+    -- In-process push tier (a vim buffer, via FrameBrokerSubmitCb): hand the
+    -- answer straight to a live Lua fn. pcall so a buggy buffer-write can never
+    -- wedge the pump / Stop hook. Fires even on '' (tool-only final turn) — the
+    -- callback tolerates empty. Terminal: nothing to collect, drop the request.
+    if type(req.ret.fn) == 'function' then pcall(req.ret.fn, text) end
+    FrameState.broker.reqs[req.id] = nil
+    return nil
+  end
   local job = nil
   if text ~= '' then
     if k == 'inbox' then
@@ -229,25 +238,44 @@ local function pump(from_stop)
   vim.g.frame_brokered_pending = 1
 end
 
--- _G.FrameBrokerSubmit(text, ret_str) — enqueue a prompt; returns its id, or
--- 'no-claude-buffer' / 'queue-full'. Busy is NOT a refusal: a request submitted
--- while claude works simply waits its turn. ret_str is 'local' | 'inbox' |
--- 'remote:name/topic'.
-_G.FrameBrokerSubmit = function(text, ret_str)
+-- broker_enqueue(text, ret) — the shared guard+mint+enqueue+pump behind both
+-- submit entry points. Returns the new id, or nil + a reason
+-- ('no-claude-buffer' | 'queue-full') when the request can't be accepted. Busy
+-- is NOT a refusal — a request submitted while claude works just waits its turn.
+local function broker_enqueue(text, ret)
   local b = FrameState.broker
-  if not FrameState.chan['claude'] then return 'no-claude-buffer' end
-  if #b.queue >= 32 then return 'queue-full' end
-  local ret
-  if ret_str == 'inbox' then ret = { kind = 'inbox' }
-  elseif type(ret_str) == 'string' and ret_str:sub(1, 7) == 'remote:' then
-    ret = { kind = 'remote', addr = ret_str:sub(8) }
-  else ret = { kind = 'local' } end
+  if not FrameState.chan['claude'] then return nil, 'no-claude-buffer' end
+  if #b.queue >= 32 then return nil, 'queue-full' end
   b.seq = b.seq + 1
   local id = 'r' .. b.seq
   b.reqs[id] = { id = id, text = text, ret = ret, status = 'queued', answer = nil }
   table.insert(b.queue, id)
   pump(false)
   return id
+end
+
+-- _G.FrameBrokerSubmit(text, ret_str) — enqueue a prompt over the socket;
+-- returns its id, or 'no-claude-buffer' / 'queue-full'. ret_str is 'local' |
+-- 'inbox' | 'remote:name/topic'.
+_G.FrameBrokerSubmit = function(text, ret_str)
+  local ret
+  if ret_str == 'inbox' then ret = { kind = 'inbox' }
+  elseif type(ret_str) == 'string' and ret_str:sub(1, 7) == 'remote:' then
+    ret = { kind = 'remote', addr = ret_str:sub(8) }
+  else ret = { kind = 'local' } end
+  local id, reason = broker_enqueue(text, ret)
+  return id or reason
+end
+
+-- _G.FrameBrokerSubmitCb(text, fn) — IN-PROCESS ONLY submit: enqueue a request
+-- whose answer is delivered by calling fn(answer) when its turn ends (a push
+-- mailbox — no id juggling, no socket, no polling). Returns the id, or nil if
+-- fn isn't a function / there's no claude buffer / the queue is full. NOT
+-- reachable over the socket (fn is a live Lua value) — for plugin code running
+-- in this same nvim (e.g. :FrameClaude). answer may be '' (tool-only turn).
+_G.FrameBrokerSubmitCb = function(text, fn)
+  if type(fn) ~= 'function' then return nil end
+  return (broker_enqueue(text, { kind = 'callback', fn = fn }))
 end
 
 -- _G.FrameBrokerAwait(id) — client poll. 'pending' while queued/in-flight,
@@ -466,6 +494,85 @@ end, {
   nargs = '?',
   complete = function() return { 'on', 'off' } end,
   desc = 'Mute/unmute frame notify banners (bare: show state)',
+})
+
+-- :[range]FrameClaude [question] — ask THIS frame's claude about the code under
+-- the cursor (or the visual selection) and show the reply in a reusable scratch
+-- buffer. The in-editor sibling of `frame claude`: same broker, same one claude
+-- conversation — but the current file:line range is attached as context and the
+-- answer is pushed back in-process via FrameBrokerSubmitCb (no socket, no poll).
+-- Bare :FrameClaude uses the current line; a visual selection uses its lines.
+-- Note: these turns enter the frame's claude conversation like any other. See
+-- docs/claude-broker.md.
+local frameclaude_buf = nil
+
+local function frameclaude_out()
+  if frameclaude_buf and vim.api.nvim_buf_is_valid(frameclaude_buf) then
+    return frameclaude_buf
+  end
+  local b = vim.api.nvim_create_buf(false, true) -- unlisted scratch (buftype=nofile)
+  pcall(vim.api.nvim_buf_set_name, b, '[FrameClaude]')
+  vim.bo[b].bufhidden = 'hide'
+  vim.bo[b].filetype = 'markdown'
+  frameclaude_buf = b
+  return b
+end
+
+-- Show `buf` in a right-hand split without stealing focus from the code.
+local function frameclaude_show(buf)
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_buf(win) == buf then return end
+  end
+  local back = vim.api.nvim_get_current_win()
+  vim.cmd('botright vsplit')
+  vim.api.nvim_win_set_buf(0, buf)
+  if vim.api.nvim_win_is_valid(back) then vim.api.nvim_set_current_win(back) end
+end
+
+-- Replace the scratch buffer's contents (kept non-modifiable, help/fugitive style).
+local function frameclaude_render(buf, lines)
+  if not vim.api.nvim_buf_is_valid(buf) then return end
+  vim.bo[buf].modifiable = true
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+end
+
+vim.api.nvim_create_user_command('FrameClaude', function(opts)
+  local l1, l2 = opts.line1, opts.line2
+  local src = vim.api.nvim_buf_get_lines(0, l1 - 1, l2, false)
+  local file = vim.fn.expand('%:.')
+  if file == '' then file = '[No Name]' end
+  local where = file .. ':' .. l1 .. (l2 > l1 and ('-' .. l2) or '')
+  local ask = opts.args ~= '' and opts.args or 'Review this code and give feedback.'
+  local ft = vim.bo.filetype
+
+  local prompt = table.concat({
+    ask, '', where, '',
+    '```' .. ft, table.concat(src, '\n'), '```',
+  }, '\n')
+
+  local function head() return { '# ' .. where, '', '> ' .. ask, '' } end
+  local out = frameclaude_out()
+  frameclaude_show(out)
+  local pending = head()
+  pending[#pending + 1] = '⏳ asking claude…'
+  frameclaude_render(out, pending)
+
+  local id = _G.FrameBrokerSubmitCb(prompt, function(answer)
+    local lines = head()
+    local body = answer == '' and '_(no textual answer)_' or answer
+    for _, l in ipairs(vim.split(body, '\n')) do lines[#lines + 1] = l end
+    frameclaude_render(out, lines)
+  end)
+  if not id then
+    local lines = head()
+    lines[#lines + 1] = '⚠️  claude unavailable or queue full — try again.'
+    frameclaude_render(out, lines)
+  end
+end, {
+  range = true,
+  nargs = '*',
+  desc = "Ask this frame's claude about the code under cursor / selection",
 })
 
 -- Register a named socket so `frame wt -d TOPIC` can send :qa! remotely.
