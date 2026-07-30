@@ -36,13 +36,23 @@ else
 fi
 cd "$DIR"
 
-# No repo → no `frame init` — wire the claude-code notification hooks
-# here instead, or a casual claude never fires Stop → frame notify. Runs on
-# reuse boots too, so dirs created before this existed get it; an existing
-# file (however it got there) is left alone.
+# No repo → no `frame init` — wire the claude-code hooks here instead, or a
+# casual claude never fires Stop → frame notify / frame reply. Shell topics
+# get reused across months, and the hook set grows: a dir wired before a hook
+# existed would otherwise be frozen without it forever (the worker answers but
+# its reply never routes home — how shell/qqq silently ate a reply). So a file
+# that is recognizably frame-authored but stale — it carries 'frame notify',
+# frame's fingerprint since day one, yet lacks a current hook — is rewritten.
+# A file WITHOUT the fingerprint is the user's own: left alone, same promise
+# frame init makes.
 if [[ ! -f .claude/settings.json ]]; then
   frame_write_claude_hooks
   echo "$OK_MARK wired claude hooks (.claude/settings.json) — Stop → frame notify"
+elif grep -qF 'frame notify' .claude/settings.json \
+  && { ! grep -qF 'frame reply' .claude/settings.json \
+    || ! grep -qF 'frame status' .claude/settings.json; }; then
+  frame_write_claude_hooks
+  echo "$OK_MARK refreshed claude hooks (.claude/settings.json) — stale frame wiring"
 fi
 
 set_title "$(frame_base_title "$NAME" "$TOPIC")"

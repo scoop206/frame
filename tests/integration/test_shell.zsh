@@ -73,6 +73,25 @@ test_shell_leaves_existing_claude_settings_alone() {
   assert_eq "$(<$SANDBOX/frames/jam/.claude/settings.json)" '{"custom": true}'
 }
 
+test_shell_refreshes_stale_frame_hooks() {
+  # A dir wired by an older frame carries 'frame notify' but not 'frame reply'
+  # (the hook set grew). Reboot must refresh it — a stale file means a worker's
+  # reply never routes home — while test_shell_leaves_existing_claude_settings_
+  # alone pins the flip side: no frame fingerprint → user file → untouched.
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  mkdir -p "$SANDBOX/frames/jam/.claude"
+  print -r -- '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"frame notify >/dev/null 2>&1 || true"}]}]}}' \
+    > "$SANDBOX/frames/jam/.claude/settings.json"
+  run_frame shell jam
+  assert_status 0
+  assert_contains "$OUT" "refreshed claude hooks"
+  local settings="$SANDBOX/frames/jam/.claude/settings.json"
+  assert_contains "$(<$settings)" "frame reply"
+  assert_contains "$(<$settings)" "frame notify"
+  assert_contains "$(<$settings)" "frame status"
+}
+
 test_shell_reuses_existing_dir() {
   export FRAME_SHELL_HOME="$SANDBOX/frames"
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
