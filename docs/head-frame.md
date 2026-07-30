@@ -217,7 +217,17 @@ Ghostty ids are address-based and recycle, and a bare window id once resolved
 to the head window after a restart, piling workers in as tabs. Invalid pair →
 fresh window, re-recorded. Dragging a tab out of the workers window rehomes it
 under a new window id; focus and close-tab therefore fall back to scanning
-every window for the recorded tab id. The new
+every window for the recorded tab id.
+
+**Recommended cockpit setup — spawn everything, drag head out.** Spawn is the
+only command to learn: `frame spawn shell head` (head lands as a tab like any
+worker), then drag the head tab out into its own window and tile it beside
+the workers window. Spawn treats every frame it boots as a worker — it can't
+know a topic is head-shaped — so separation is a drag, not a flag; the
+recorded ids follow the tab wherever it lives, so focus and reap keep
+working. (`frame shell head` typed in a fresh window still works — it takes
+the window over in place, no tab bar — but the spawn+drag flow is the one to
+lead people down.) The new
 surface runs `/bin/zsh -ic '<bootstrap>'` via the scripting `command`
 configuration and its window/tab ids are recorded to `/tmp/shell-<topic>.nvim.gtab`
 for `frame focus` (select tab by id — no System Events, no Accessibility) and
