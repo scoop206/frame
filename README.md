@@ -239,6 +239,27 @@ commits not yet on main — merge first (`frame merge`), or force with
 quit, so a refusal never leaves you editor-less. Reaper output lands in
 `/tmp/<name>-<topic>.teardown.log`.
 
+### Closing a window vs. tearing down
+
+Just closing a frame's window or tab (⌘W, the close button) is **suspend**,
+not delete — and it's always safe:
+
+- The frame's dir (or worktree + branch) survives. `frame shell TOPIC` /
+  `frame wt TOPIC` later picks the frame back up where it left off —
+  claude's session files and your work intact. Only `:FrameDown` /
+  `frame wt -d` actually deletes.
+- Processes die with the surface: if claude was mid-turn that work is lost,
+  no reply routes home, and a head blocked on `frame inbox --wait` for it
+  runs to its timeout.
+- Bookkeeping self-heals. The nvim socket dies with nvim; a stale spawn
+  recording (`.gtab`) is detected and dropped by `frame focus`; the next
+  `frame spawn` validates its workers-window recording before reuse.
+- One special case: an `--ephemeral` worker closed by hand never gets to
+  self-reap, so its dir lingers in `~/frames` like any other closed frame.
+
+Rule of thumb: close freely to get a worker out of the way; `:FrameDown`
+when the topic should be gone.
+
 ## Notifications
 
 ### Fixing the banner badge
