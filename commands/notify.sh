@@ -105,7 +105,7 @@ if [[ $_mode == blocked && -S "$SOCKET" ]]; then
   # ps:\t: — the p flag makes \t a real tab in the split spec; a bare s:\t:
   # would split on the literal two chars backslash-t and never see the fields.
   _fields=( "${(@ps:\t:)_info}" )
-  if [[ "${_fields[4]}" == waiting ]]; then
+  if [[ "${_fields[4]:-}" == waiting ]]; then
     exit 0
   fi
 fi
