@@ -90,14 +90,22 @@ SOCKET="/tmp/$NAME-$TOPIC.nvim"
 # when claude is merely done and unattended. A real mid-turn block still reads
 # "working" (no Stop since the prompt), so it falls through untouched. Gate
 # BEFORE the title flip below — otherwise the phantom would still repaint it
-# "blocked". Best-effort: FrameInfo → name<TAB>topic<TAB>port<TAB>status (status
-# is the last field); no socket / session predating FrameInfo / no answer →
-# empty → err toward firing, the pre-fix behaviour. This matters most for shell
-# frames: they run bypass-permissions, so their ONLY Notifications are these
-# idle ones — without the gate the banner is almost always a false alarm.
+# "blocked". Best-effort: FrameInfo → name<TAB>topic<TAB>port<TAB>status<TAB>health
+# — status is field 4, and stays field 4 whether or not the (later-appended)
+# health field is present, so read it by position, NOT as the last field: ls's
+# broker-health column (d5c81d4) made health the trailing field, and a
+# last-field read would test health ("," + numbers), never match "waiting", and
+# let every idle ping through — the very phantom this gate exists to stop. No
+# socket / session predating FrameInfo / no answer → empty → field 4 empty →
+# err toward firing, the pre-fix behaviour. This matters most for shell frames:
+# they run bypass-permissions, so their ONLY Notifications are these idle ones —
+# without the gate the banner is almost always a false alarm.
 if [[ $_mode == blocked && -S "$SOCKET" ]]; then
   _info=$(frame_rpc_expr "$SOCKET" 'v:lua.FrameInfo()') || _info=""
-  if [[ "${_info##*$'\t'}" == waiting ]]; then
+  # ps:\t: — the p flag makes \t a real tab in the split spec; a bare s:\t:
+  # would split on the literal two chars backslash-t and never see the fields.
+  _fields=( "${(@ps:\t:)_info}" )
+  if [[ "${_fields[4]}" == waiting ]]; then
     exit 0
   fi
 fi
