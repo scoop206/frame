@@ -558,13 +558,14 @@ end, {
 -- ── :FrameClaude / :FrameClaudeBuffer ─────────────────────────────────────────
 -- Both open THIS frame's live claude terminal in a far-right vertical split and
 -- drop you into Terminal-mode at the prompt — the in-editor way to reach the same
--- one claude conversation `frame claude` talks to. The only difference:
--- :[range]FrameClaude first pastes the current file:line range (or visual
--- selection, or a leading [question]) into the prompt as context;
--- :FrameClaudeBuffer opens the bare prompt. Neither submits — you edit and hit
--- <CR> yourself. NOTE: typing here is a direct write into claude, NOT a brokered
--- turn (cf. docs/claude-broker.md) — it interleaves with an in-flight turn
--- exactly as manual typing would.
+-- one claude conversation `frame claude` talks to. The difference:
+-- :[range]FrameClaude pastes the current file:line range (or visual selection)
+-- into the prompt as context. Given a [question] it SUBMITS straight away
+-- (question + context, run for you); bare, it leaves the context in the prompt
+-- for you to finish and submit. :FrameClaudeBuffer just opens the bare prompt.
+-- NOTE: typing here is a direct write into claude, NOT a brokered turn (cf.
+-- docs/claude-broker.md) — it interleaves with an in-flight turn exactly as
+-- manual typing would.
 
 -- Open the claude terminal in a vsplit (reusing its window if already visible)
 -- and start Terminal-mode insert. Returns the terminal's job channel so a caller
@@ -598,8 +599,9 @@ vim.api.nvim_create_user_command('FrameClaude', function(opts)
   local where = file .. ':' .. l1 .. (l2 > l1 and ('-' .. l2) or '')
   local ft = vim.bo.filetype
 
-  -- The context we paste in front of the (as-yet-unwritten) question: an
-  -- optional leading [question] arg, the file:line, then the fenced source.
+  -- Context: an optional leading [question], the file:line, then the fenced
+  -- source. A single rapid chunk either way — claude's TUI paste-detection folds
+  -- the embedded newlines into the input box rather than submitting each line.
   local parts = {}
   if opts.args ~= '' then parts[#parts + 1] = opts.args; parts[#parts + 1] = '' end
   parts[#parts + 1] = where
@@ -607,19 +609,23 @@ vim.api.nvim_create_user_command('FrameClaude', function(opts)
   parts[#parts + 1] = '```' .. ft
   parts[#parts + 1] = table.concat(src, '\n')
   parts[#parts + 1] = '```'
-  -- Trailing newline so your cursor lands on a fresh line below the fence.
-  local text = table.concat(parts, '\n') .. '\n'
+  local text = table.concat(parts, '\n')
 
   local chan = frameclaude_open()
   if not chan then return end
-  -- One rapid chansend: claude's TUI paste-detection folds the embedded newlines
-  -- into the input box instead of submitting (same mechanism frame_submit uses;
-  -- here we send NO trailing '\r', so nothing is submitted — you do that).
-  vim.fn.chansend(chan, text)
+  if opts.args ~= '' then
+    -- Question given → run it. frame_submit sends the paste, then a LONE '\r'
+    -- ~200ms later: a CR in the same chunk would fold to a newline, not submit.
+    frame_submit(chan, text)
+  else
+    -- Bare → leave the context in the prompt (trailing newline drops your cursor
+    -- onto a fresh line below the fence) for you to finish typing and submit.
+    vim.fn.chansend(chan, text .. '\n')
+  end
 end, {
   range = true,
   nargs = '*',
-  desc = "Open this frame's claude with the code under cursor / selection pasted in",
+  desc = "Ask this frame's claude about the code under cursor / selection (bare: paste + wait)",
 })
 
 vim.api.nvim_create_user_command('FrameClaudeBuffer', function()
