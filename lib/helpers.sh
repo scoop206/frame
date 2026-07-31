@@ -499,6 +499,32 @@ frame_rpc_expr() {
   return $_rc
 }
 
+frame_dir_in_use() {
+  # frame_dir_in_use DIR — print `pid command` for every live process whose
+  # working directory is at or under DIR, one per line; no output means nothing
+  # holds it. Teardown consults this before it deletes a worktree: the socket
+  # handshake can miss a still-live session (its socket at a legacy path after
+  # the rundir move, a wedged nvim that won't answer, a stray terminal left
+  # cd'd inside), and removing the tree under a live process orphans the editor
+  # and strands its cwd — the husk-directory failure this exists to prevent.
+  #
+  # lsof is macOS-native; `-d cwd -a +D` selects only the cwd fd of processes
+  # rooted under DIR, so the tree walk skips every open data file, and a
+  # worktree's node_modules is a symlink lsof won't descend — the probe stays
+  # cheap. lsof exits non-zero when nothing matches (the common case), which is
+  # simply empty output here. No lsof at all → empty (can't tell); the caller's
+  # -f still forces through, so this is never a hard dependency.
+  (( $+commands[lsof] )) || return 0
+  local _dir=$1 _line _pid=""
+  lsof -w -n -P -a -d cwd -F pc +D "$_dir" 2>/dev/null | while IFS= read -r _line; do
+    case $_line in
+      p*) _pid=${_line#p} ;;
+      c*) [[ -n $_pid ]] && print -r -- "$_pid ${_line#c}"; _pid="" ;;
+    esac
+  done
+  return 0
+}
+
 frame_live_frames() {
   # Print one `name<TAB>topic<TAB>port<TAB>status` row per running frame on this
   # machine, unsorted. A running frame is exactly one with a live nvim socket at
