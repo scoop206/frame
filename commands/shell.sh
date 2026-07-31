@@ -80,6 +80,7 @@ elif grep -qF 'frame notify' .claude/settings.json \
 fi
 
 set_title "$(frame_base_title "$NAME" "$TOPIC")"
+frame_record_gtab "$NAME" "$TOPIC"
 
 # Same layout as worktree frames — it's parameterized entirely by env, and
 # an empty FRAME_MAIN_WT is the "no primary checkout" signal that selects

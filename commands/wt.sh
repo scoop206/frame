@@ -176,6 +176,7 @@ fi
 cd "$PROJECT_DIR"
 
 set_title "$(frame_base_title "$NAME" "$TOPIC")"
+frame_record_gtab "$NAME" "$TOPIC"
 
 # Frames are self-sufficient: whichever boots first brings up the world.
 # stack_up is idempotent (compose up -d no-ops, ensure_* helpers no-op), so

@@ -189,11 +189,15 @@ frame_assert_topic_free "$W_NAME" "$TOPIC" || exit 1
 # survive nvim to run close-tab (`&&` — only after a clean exit; a failed boot
 # leaves the tab stranded on the error, readable).
 SOCKET="/tmp/$W_NAME-$TOPIC.nvim"
+# FRAME_SPAWNED=1: spawn records the authoritative .gtab below from the window
+# it creates (frame_open_window), so the inner frame shell/wt must NOT re-record
+# from its own "front window" — a worker tab isn't frontmost at boot, so it would
+# capture the head window's ids and misdirect focus. (See frame_record_gtab.)
 if [[ "$KIND" == shell ]]; then
-  BOOT="${EPHEMERAL:+FRAME_EPHEMERAL=1 }${(q)FRAME_ROOT}/bin/frame shell ${(q)TOPIC}"
+  BOOT="FRAME_SPAWNED=1 ${EPHEMERAL:+FRAME_EPHEMERAL=1 }${(q)FRAME_ROOT}/bin/frame shell ${(q)TOPIC}"
   BOOT+=" && ${(q)FRAME_ROOT}/bin/frame spawn close-tab ${(q)TOPIC}"
 else
-  BOOT="cd ${(q)PROJ} && ${(q)FRAME_ROOT}/bin/frame wt ${(q)TOPIC}"
+  BOOT="cd ${(q)PROJ} && FRAME_SPAWNED=1 ${(q)FRAME_ROOT}/bin/frame wt ${(q)TOPIC}"
   BOOT+=" && ${(q)FRAME_ROOT}/bin/frame spawn close-tab ${(q)W_NAME}/${(q)TOPIC}"
 fi
 if ! IDS=$(frame_open_window "$BOOT"); then

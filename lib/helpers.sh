@@ -299,6 +299,42 @@ set_title() {
   printf '\e]2;%s\e\\' "$1"
 }
 
+frame_record_gtab() {
+  # frame_record_gtab NAME TOPIC — record this frame's ghostty window+tab id to
+  # /tmp/NAME-TOPIC.nvim.gtab so `frame focus` (and the notify banner's click)
+  # can raise the exact window by id. That id path in commands/focus.sh needs
+  # only Automation (tell Ghostty) — NOT System Events / the Accessibility grant,
+  # which the notifier app's relaunched click callback can't get (ad-hoc signed,
+  # so macOS won't honor its assistive-access grant). Hand-booted frames
+  # (frame shell / frame wt exec nvim in the CURRENT window) otherwise have no
+  # recording and fall to focus's title matcher — exactly the path that dies with
+  # osascript-not-allowed-assistive-access (-1728) from a banner click.
+  #
+  # spawn writes its OWN authoritative gtab from the window it creates and sets
+  # FRAME_SPAWNED=1 so this no-ops: a spawned worker's tab isn't frontmost at
+  # boot, so "front window" here would capture the HEAD window's ids and send
+  # focus to the wrong window.
+  #
+  # Best-effort and Ghostty-only: it runs in the terminal the human invoked, so
+  # the frame's window is frontmost; if this isn't Ghostty, Automation is denied,
+  # or Ghostty predates the AppleScript dictionary, it writes nothing and focus
+  # falls back to the matcher. Same "WINDOW_ID TAB_ID" shape frame_open_window
+  # and spawn write, and commands/focus.sh reads.
+  [[ -n "${FRAME_SPAWNED:-}" ]] && return 0
+  [[ "${TERM_PROGRAM:-}" == ghostty ]] || return 0
+  local _name=$1 _topic=$2 _ids
+  _ids=$(osascript 2>/dev/null <<'APPLESCRIPT'
+tell application "Ghostty"
+  set w to front window
+  set tb to selected tab of w
+  return (id of w) & " " & (id of tb)
+end tell
+APPLESCRIPT
+  ) || return 0
+  [[ -n "$_ids" ]] && print -r -- "$_ids" > "/tmp/$_name-$_topic.nvim.gtab"
+  return 0
+}
+
 # ── shell topics ──────────────────────────────────────────────────────────────
 
 frame_mint_shell_topic() {
