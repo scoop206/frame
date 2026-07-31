@@ -10,6 +10,11 @@
 # not — or, with --force, overwrites settings.json to re-sync the hooks, but only
 # when the file holds nothing but frame's own hooks (jq confirms that); a file
 # with custom hooks or settings is still left for a hand-merge.
+#
+# Exit status: 0 when everything's in sync (including a clean --force re-sync);
+# 3 when a settings.json is left out of sync — its frame hooks are missing and
+# init didn't fix it (no --force, custom content, or jq unavailable) — so `frame
+# init` doubles as a drift check. 1 = not a git repo; 2 = usage error.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 PROJECT_ROOT=$(frame_project_root) || {
@@ -83,10 +88,7 @@ if [[ -f .claude/settings.json ]]; then
   # hooks are already wired; if any are missing, flag it so the user knows the
   # file needs a hand-merge rather than assuming init finished the job.
   typeset -a _missing
-  _missing=()
-  for _h in 'frame notify' 'frame reply' 'frame status --prompt' 'frame notify --blocked'; do
-    grep -qF "$_h" .claude/settings.json || _missing+=( "$_h" )
-  done
+  _missing=(${(f)"$(frame_claude_hooks_missing .claude/settings.json)"})
   if (( ${#_missing} )); then
     if (( FORCE )); then
       # --force overwrites only when the file is frame's-hooks-or-nothing;
@@ -139,16 +141,16 @@ if [[ -n $_hooks_hint ]]; then
   print
   case $_hooks_hint in
     missing)
-      print -- "  ⚠ .claude/settings.json already exists, so frame left it untouched —"
+      print -- "  $WARN_MARK .claude/settings.json already exists, so frame left it untouched —"
       print -- "    it's missing frame's notification hooks. Re-run \`frame init --force\`"
       print -- "    to overwrite it with frame's hooks (only if it holds no custom"
       print -- "    content), or add these by hand:" ;;
     custom)
-      print -- "  ⚠ .claude/settings.json holds custom hooks or settings, so --force"
+      print -- "  $WARN_MARK .claude/settings.json holds custom hooks or settings, so --force"
       print -- "    left it untouched rather than clobber them. It's missing frame's"
       print -- "    notification hooks — merge these in by hand:" ;;
     nojq)
-      print -- "  ⚠ --force needs \`jq\` to confirm settings.json holds nothing but"
+      print -- "  $WARN_MARK --force needs \`jq\` to confirm settings.json holds nothing but"
       print -- "    frame's hooks before overwriting it, and jq isn't installed. Install"
       print -- "    it (brew install jq) and re-run, or add the missing hooks by hand:" ;;
   esac
@@ -160,4 +162,9 @@ if [[ -n $_hooks_hint ]]; then
       'frame status --prompt') print -- "      UserPromptSubmit → 'frame status --prompt'  (\"working\" status + turn stamp)" ;;
     esac
   done
+
+  # A left-untouched, out-of-sync settings.json is a failure to signal, not just
+  # a note to read: exit nonzero so `frame init` doubles as a drift check (CI, a
+  # pre-flight, or a human who scripts it) and the drift can't pass silently.
+  exit 3
 fi

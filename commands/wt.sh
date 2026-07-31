@@ -218,6 +218,17 @@ export FRAME_TOPIC="$TOPIC"
 export FRAME_MAIN_WT="$MAIN_WT"
 export FRAME_VITE_PORT
 export FRAME_BUFFERS="${BUFFERS[*]}"
+# Sniff the committed claude hooks this frame is about to boot on. A worktree
+# inherits whatever .claude/settings.json the branch carries, so a file that's
+# missing or drifted from frame's canonical hook set (frame_claude_hooks_missing
+# — the same list init checks and shell re-syncs) silently breaks THIS frame's
+# notifications: the exact bite this guards. We only flag it (never rewrite — a
+# tracked file, and a blind overwrite could clobber custom hooks). The drift
+# list rides along to the layout, which re-emits it via vim.notify so it lands
+# in the message area instead of scrolling away under the exec into nvim.
+# `frame init --force` re-syncs it (or scaffolds one when the file is absent).
+_hook_drift=(${(f)"$(frame_claude_hooks_missing .claude/settings.json)"})
+export FRAME_HOOK_DRIFT="${(j:, :)_hook_drift}"
 # Config vars referenced by buffers.json are exported under their own names,
 # so the registry reads exactly like the config. FRAME_* stays reserved for
 # frame-computed values with no config counterpart.
