@@ -77,6 +77,16 @@ BUFFERS=(claude local)
 #app_env() {
 #  export DATABASE_URL=postgres://$_name:devpassword@localhost:5432/$_name
 #}
+
+# Run after a successful \`frame merge\`: merge_epilog TOPIC PUSHED (\$2 is 'true'
+# when --push / :FrameMerge! was used). Off unless you define it — use it to
+# nudge the last step agents tend to forget: tearing the frame down. Fire on
+# every merge (agents rarely --push, so don't gate on \$2 if it's them you're
+# reminding), or gate on \$2 for a push-means-done policy. A machine-wide default
+# can live in ~/.config/frame/config.sh; this overrides it per-project.
+#merge_epilog() {
+#  echo "→ done with '\$1'? tear it down:  frame wt -d \$1   (or :FrameDown from inside)"
+#}
 EOF
   _rows+=( ".frame/config.sh|yes|scaffolded — edit it to fit the project" )
 fi

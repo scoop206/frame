@@ -73,6 +73,14 @@ frame_load_config() {
   }
   MAIN_WT=$(frame_main_wt "$PROJECT_ROOT")
 
+  # Machine-wide base layer: personal hooks (e.g. merge_epilog) shared by every
+  # project on this box, in XDG-standard ~/.config/frame/config.sh. Sourced
+  # BEFORE the project config so any project can override or unset what it
+  # defines. Opt-in and sourced — unlike $FRAME_GLOBAL_CONFIG (key=value, never
+  # sourced so hot-path reads execute nothing).
+  local _global="${XDG_CONFIG_HOME:-$HOME/.config}/frame/config.sh"
+  [[ -f "$_global" ]] && source "$_global"
+
   local _dir _f _cfg=""
   for _dir in "$PROJECT_ROOT" "$MAIN_WT"; do
     for _f in "$_dir/.frame/local/config.sh" "$_dir/.frame/config.sh"; do
