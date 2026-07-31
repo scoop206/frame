@@ -558,14 +558,17 @@ end, {
 -- ── :[range]FrameClaude [question] ────────────────────────────────────────────
 -- Opens THIS frame's live claude terminal in a far-right vertical split and drops
 -- you into Terminal-mode at the prompt — the in-editor way to reach the same one
--- claude conversation `frame claude` talks to. Two modes, keyed on whether you
--- pass a question:
---   :FrameClaude              — just open the prompt, ready to type. No context.
---   :FrameClaude <question>   — attach the current line (or the [range]/visual
---                               selection) as file:line + fenced source, and
---                               SUBMIT the question straight away.
--- So `<leader>c → :FrameClaude<cr>` opens claude, while `<leader>ca → :FrameClaude `
--- (normal or visual) leaves you typing the question, submitted on <CR>.
+-- claude conversation `frame claude` talks to. Behavior is keyed on two things,
+-- a RANGE (attaches context) and a QUESTION (submits):
+--   :FrameClaude              — no range, no question → just open the prompt.
+--   :'<,'>FrameClaude         — a range/visual selection, no question → paste the
+--                               file:line + fenced source and leave it in the
+--                               prompt for you to type your question and submit.
+--   :FrameClaude <question>   — question → attach the current line (or the
+--                               range/selection) as context and SUBMIT it.
+-- So `<leader>c → :FrameClaude<cr>` opens claude; selecting code then bare
+-- :FrameClaude drops that code in for you; `<leader>ca → :FrameClaude ` (normal
+-- or visual) leaves you typing the question, submitted on <CR>.
 -- NOTE: this is a direct write into claude, NOT a brokered turn (cf.
 -- docs/claude-broker.md) — it interleaves with an in-flight turn exactly as
 -- manual typing would.
@@ -595,29 +598,44 @@ local function frameclaude_open()
 end
 
 vim.api.nvim_create_user_command('FrameClaude', function(opts)
+  local has_q = opts.args ~= ''
+  local has_range = opts.range > 0 -- 0 = none, 1 = one line, 2 = a range/visual
+
   -- Capture context from the CURRENT (code) buffer BEFORE opening claude —
   -- frameclaude_open() switches windows, after which buffer 0 is the terminal.
-  -- A question attaches the current line (or the range/visual selection) as
-  -- file:line + fenced source; bare leaves text nil (just open the prompt).
+  -- Context is attached whenever there's a question or an explicit range; a bare
+  -- rangeless :FrameClaude leaves text nil (just open the prompt).
   local text
-  if opts.args ~= '' then
+  if has_q or has_range then
     local l1, l2 = opts.line1, opts.line2
     local src = vim.api.nvim_buf_get_lines(0, l1 - 1, l2, false)
     local file = vim.fn.expand('%:.')
     if file == '' then file = '[No Name]' end
     local where = file .. ':' .. l1 .. (l2 > l1 and ('-' .. l2) or '')
-    text = table.concat({
-      opts.args, '', where, '',
-      '```' .. vim.bo.filetype, table.concat(src, '\n'), '```',
-    }, '\n')
+    local parts = {}
+    if has_q then parts[#parts + 1] = opts.args; parts[#parts + 1] = '' end
+    parts[#parts + 1] = where
+    parts[#parts + 1] = ''
+    parts[#parts + 1] = '```' .. vim.bo.filetype
+    parts[#parts + 1] = table.concat(src, '\n')
+    parts[#parts + 1] = '```'
+    text = table.concat(parts, '\n')
   end
 
   local chan = frameclaude_open()
   if not chan then return end
-  -- Submit: one rapid chunk (claude's TUI paste-detection folds the embedded
-  -- newlines into the input box), then frame_submit sends a LONE '\r' ~200ms
-  -- later — a CR in the same chunk would fold to a newline, not submit.
-  if text then frame_submit(chan, text) end
+  if not text then return end -- bare, rangeless → just opened the prompt
+  -- Both paths send one rapid chunk — claude's TUI paste-detection folds the
+  -- embedded newlines into the input box rather than submitting each line.
+  if has_q then
+    -- Question → run it. frame_submit sends the paste, then a LONE '\r' ~200ms
+    -- later (a CR in the same chunk would fold to a newline, not submit).
+    frame_submit(chan, text)
+  else
+    -- Range but no question → leave the context in the prompt (trailing newline
+    -- drops your cursor onto a fresh line) for you to type your question + submit.
+    vim.fn.chansend(chan, text .. '\n')
+  end
 end, {
   range = true,
   nargs = '*',
