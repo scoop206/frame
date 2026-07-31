@@ -2,9 +2,7 @@
 
 [![tests](https://github.com/scoop206/frame/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/scoop206/frame/actions/workflows/test.yml)
 
-A Claude harness built around **neovim**, **ghostty**, **git worktrees** — a frame
-per feature, parallel Claude sessions you can tell apart, and shared services
-across all your projects.
+frame - an AI harness built on: zsh, ghostty, neovim, and claude code
 
 <p align="center">
   <img src="assets/frame_badge.png" alt="frame badge: three ordered tabs over a window with a neovim-chamfered N on terracotta" width="216">
@@ -36,49 +34,35 @@ across all your projects.
 
 ## What Frame does
 
-Run from a project:
+Everyday commands — run `frame <command> --help` for flags, or `frame --help`
+for the full list:
 
-```
-frame init                 scaffold integration into project (.frame/* and
-                           .claude/settings.json hooks)
-frame init --force         re-sync: overwrite an existing settings.json whose
-                           frame hooks are stale/missing (only when it holds no
-                           custom content; needs jq to verify that)
-frame wt TOPIC             create/reuse branch TOPIC + worktree ../_<name>-TOPIC, boot it
-frame wt                   boot the worktree you're already in
-frame wt -d [-f] [TOPIC]   tear down a frame (defaults to the one you're in)
-frame shell TOPIC          casual frame in ~/frames/TOPIC — no repo, no branch,
-                           just the claude + local buffers
-frame shell                infer TOPIC from the cwd if it's a shell frame dir,
-                           else mint a fresh dated one (2026-07-30-a3f9)
-frame ls                   list every live frame (all projects); → marks the one
-                           you're in. `frame focus` a topic you spot here
-frame merge [TOPIC] [--push|--ff|-n]   merge into main from the primary worktree
-frame services [up|down|ps]            manage the shared postgres/minio stack
-frame status [TEXT…]       append "- TEXT" to this frame's window title (no TEXT clears;
-                           the claude hooks set "working" on prompt, "waiting" on Stop,
-                           "blocked" when claude pauses mid-turn for permission/input)
-frame notify [--blocked]   send a notification: task-complete (Stop hook), or
-                           --blocked when claude needs your input (Notification hook)
-frame notification on|off|init   on|off: global switch
-                           init: build/repair the banner app (needs `brew install terminal-notifier`)
-frame yolo on|off          master switch: claude in every frame launches with
-                           --dangerously-skip-permissions (default off)
-frame focus [TOPIC|NAME/TOPIC]  raise that frame's ghostty window (default: the one you're in)
-frame claude [--timeout N] TEXT…   ask THIS frame's claude and block for its answer
-frame req <topic|name/topic> TEXT…   hand a request to ANOTHER frame's claude; async
-                           (returns once queued), the reply routes home to your frame inbox
-frame inbox [--wait]       read replies routed back by frame req (--wait blocks for the next)
-```
+| command                      | what it does                                           |
+| ---------------------------- | ------------------------------------------------------ |
+| `frame init`                 | scaffold frame into a project (`.frame/*`, hooks)      |
+| `frame wt TOPIC`             | create/reuse a branch + worktree, boot it              |
+| `frame wt`                   | boot the worktree you're already in                    |
+| `frame wt -d [TOPIC]`        | tear down a frame (default: the current one)           |
+| `frame shell TOPIC`          | a frame with no repo — just the claude + local buffers |
+| `frame ls`                   | list every live frame across projects                  |
+| `frame merge [TOPIC]`        | merge a topic branch into main                         |
+| `frame claude TEXT…`         | ask this frame's claude, block for the answer          |
+| `frame req NAME/TOPIC TEXT…` | ask another frame's claude (async)                     |
+| `frame inbox`                | read replies routed back to you                        |
+| `frame services up`          | bring up the shared postgres/minio stack               |
+| `frame focus [TOPIC]`        | raise a frame's window                                 |
+| `frame yolo on\|off`         | toggle `--dangerously-skip-permissions` everywhere     |
 
-`worktree` is accepted as a synonym for `wt`; `list` for `ls`.
+`worktree` is a synonym for `wt`; `list` for `ls`. Not shown here: `spawn`,
+`deliver`, `reply`, `view`, `status`, `notify`, `notification`, and every
+`--flag` — see `frame --help`.
 
 ### Inbox filtering
 
 When you send a `frame req`, Frame prints a **token** (`token: frame/topic#id`) — a
 globally-unique id for that request. Your inbox is shared: replies from every
 `frame req` you've fired land there together, so reading in order can't guarantee
-you're looking at the answer to a *specific* request.
+you're looking at the answer to a _specific_ request.
 
 Pass `--for <token>` to `frame inbox` to retrieve only the reply for that request:
 
@@ -100,7 +84,7 @@ See [docs/claude-broker.md](docs/claude-broker.md) for the full model.
 
 - A frame per feature
 - Parallel sessions you can tell apart
-- Claude notifications
+- notifications when claude is
 - Shared postgres + minio (or whatever) across all your projects
 - minimal neovim, zsh, git worktrees
 
@@ -215,15 +199,15 @@ You can see vite's rendered web app at http://localhost:PORT
 When frame instantiates the nvim instance it injects these user commands
 (defined in `layouts/worktree.lua`), available from any buffer in the session:
 
-| command              | action                                                                        |
-| -------------------- | ----------------------------------------------------------------------------- |
-| `:FrameStatus TEXT…` | append "- TEXT" to the window title's status suffix (no TEXT clears it)       |
-| `:FrameNotify off`   | 'on' or 'off' to unmute/mute banners; no arg shows state                      |
-| `:FrameQuit`         | quit the session only — worktree and branch stay for a later `frame wt TOPIC` |
-| `:FrameDown`         | tear down the whole frame: quit nvim, remove the worktree, delete the branch  |
-| `:FrameDown!`        | force teardown — discard uncommitted changes and unmerged commits             |
-| `:FrameMerge`        | merge this frame's branch into main (same safeguards as `frame merge`)        |
-| `:FrameMerge!`       | merge, then push main to origin (mirrors `frame merge --push`)                |
+| command                   | action                                                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `:FrameStatus TEXT…`      | append "- TEXT" to the window title's status suffix (no TEXT clears it)                                             |
+| `:FrameNotify off`        | 'on' or 'off' to unmute/mute banners; no arg shows state                                                            |
+| `:FrameQuit`              | quit the session only — worktree and branch stay for a later `frame wt TOPIC`                                       |
+| `:FrameDown`              | tear down the whole frame: quit nvim, remove the worktree, delete the branch                                        |
+| `:FrameDown!`             | force teardown — discard uncommitted changes and unmerged commits                                                   |
+| `:FrameMerge`             | merge this frame's branch into main (same safeguards as `frame merge`)                                              |
+| `:FrameMerge!`            | merge, then push main to origin (mirrors `frame merge --push`)                                                      |
 | `:[range]FrameClaude [Q]` | ask this frame's claude about the current line / visual selection; answer opens in a `[FrameClaude]` scratch buffer |
 
 In a shell frame (`frame shell`) there is no worktree or branch, so

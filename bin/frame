@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# frame - an AI harness built on: ghostty, neovim, and claude code
+# frame - an AI harness built on: zsh, ghostty, neovim, and claude code
 #
 # A frame is a terminal window running neovim as its buffer-management layer —
 # running Claude with supporting service buffers and a terminal (local).
