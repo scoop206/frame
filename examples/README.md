@@ -1,15 +1,42 @@
 # Examples
 
-Three fictional projects showing what a committed `.frame/` directory looks
-like, from nothing to a project with its own container. Copy the closest one
-into your repo (or run `frame init` and edit) — the config is the whole
-integration; there is nothing else to wire up.
+Three fictional projects showing what a committed frame integration looks
+like, from nothing to a project with its own container. Each carries the two
+committed pieces `frame init` scaffolds — a `.frame/config.sh` and a
+`.claude/settings.json` — so copying the closest one into your repo (or
+running `frame init` and editing) gives you a fully wired project; there is
+nothing else to add.
 
 | example                              | shows                                                                     |
 | ------------------------------------ | ------------------------------------------------------------------------- |
 | [`barebones/`](barebones)            | the minimum: `config.sh` with just `NAME`                                 |
 | [`standard-web/`](standard-web)      | the default web stack: a server + vite app on the shared postgres/minio   |
 | [`sidecar/`](sidecar)                | additionally running its own project-unique container from its compose file |
+
+The `.frame/config.sh` is the part that varies per project — it's what each
+example below is really about. The `.claude/settings.json` is identical in all
+three (and in your repo): frame writes the same canonical hooks regardless of
+the project, so it's described once here rather than re-explained per example.
+
+### .claude/settings.json
+
+The hooks that put each frame's claude lifecycle into the window title and
+`frame ls`, and route a finished turn to whoever's watching. Frame writes this
+verbatim; you don't hand-edit it. Three hook events:
+
+- **`Stop`** → `frame notify` (banner + a "- waiting" title status) and
+  `frame reply` (routes the turn's last message to anyone who `req`'d this
+  frame).
+- **`UserPromptSubmit`** → `frame status --prompt` ("- working" + the
+  turn-start stamp).
+- **`Notification`** → `frame notify --blocked` ("- blocked" + banner) for
+  when claude pauses mid-turn on a permission prompt — the one state
+  `Stop`/`UserPromptSubmit` can't see, so without it a blocked frame reads as
+  "working" forever.
+
+If yours predates the `Notification` hook (or otherwise drifts from this),
+`frame init --force` re-syncs it — but only when the file holds nothing but
+frame's own hooks, so it never clobbers custom settings.
 
 ### barebones
 
