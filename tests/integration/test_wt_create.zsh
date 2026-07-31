@@ -52,6 +52,19 @@ test_existing_worktree_is_reused() {
   assert_contains "$OUT" "already exists — reusing"
 }
 
+test_husk_directory_is_not_reused() {
+  # A bare directory where the worktree belongs — left by a torn-down or
+  # half-removed frame — has no .git; booting into it fails cryptically
+  # mid-setup. Refuse before any side effect rather than "reusing" it.
+  setup_project
+  mkdir -p "$SANDBOX/_$TNAME-topic"      # husk: exists, not a registered worktree
+  run_frame wt topic
+  assert_status 1
+  assert_contains "$OUT" "not a live worktree"
+  assert_branch_absent "$REPO" topic
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
 test_existing_branch_gets_worktree() {
   setup_project
   git -C "$REPO" branch topic2

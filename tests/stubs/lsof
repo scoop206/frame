@@ -1,7 +1,10 @@
 #!/usr/bin/env zsh
-# Test stub for lsof. find_free_port calls `lsof -nP -iTCP:<port> -sTCP:LISTEN`
-# and only checks the exit code. A port is "busy" iff it appears in the
-# space-separated $FAKE_BUSY_PORTS.
+# Test stub for lsof. Two callers:
+#   find_free_port   → `lsof -nP -iTCP:<port> -sTCP:LISTEN`: exit 0 iff <port> is
+#                      in the space-separated $FAKE_BUSY_PORTS (only rc is read).
+#   frame_dir_in_use → `lsof … -d cwd -F pc +D <dir>`: emit a fake cwd-holder in
+#                      `-F pc` form when <dir> == $FAKE_HELD_DIR, else nothing.
+prev=""
 for arg in "$@"; do
   if [[ "$arg" == -iTCP:* ]]; then
     port=${arg#-iTCP:}
@@ -10,5 +13,12 @@ for arg in "$@"; do
     done
     exit 1
   fi
+  if [[ "$prev" == "+D" ]]; then
+    if [[ -n "${FAKE_HELD_DIR:-}" && "$arg" == "$FAKE_HELD_DIR" ]]; then
+      print -r -- "p99999"; print -r -- "cframe-test-holder"; exit 0
+    fi
+    exit 1   # +D probe for an unheld dir → nothing holds it
+  fi
+  prev=$arg
 done
 exit 1

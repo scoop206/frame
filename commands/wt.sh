@@ -83,6 +83,10 @@ if [[ "${1:-}" == "-d" ]]; then
     exit 0
   fi
 
+  # Track whether we POSITIVELY saw the session go down. Only a clean :qa!
+  # handshake followed by the socket unlinking proves it; a missing or
+  # unresponsive socket does not (see the backstop below).
+  _confirmed_down=0
   if [[ -S "$SOCKET" ]]; then
     echo "$RUN_MARK sending :qa! to nvim ($SOCKET)…"
     # <Cmd>qa!<CR> executes from ANY mode — the session normally sits in
@@ -98,12 +102,34 @@ if [[ "${1:-}" == "-d" ]]; then
         echo "$X_MARK nvim still running after 10s — aborting teardown" >&2
         exit 1
       fi
+      _confirmed_down=1   # acked :qa! and unlinked its socket — really gone
     else
       echo "⚠ socket is stale (no nvim listening) — removing it"
       rm -f "$SOCKET"
     fi
   else
     echo "⚠ no nvim socket at $SOCKET — session may already be closed"
+  fi
+
+  # Backstop before anything destructive, for the case we did NOT confirm the
+  # session down. A missing or unresponsive socket is NOT proof the editor is
+  # gone: after the rundir moved to $FRAME_RUNDIR a pre-move session still
+  # listens on a legacy /tmp path, and a wedged nvim won't answer the handshake
+  # above — either way this code used to fall straight through and delete the
+  # worktree out from under a live process, orphaning the editor and stranding
+  # its shell in a husk directory (the exact bug this guards). So refuse when a
+  # live process still holds the worktree as its cwd. Skipped when :qa! already
+  # confirmed the exit (its terminal children may linger a beat and would else
+  # false-positive) and skipped under -f for the deliberate nuke.
+  if (( ! FORCE && ! _confirmed_down )); then
+    _holders=$(frame_dir_in_use "$WT_DIR")
+    if [[ -n "$_holders" ]]; then
+      echo "$X_MARK $WT_DIR is still in use — not removing it:" >&2
+      print -r -- "$_holders" | sed 's/^/    /' >&2
+      echo "  quit that session/shell first (it may be an orphaned nvim whose" >&2
+      echo "  socket moved), or force with: frame wt -d -f $TOPIC" >&2
+      exit 1
+    fi
   fi
   _rm_flags=(); if (( FORCE )); then _rm_flags=(--force); fi
   git -C "$MAIN_WT" worktree remove "${_rm_flags[@]}" "$WT_DIR"
@@ -160,16 +186,28 @@ frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
 
 # Topic is clear — now materialize the worktree for the `frame wt TOPIC` form.
 if (( $# >= 1 )); then
-  if [[ ! -d "$WT_DIR" ]]; then
-    if git -C "$MAIN_WT" show-ref --verify --quiet "refs/heads/$TOPIC"; then
-      echo "$RUN_MARK adding worktree $WT_DIR on existing branch $TOPIC…"
-      git -C "$MAIN_WT" worktree add "$WT_DIR" "$TOPIC"
+  if [[ -d "$WT_DIR" ]]; then
+    # A directory here isn't automatically a healthy worktree to reuse. A
+    # teardown that couldn't reach its session (or one racing this boot) can
+    # leave the path behind as a husk — an empty dir git no longer tracks, or
+    # one mid-removal. Booting into that gives a frame with no .git: services
+    # come up, then the first file op (symlinking .env) fails in a cwd that has
+    # since vanished — the cryptic "ln: .env: No such file or directory" this
+    # replaces. Only reuse a dir git still recognizes as THIS worktree's root.
+    if [[ "$(git -C "$WT_DIR" rev-parse --show-toplevel 2>/dev/null)" == "${WT_DIR:A}" ]]; then
+      echo "$OK_MARK worktree $WT_DIR already exists — reusing"
     else
-      echo "$RUN_MARK creating branch $TOPIC + worktree $WT_DIR…"
-      git -C "$MAIN_WT" worktree add -b "$TOPIC" "$WT_DIR"
+      echo "$X_MARK $WT_DIR exists but is not a live worktree — a torn-down or" >&2
+      echo "  half-removed frame left it behind. Clear the stale directory, then retry:" >&2
+      echo "      rm -rf ${(q)WT_DIR} && git -C ${(q)MAIN_WT} worktree prune" >&2
+      exit 1
     fi
+  elif git -C "$MAIN_WT" show-ref --verify --quiet "refs/heads/$TOPIC"; then
+    echo "$RUN_MARK adding worktree $WT_DIR on existing branch $TOPIC…"
+    git -C "$MAIN_WT" worktree add "$WT_DIR" "$TOPIC"
   else
-    echo "$OK_MARK worktree $WT_DIR already exists — reusing"
+    echo "$RUN_MARK creating branch $TOPIC + worktree $WT_DIR…"
+    git -C "$MAIN_WT" worktree add -b "$TOPIC" "$WT_DIR"
   fi
 fi
 
@@ -182,6 +220,17 @@ frame_record_gtab "$NAME" "$TOPIC"
 # stack_up is idempotent (compose up -d no-ops, ensure_* helpers no-op), so
 # this is cheap when the stack is already running.
 if (( $+functions[stack_up] )); then stack_up; fi
+
+# A concurrent teardown can pull the worktree out from under us during the work
+# above — stack_up alone takes seconds. If our cwd has been unlinked, every file
+# op below (starting with the .env symlink) fails with a bare ENOENT; surface
+# the real cause once, here, instead of that cryptic error. Harmless for the
+# primary checkout — MAIN_WT never gets reaped.
+if ! git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "$X_MARK $PROJECT_DIR vanished mid-boot — a teardown removed it out from" >&2
+  echo "  under this boot. Nothing persisted; just run: frame wt $TOPIC" >&2
+  exit 1
+fi
 
 # Gitignored assets a fresh worktree lacks — symlink from the primary checkout
 # so it boots instantly. Default covers .env (shared server config; exported

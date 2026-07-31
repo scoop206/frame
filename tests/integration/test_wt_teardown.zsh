@@ -58,6 +58,31 @@ test_force_overrides_both_rails() {
   assert_branch_absent "$REPO" topic
 }
 
+test_live_holder_blocks_socketless_teardown() {
+  # No socket exists here (unique $TNAME), so teardown can't confirm the session
+  # is down. A live process still sitting in the worktree (its cwd) must block
+  # removal rather than have the tree deleted out from under it — the husk bug.
+  setup_frame
+  export FAKE_HELD_DIR="$WT"
+  run_frame wt -d topic
+  unset FAKE_HELD_DIR
+  assert_status 1
+  assert_contains "$OUT" "still in use"
+  assert_dir_exists "$WT"
+  assert_branch_exists "$REPO" topic
+}
+
+test_force_teardown_ignores_live_holder() {
+  # -f is the deliberate nuke: it skips the holder check entirely.
+  setup_frame
+  export FAKE_HELD_DIR="$WT"
+  run_frame wt -d -f topic
+  unset FAKE_HELD_DIR
+  assert_status 0
+  assert_dir_absent "$WT"
+  assert_branch_absent "$REPO" topic
+}
+
 test_missing_worktree_fails() {
   make_repo
   run_frame wt -d nope
