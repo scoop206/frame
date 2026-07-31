@@ -306,7 +306,7 @@ Teardown refuses if the worktree has uncommitted changes or the branch has
 commits not yet on main — merge first (`frame merge`), or force with
 `frame wt -d -f [TOPIC]` / `:FrameDown!`. These checks run _before_ nvim is
 quit, so a refusal never leaves you editor-less. Reaper output lands in
-`/tmp/<name>-<topic>.teardown.log`.
+`/tmp/frame/<name>-<topic>.teardown.log`.
 
 ### Closing a window vs. tearing down
 

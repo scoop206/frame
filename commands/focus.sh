@@ -52,9 +52,9 @@ TARGET="${F_NAME:+$F_NAME/}$F_TOPIC"
 # through to the matcher; a stale recording (frame died, tab gone) is deleted
 # so it can't misdirect again.
 if [[ -n "$F_NAME" ]]; then
-  GTABS=(/tmp/$F_NAME-$F_TOPIC.nvim.gtab(N))
+  GTABS=($FRAME_RUNDIR/$F_NAME-$F_TOPIC.nvim.gtab(N))
 else
-  GTABS=(/tmp/*-$F_TOPIC.nvim.gtab(N))
+  GTABS=($FRAME_RUNDIR/*-$F_TOPIC.nvim.gtab(N))
 fi
 if (( $#GTABS )); then
   read -r G_WID G_TID < "$GTABS[1]"

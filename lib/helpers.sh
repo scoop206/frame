@@ -4,6 +4,29 @@
 
 FRAME_SERVICES_COMPOSE="$FRAME_ROOT/services/docker-compose.yml"
 
+# ── runtime dir ─────────────────────────────────────────────────────────────
+# One per-user home for this session's ephemera — nvim sockets, prompt/gtab
+# stamps, teardown logs, the workers-window record — instead of strewing them
+# across /tmp's root. Grouped so `ls "$FRAME_RUNDIR"` is legible and
+# `rm -rf "$FRAME_RUNDIR"` resets all frame runtime state. Exported so the nvim
+# layout (worktree.lua) and any child resolve the same path; overridable so the
+# test sandbox can point it at a private, per-test dir.
+#
+# Unlike /tmp itself, /tmp/frame is NOT guaranteed to exist: macOS's daily
+# tmp_cleaner reaps files untouched for ~3 days and can then remove the emptied
+# dir. So writers go through frame_rundir(), which (re)creates it first. 0700
+# both tidies and sidesteps the world-writable-/tmp pre-creation footgun.
+: ${FRAME_RUNDIR:=/tmp/frame}
+export FRAME_RUNDIR
+
+frame_rundir() {
+  # Ensure $FRAME_RUNDIR exists and print it. Use at every write site; reads and
+  # globs can reference $FRAME_RUNDIR directly (a missing dir just yields no
+  # matches / a false -S test, which is the correct answer).
+  [[ -d $FRAME_RUNDIR ]] || mkdir -m 700 -p -- "$FRAME_RUNDIR"
+  print -r -- "$FRAME_RUNDIR"
+}
+
 # ── status markers ────────────────────────────────────────────────────────────
 # Colored only when the stream is a terminal (✗ prints to stderr, ✓/▶/⚠ to
 # stdout) and NO_COLOR is unset — piped output, logs, and the worktree.lua
@@ -301,7 +324,7 @@ set_title() {
 
 frame_record_gtab() {
   # frame_record_gtab NAME TOPIC — record this frame's ghostty window+tab id to
-  # /tmp/NAME-TOPIC.nvim.gtab so `frame focus` (and the notify banner's click)
+  # $FRAME_RUNDIR/NAME-TOPIC.nvim.gtab so `frame focus` (and the notify click)
   # can raise the exact window by id. That id path in commands/focus.sh needs
   # only Automation (tell Ghostty) — NOT System Events / the Accessibility grant,
   # which the notifier app's relaunched click callback can't get (ad-hoc signed,
@@ -331,7 +354,7 @@ tell application "Ghostty"
 end tell
 APPLESCRIPT
   ) || return 0
-  [[ -n "$_ids" ]] && print -r -- "$_ids" > "/tmp/$_name-$_topic.nvim.gtab"
+  [[ -n "$_ids" ]] && print -r -- "$_ids" > "$FRAME_RUNDIR/$_name-$_topic.nvim.gtab"
   return 0
 }
 
@@ -380,7 +403,7 @@ frame_open_window() {
   # AppleScript dictionary, so workers open as TABS congregating in one shared
   # "workers window" inside the running Ghostty — head keeps its own window,
   # workers stack beside it. $FRAME_WORKERS_WINDOW (default
-  # /tmp/frame-workers.window) remembers "WINDOW_ID TAB_ID" of the last spawn;
+  # $FRAME_RUNDIR/workers.window) remembers "WINDOW_ID TAB_ID" of the last spawn;
   # reuse requires that exact PAIR to still exist. The pair, not the window id
   # alone: Ghostty ids are address-based and get recycled, and a bare window
   # id once resolved to the user's HEAD window after a restart — workers piled
@@ -395,7 +418,7 @@ frame_open_window() {
   # legacy separate app instance via `open -na` + `-e`, printing no ids —
   # --quit-after-last-window-closed makes that instance exit with its window.
   # Ghostty's launch hook; callers stay terminal-agnostic above this line.
-  local state="${FRAME_WORKERS_WINDOW:-/tmp/frame-workers.window}"
+  local state="${FRAME_WORKERS_WINDOW:-$FRAME_RUNDIR/workers.window}"
   local prev_wid="" prev_tid="" ids=""
   [[ -f "$state" ]] && read -r prev_wid prev_tid < "$state"
   ids=$(osascript - "$prev_wid" "$prev_tid" "/bin/zsh -ic ${(qq)1}" 2>/dev/null <<'APPLESCRIPT'
@@ -442,7 +465,7 @@ frame_rpc_expr() {
   # and is skipped; a healthy session answers fast. But an nvim that is
   # alive-but-unresponsive — mid-boot, wedged, momentarily not servicing RPC —
   # makes a bare --remote-expr block *forever*. frame_live_frames loops over
-  # every /tmp/*.nvim, so one such socket would hang `frame ls` and the
+  # every $FRAME_RUNDIR/*.nvim, so one such socket would hang `frame ls` and the
   # wt/shell topic-collision guard until Ctrl-C. Bounding each probe means a
   # wedged frame costs at most TIMEOUT_S and is skipped like any dead debris.
   #
@@ -479,7 +502,7 @@ frame_rpc_expr() {
 frame_live_frames() {
   # Print one `name<TAB>topic<TAB>port<TAB>status` row per running frame on this
   # machine, unsorted. A running frame is exactly one with a live nvim socket at
-  # /tmp/<name>-<topic>.nvim that answers FrameInfo() over that socket — we ask
+  # $FRAME_RUNDIR/<name>-<topic>.nvim that answers FrameInfo() over that socket — we ask
   # the session for its own identity rather than parsing the ambiguous
   # <name>-<topic> filename (topics can contain dashes). Sockets that don't
   # answer are skipped: dead debris from a crash, a session predating FrameInfo
@@ -489,7 +512,7 @@ frame_live_frames() {
   # `frame ls` or the wt/shell topic-collision guard that call this. Shared by
   # `frame ls` (renders the rows) and the creation paths (topic-collision guard).
   #
-  # (N) = null_glob for this one pattern, so an empty /tmp expands to nothing
+  # (N) = null_glob for this one pattern, so an empty rundir expands to nothing
   # rather than the literal. Port/status/health are printed raw ('' when absent);
   # callers render the empty case however they like. `health` is FrameInfo's
   # appended 5th field (broker signal for ls's COMMS column); sessions predating
@@ -497,7 +520,7 @@ frame_live_frames() {
   # health to '' when no 5th field is present — never re-emitting status as
   # health (a bare ${_rec#*sep} returns the string unchanged when sep is absent).
   local _sock _rec _name _topic _port _status _health
-  for _sock in /tmp/*.nvim(N); do
+  for _sock in $FRAME_RUNDIR/*.nvim(N); do
     [[ -S "$_sock" ]] || continue
     _rec=$(frame_rpc_expr "$_sock" 'v:lua.FrameInfo()') || continue
     [[ -n "$_rec" ]] || continue
@@ -528,7 +551,7 @@ frame_resolve_target() {
   local spec="$1"
   if [[ "$spec" == */* ]]; then
     NAME="${spec%%/*}" TOPIC="${spec#*/}"
-    SOCKET="/tmp/$NAME-$TOPIC.nvim"
+    SOCKET="$FRAME_RUNDIR/$NAME-$TOPIC.nvim"
     if [[ ! -S "$SOCKET" ]]; then
       echo "$X_MARK no frame session for $NAME/$TOPIC (no socket at $SOCKET)" >&2
       return 1
@@ -539,8 +562,8 @@ frame_resolve_target() {
   TOPIC="$spec"
   # 1. Same-project sibling — our own NAME. Cheap, unambiguous, matches the
   #    historical bare-topic behavior.
-  if [[ -n "${SELF_NAME:-}" && -S "/tmp/$SELF_NAME-$TOPIC.nvim" ]]; then
-    NAME=$SELF_NAME SOCKET="/tmp/$SELF_NAME-$TOPIC.nvim"
+  if [[ -n "${SELF_NAME:-}" && -S "$FRAME_RUNDIR/$SELF_NAME-$TOPIC.nvim" ]]; then
+    NAME=$SELF_NAME SOCKET="$FRAME_RUNDIR/$SELF_NAME-$TOPIC.nvim"
     return 0
   fi
 
@@ -552,7 +575,7 @@ frame_resolve_target() {
   done < <(frame_live_frames)
 
   if (( ${#hits} == 1 )); then
-    NAME="${hits[1]}" SOCKET="/tmp/${hits[1]}-$TOPIC.nvim"
+    NAME="${hits[1]}" SOCKET="$FRAME_RUNDIR/${hits[1]}-$TOPIC.nvim"
     return 0
   fi
   if (( ${#hits} > 1 )); then

@@ -74,7 +74,7 @@ transport; `inbox` reads. (`agent` stays free as a future umbrella noun.)
 ## TL;DR
 
 - **A frame already exposes exactly one way in: its nvim RPC socket**
-  (`/tmp/<name>-<topic>.nvim`). `status`, `notify`, `ls`, teardown all go
+  (`/tmp/frame/<name>-<topic>.nvim`). `status`, `notify`, `ls`, teardown all go
   through it; nothing talks to the Claude process directly. `frame req` is
   just the newest consumer of that same socket.
 - **Send is easy** because nvim *owns the terminal Claude runs in*: RPC into the

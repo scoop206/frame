@@ -28,7 +28,7 @@
 # on timeout, mirroring `frame inbox --wait`.
 #
 # wt workers belong to a project: NAME comes from its .frame config (socket
-# /tmp/NAME-TOPIC.nvim), resolved at --cwd or the current directory. No
+# $FRAME_RUNDIR/NAME-TOPIC.nvim), resolved at --cwd or the current directory. No
 # --ephemeral for wt — a worktree frame's self-reap would force-delete a
 # branch, which no spawn flag should reach (see FrameBrokerOnTurnEnd).
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
@@ -53,9 +53,9 @@ case "$KIND" in
       exit 2
     fi
     if [[ "$ARG" == */* ]]; then
-      GTAB="/tmp/${ARG%%/*}-${ARG#*/}.nvim.gtab"
+      GTAB="$FRAME_RUNDIR/${ARG%%/*}-${ARG#*/}.nvim.gtab"
     else
-      GTAB="/tmp/shell-$ARG.nvim.gtab"
+      GTAB="$FRAME_RUNDIR/shell-$ARG.nvim.gtab"
     fi
     [[ -f "$GTAB" ]] || exit 0
     read -r G_WID G_TID < "$GTAB"
@@ -149,7 +149,7 @@ fi
 # W_NAME, not NAME: frame_self_identity (below) may source the surrounding
 # checkout's .frame/config.sh, which assigns NAME — spawn's worker name must
 # survive that. shell workers are owned by name `shell` (commands/shell.sh,
-# socket /tmp/shell-TOPIC.nvim); wt workers by their project's NAME, resolved
+# socket $FRAME_RUNDIR/shell-TOPIC.nvim); wt workers by their project's NAME, resolved
 # in a subshell so the target project's config can't pollute this one.
 if [[ "$KIND" == shell ]]; then
   W_NAME=shell
@@ -188,7 +188,7 @@ frame_assert_topic_free "$W_NAME" "$TOPIC" || exit 1
 # first reply routes home. No `exec` before the frame command: the tab's zsh must
 # survive nvim to run close-tab (`&&` — only after a clean exit; a failed boot
 # leaves the tab stranded on the error, readable).
-SOCKET="/tmp/$W_NAME-$TOPIC.nvim"
+SOCKET="$FRAME_RUNDIR/$W_NAME-$TOPIC.nvim"
 # FRAME_SPAWNED=1: spawn records the authoritative .gtab below from the window
 # it creates (frame_open_window), so the inner frame shell/wt must NOT re-record
 # from its own "front window" — a worker tab isn't frontmost at boot, so it would

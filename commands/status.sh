@@ -56,13 +56,13 @@ fi
 # it was the hook's spelling before --prompt existed, and projects wired back
 # then keep their gate until their settings.json is refreshed.
 if (( _prompt )); then
-  touch "/tmp/$NAME-$TOPIC.prompt" 2>/dev/null || true
+  touch "$FRAME_RUNDIR/$NAME-$TOPIC.prompt" 2>/dev/null || true
   set -- working
 elif (( $# == 0 )); then
-  touch "/tmp/$NAME-$TOPIC.prompt" 2>/dev/null || true
+  touch "$FRAME_RUNDIR/$NAME-$TOPIC.prompt" 2>/dev/null || true
 fi
 
-SOCKET="/tmp/$NAME-$TOPIC.nvim"
+SOCKET="$FRAME_RUNDIR/$NAME-$TOPIC.nvim"
 if [[ ! -S "$SOCKET" ]]; then
   echo "$X_MARK no frame session for $NAME/$TOPIC (no socket at $SOCKET)" >&2
   frame_session_down_hint "$NAME" "$TOPIC"

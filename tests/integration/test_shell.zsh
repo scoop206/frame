@@ -30,7 +30,7 @@ test_shell_refuses_topic_live_elsewhere() {
   # planted companion; socket carries $TNAME so sandbox_down sweeps it.
   export FRAME_SHELL_HOME="$SANDBOX/frames"
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
-  local sock="/tmp/$TNAME-other.nvim"
+  local sock="$FRAME_RUNDIR/$TNAME-other.nvim"
   python3 -c 'import socket,sys
 s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$sock"
   printf '%s\t%s\t%s\t%s\n' flipnem jam 5173 '' > "$sock.info"
@@ -155,7 +155,7 @@ test_status_in_shell_frame_uses_session_env() {
   # A shell frame's buffers aren't in a git repo; status must fall back to
   # the session's FRAME_NAME/FRAME_TOPIC. No nvim runs in tests, so the
   # proof is the error naming the right socket rather than a git failure.
-  # $TNAME keeps the /tmp/shell-<topic>.nvim probe clear of real sessions.
+  # $TNAME keeps the $FRAME_RUNDIR/shell-<topic>.nvim probe clear of real sessions.
   mkdir -p "$SANDBOX/frames/$TNAME"
   cd "$SANDBOX/frames/$TNAME"
   export FRAME_NAME=shell FRAME_TOPIC=$TNAME
@@ -188,7 +188,7 @@ test_notify_outside_any_frame_still_exits_0() {
 test_nested_boot_refused_noninteractively() {
   # $NVIM set = we're inside an existing frame's nvim; a non-tty caller (an
   # agent, a script) gets a refusal, not a hanging y/N prompt.
-  export NVIM=/tmp/fake-parent.sock
+  export NVIM=$FRAME_RUNDIR/fake-parent.sock
   run_frame shell $TNAME < /dev/null
   assert_status 1
   assert_contains "$OUT" "refusing to boot a frame inside this frame's nvim"

@@ -22,7 +22,7 @@ in_hub() { export FRAME_NAME=$TNAME FRAME_TOPIC=hub; }
 
 test_name_topic_target_submits_and_names_return_address() {
   in_hub
-  _mksock "/tmp/$TNAME-alpha.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-alpha.nvim"
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
   run_frame req "$TNAME/alpha" "what is blocking the migration?"
   assert_status 0
@@ -36,7 +36,7 @@ test_name_topic_target_submits_and_names_return_address() {
 
 test_bare_topic_pairs_with_own_name() {
   in_hub
-  _mksock "/tmp/$TNAME-alpha.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-alpha.nvim"
   run_frame req alpha "run the tests again"
   assert_status 0
   assert_contains "$OUT" "sent to $TNAME/alpha"
@@ -46,7 +46,7 @@ test_emits_correlation_token_from_the_returned_id() {
   # The broker returns 'r7'; req composes <target-addr>#<id> so a fan-out caller
   # can `frame inbox --wait --for` exactly this reply.
   in_hub
-  _mksock "/tmp/$TNAME-alpha.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-alpha.nvim"
   export FAKE_BROKER_SUBMIT=r7
   run_frame req "$TNAME/alpha" "question"
   assert_status 0
@@ -55,7 +55,7 @@ test_emits_correlation_token_from_the_returned_id() {
 
 test_refuses_when_not_in_a_frame() {
   # No FRAME_NAME and a non-git sandbox cwd → no return address → refuse.
-  _mksock "/tmp/$TNAME-alpha.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-alpha.nvim"
   run_frame req "$TNAME/alpha" "hello?"
   assert_status 1
   assert_contains "$OUT" "must be run from inside a frame"
@@ -70,7 +70,7 @@ test_dead_target_no_socket_fails() {
 
 test_missing_text_is_usage_error() {
   in_hub
-  _mksock "/tmp/$TNAME-alpha.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-alpha.nvim"
   run_frame req "$TNAME/alpha"
   assert_status 2
   assert_contains "$OUT" "nothing to send"
@@ -84,7 +84,7 @@ test_no_args_is_usage_error() {
 
 test_frame_without_claude_buffer_reports_it() {
   in_hub
-  _mksock "/tmp/$TNAME-alpha.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-alpha.nvim"
   export FAKE_BROKER_SUBMIT=no-claude-buffer
   run_frame req "$TNAME/alpha" "nowhere to type"
   assert_status 1
@@ -93,7 +93,7 @@ test_frame_without_claude_buffer_reports_it() {
 
 test_full_queue_is_retryable() {
   in_hub
-  _mksock "/tmp/$TNAME-alpha.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-alpha.nvim"
   export FAKE_BROKER_SUBMIT=queue-full
   run_frame req "$TNAME/alpha" "one more"
   assert_status 4
@@ -107,7 +107,7 @@ test_bare_topic_falls_back_to_a_unique_live_frame() {
   # project by bare topic — resolves to the sole live match. Topic == $TNAME so
   # the planted socket gets swept.
   export FRAME_NAME=shell FRAME_TOPIC=headv2
-  plant_live "/tmp/webproj-$TNAME.nvim" webproj "$TNAME" '' waiting
+  plant_live "$FRAME_RUNDIR/webproj-$TNAME.nvim" webproj "$TNAME" '' waiting
   run_frame req "$TNAME" "ping"
   assert_status 0
   assert_contains "$OUT" "sent to webproj/$TNAME"
@@ -116,8 +116,8 @@ test_bare_topic_falls_back_to_a_unique_live_frame() {
 test_same_project_sibling_wins_over_the_search() {
   # Our own NAME/topic is preferred even when another project shares the topic.
   export FRAME_NAME=shell FRAME_TOPIC=headv2
-  _mksock "/tmp/shell-$TNAME.nvim"                       # our sibling
-  plant_live "/tmp/webproj-$TNAME.nvim" webproj "$TNAME" '' waiting
+  _mksock "$FRAME_RUNDIR/shell-$TNAME.nvim"                       # our sibling
+  plant_live "$FRAME_RUNDIR/webproj-$TNAME.nvim" webproj "$TNAME" '' waiting
   run_frame req "$TNAME" "ping"
   assert_status 0
   assert_contains "$OUT" "sent to shell/$TNAME"
@@ -125,8 +125,8 @@ test_same_project_sibling_wins_over_the_search() {
 
 test_bare_topic_ambiguous_refuses() {
   export FRAME_NAME=shell FRAME_TOPIC=headv2
-  plant_live "/tmp/aa-$TNAME.nvim" aa "$TNAME" '' waiting
-  plant_live "/tmp/bb-$TNAME.nvim" bb "$TNAME" '' waiting
+  plant_live "$FRAME_RUNDIR/aa-$TNAME.nvim" aa "$TNAME" '' waiting
+  plant_live "$FRAME_RUNDIR/bb-$TNAME.nvim" bb "$TNAME" '' waiting
   run_frame req "$TNAME" "which one?"
   assert_status 1
   assert_contains "$OUT" "ambiguous topic '$TNAME'"

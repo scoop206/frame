@@ -46,7 +46,7 @@ if [[ "${1:-}" == "-d" ]]; then
   fi
 
   WT_DIR="${MAIN_WT:h}/_$NAME-$TOPIC"
-  SOCKET="/tmp/$NAME-$TOPIC.nvim"
+  SOCKET="$FRAME_RUNDIR/$NAME-$TOPIC.nvim"
   if [[ ! -d "$WT_DIR" ]]; then
     echo "$X_MARK no worktree at $WT_DIR" >&2; exit 1
   fi
@@ -73,7 +73,7 @@ if [[ "${1:-}" == "-d" ]]; then
   # re-invocation rooted in MAIN_WT; nohup shields it from the SIGHUP that
   # nvim's exit sends this terminal.
   if [[ "${PROJECT_ROOT:A}" == "${WT_DIR:A}" ]]; then
-    _log="/tmp/$NAME-$TOPIC.teardown.log"
+    _log="$FRAME_RUNDIR/$NAME-$TOPIC.teardown.log"
     _flags=(); if (( FORCE )); then _flags=(-f); fi
     echo "$RUN_MARK tearing down $TOPIC from inside — handing off to a detached reaper"
     echo "  (log: $_log). nvim will quit and this window will close; if no nvim"

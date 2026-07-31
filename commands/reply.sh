@@ -18,7 +18,7 @@ fi
 if ! frame_self_identity; then
   exit 0
 fi
-SOCKET="/tmp/$SELF_NAME-$SELF_TOPIC.nvim"
+SOCKET="$FRAME_RUNDIR/$SELF_NAME-$SELF_TOPIC.nvim"
 if [[ ! -S "$SOCKET" ]]; then
   exit 0
 fi

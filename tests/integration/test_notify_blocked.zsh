@@ -18,14 +18,14 @@ setup_shell_frame() {
   export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs.log"
   python3 -c 'import socket, sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])' \
-    "/tmp/shell-$TNAME.nvim"
+    "$FRAME_RUNDIR/shell-$TNAME.nvim"
 }
 
 # Plant the live-session answer to FrameInfo() the status-gate reads: the nvim
 # stub serves <sock>.info as name<TAB>topic<TAB>port<TAB>status (status last,
 # the field the gate inspects). Call after setup_shell_frame.
 plant_status() {
-  printf '%s\t%s\t%s\t%s\n' shell "$TNAME" '' "$1" > "/tmp/shell-$TNAME.nvim.info"
+  printf '%s\t%s\t%s\t%s\n' shell "$TNAME" '' "$1" > "$FRAME_RUNDIR/shell-$TNAME.nvim.info"
 }
 
 test_blocked_sets_blocked_status() {
@@ -55,7 +55,7 @@ test_blocked_bypasses_quick_turn_gate() {
   (( $+commands[python3] )) || { skip "python3 not found"; return }
   setup_shell_frame
   export FAKE_NVIM_EXPR_RESULT=0
-  touch "/tmp/shell-$TNAME.prompt"
+  touch "$FRAME_RUNDIR/shell-$TNAME.prompt"
   run_frame notify --blocked
   assert_status 0
   assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - needs your input shell [ $TNAME ]"

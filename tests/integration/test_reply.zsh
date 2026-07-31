@@ -13,7 +13,7 @@ as_work() { export FRAME_NAME=$TNAME FRAME_TOPIC=work; }
 
 test_explicit_form_is_retired() {
   as_work
-  _mksock "/tmp/$TNAME-work.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-work.nvim"
   run_frame reply "widget built, tests green"
   assert_status 2
   assert_contains "$OUT" "takes no arguments"
@@ -24,7 +24,7 @@ test_hook_form_reads_stdin_payload_and_exits_zero() {
   # JSON and hands the path to nvim (stubbed here). Must stay silent + exit 0 so
   # it never disrupts the Stop hook.
   as_work
-  _mksock "/tmp/$TNAME-work.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-work.nvim"
   export FAKE_NVIM_EXPR_RESULT=0
   local out st
   out=$(print -r -- '{"transcript_path":"/nonexistent"}' | "$FRAME_BIN" reply 2>&1)

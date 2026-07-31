@@ -30,7 +30,7 @@
 # creates, boots, or tears anything down.
 #
 # A running frame is exactly one with a live nvim socket at
-# /tmp/<name>-<topic>.nvim (the same sockets status.sh/notify.sh use). For each,
+# $FRAME_RUNDIR/<name>-<topic>.nvim (same sockets status.sh/notify.sh use). For each,
 # we ask the session for its own identity over that socket — FrameInfo, added
 # next to FrameSetStatus in layouts/worktree.lua — rather than parsing the
 # filename, whose <name>-<topic> is ambiguous when the topic has dashes. A

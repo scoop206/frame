@@ -7,14 +7,14 @@ source "${${(%):-%x}:A:h:h}/helpers/harness.zsh"
 
 # Uses a shell frame for identity (env-carried, no repo fixture needed);
 # the mute logic itself is frame-kind-agnostic. $TNAME keeps the hardcoded
-# /tmp/<name>-<topic>.nvim path unique per test (sandbox_down sweeps it).
+# $FRAME_RUNDIR/<name>-<topic>.nvim path unique per test (sandbox_down sweeps it).
 setup_shell_frame() {
   mkdir -p "$SANDBOX/frames/$TNAME"
   cd "$SANDBOX/frames/$TNAME"
   export FRAME_NAME=shell FRAME_TOPIC=$TNAME
   export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
   python3 -c 'import socket, sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])' \
-    "/tmp/shell-$TNAME.nvim"
+    "$FRAME_RUNDIR/shell-$TNAME.nvim"
 }
 
 test_muted_session_suppresses_banner() {
