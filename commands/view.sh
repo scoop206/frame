@@ -3,7 +3,7 @@
 #   $ frame view
 #     flipnem [ schema ]   → this frame
 #
-#     socket     /tmp/flipnem-schema.nvim
+#     socket     /tmp/frame/flipnem-schema.nvim
 #     cwd        ~/git_repos/_flipnem-schema
 #     main wt    ~/git_repos/flipnem
 #
@@ -34,7 +34,7 @@ if (( $# == 0 )); then
     echo "$X_MARK not inside a frame — pass a TOPIC or NAME/TOPIC to view one" >&2
     exit 1
   fi
-  NAME=$SELF_NAME TOPIC=$SELF_TOPIC SOCKET="/tmp/$NAME-$TOPIC.nvim"
+  NAME=$SELF_NAME TOPIC=$SELF_TOPIC SOCKET="$FRAME_RUNDIR/$NAME-$TOPIC.nvim"
   if [[ ! -S "$SOCKET" ]]; then
     echo "$X_MARK no frame session for $NAME/$TOPIC (no socket at $SOCKET)" >&2
     frame_session_down_hint "$NAME" "$TOPIC"

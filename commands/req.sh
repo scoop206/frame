@@ -39,7 +39,7 @@ FROM="$SELF_NAME/$SELF_TOPIC"
 # from git yet no session exists there, so the answer would land nowhere. Warn
 # (don't refuse — the request still reaches the target, and a caller may not
 # need the reply) and point at the fix.
-if [[ ! -S "/tmp/$SELF_NAME-$SELF_TOPIC.nvim" ]]; then
+if [[ ! -S "$FRAME_RUNDIR/$SELF_NAME-$SELF_TOPIC.nvim" ]]; then
   echo "$WARN_MARK reply address $FROM has no live session — its answer will have nowhere to land." >&2
   frame_session_down_hint "$SELF_NAME" "$SELF_TOPIC"
 fi

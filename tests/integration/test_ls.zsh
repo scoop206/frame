@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# frame ls — lists live frames by querying each /tmp/*.nvim socket for its
+# frame ls — lists live frames by querying each $FRAME_RUNDIR/*.nvim socket for its
 # identity via FrameInfo(). The nvim stub stands in for a live session: a
 # socket with a <sock>.info companion answers FrameInfo(); a socket without one
 # is "dead" and its query fails, exactly as a real crashed session's (or one
@@ -19,8 +19,8 @@ plant_dead() { _mksock "$1"; }                                  # no responder
 plant_hung() { _mksock "$1"; : > "$1.hang"; }                   # alive but wedged
 
 test_lists_live_frames_in_columns() {
-  plant_live "/tmp/$TNAME-alpha.nvim" "$TNAME" alpha 5173 WAITING
-  plant_live "/tmp/$TNAME-beta.nvim"  "$TNAME" beta  5175 ''
+  plant_live "$FRAME_RUNDIR/$TNAME-alpha.nvim" "$TNAME" alpha 5173 WAITING
+  plant_live "$FRAME_RUNDIR/$TNAME-beta.nvim"  "$TNAME" beta  5175 ''
   run_frame ls
   assert_status 0
   assert_contains "$OUT" "NAME"
@@ -35,7 +35,7 @@ test_lists_live_frames_in_columns() {
 
 test_empty_port_and_status_render_as_dash() {
   # A shell frame: no port, status cleared → both columns show "-".
-  plant_live "/tmp/$TNAME-shellish.nvim" "$TNAME" shellish '' ''
+  plant_live "$FRAME_RUNDIR/$TNAME-shellish.nvim" "$TNAME" shellish '' ''
   run_frame ls
   assert_status 0
   local row=$(print -r -- "$OUT" | grep shellish)
@@ -49,7 +49,7 @@ test_portless_status_stays_in_status_column() {
   # of tabs that `read` (tab = IFS whitespace) merges, sliding the status left
   # into the PORT column. ls splits with (ps:\t:) to keep the empty field:
   # the row must read "- waiting" (port dash, then status), not "waiting -".
-  plant_live "/tmp/$TNAME-portless.nvim" "$TNAME" portless '' waiting
+  plant_live "$FRAME_RUNDIR/$TNAME-portless.nvim" "$TNAME" portless '' waiting
   run_frame ls
   assert_status 0
   local row=$(print -r -- "$OUT" | grep portless)
@@ -58,8 +58,8 @@ test_portless_status_stays_in_status_column() {
 }
 
 test_current_frame_is_marked() {
-  plant_live "/tmp/$TNAME-alpha.nvim" "$TNAME" alpha 5173 WAITING
-  plant_live "/tmp/$TNAME-beta.nvim"  "$TNAME" beta  5175 ''
+  plant_live "$FRAME_RUNDIR/$TNAME-alpha.nvim" "$TNAME" alpha 5173 WAITING
+  plant_live "$FRAME_RUNDIR/$TNAME-beta.nvim"  "$TNAME" beta  5175 ''
   # No git repo under the sandbox cwd → identity comes from the session env,
   # same as a shell-frame buffer.
   export FRAME_NAME=$TNAME FRAME_TOPIC=alpha
@@ -72,8 +72,8 @@ test_current_frame_is_marked() {
 }
 
 test_stale_socket_excluded() {
-  plant_live "/tmp/$TNAME-live.nvim" "$TNAME" live 5173 ''
-  plant_dead "/tmp/$TNAME-dead.nvim"          # answers nothing
+  plant_live "$FRAME_RUNDIR/$TNAME-live.nvim" "$TNAME" live 5173 ''
+  plant_dead "$FRAME_RUNDIR/$TNAME-dead.nvim"          # answers nothing
   run_frame ls
   assert_status 0
   assert_contains "$OUT" "live"
@@ -86,8 +86,8 @@ test_unresponsive_socket_skipped_promptly() {
   # frame is skipped like dead debris, and the responsive rows still list. A
   # short timeout keeps the suite fast; without the bound this test would hang.
   export FRAME_RPC_TIMEOUT=1
-  plant_live "/tmp/$TNAME-live.nvim" "$TNAME" live 5173 ''
-  plant_hung "/tmp/$TNAME-hung.nvim"          # blocks forever if not bounded
+  plant_live "$FRAME_RUNDIR/$TNAME-live.nvim" "$TNAME" live 5173 ''
+  plant_hung "$FRAME_RUNDIR/$TNAME-hung.nvim"          # blocks forever if not bounded
   run_frame ls
   assert_status 0
   assert_contains "$OUT" "live"
@@ -104,8 +104,8 @@ test_no_live_frames_prints_message() {
 
 test_rows_sorted_by_name_then_topic() {
   # topic=$TNAME (so sandbox_down's *-$TNAME.nvim glob sweeps them); names vary.
-  plant_live "/tmp/zzz-$TNAME.nvim" zzz "$TNAME" 5173 ''
-  plant_live "/tmp/aaa-$TNAME.nvim" aaa "$TNAME" 5174 ''
+  plant_live "$FRAME_RUNDIR/zzz-$TNAME.nvim" zzz "$TNAME" 5173 ''
+  plant_live "$FRAME_RUNDIR/aaa-$TNAME.nvim" aaa "$TNAME" 5174 ''
   run_frame ls
   assert_status 0
   # aaa must appear before zzz in the output.

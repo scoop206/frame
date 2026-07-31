@@ -7,8 +7,13 @@
 #     so git never reads (or writes) the real user config
 #   - the stubs dir is PATH-prepended: nvim/docker/open become tripwires and
 #     lsof becomes deterministic
-#   - $TNAME is unique per test, keeping wt.sh's hardcoded /tmp/$NAME-$TOPIC.*
-#     paths clear of any real frame session
+#   - FRAME_RUNDIR is a private per-test dir, so this test's sockets / stamps /
+#     logs never touch (or see) a real frame session's runtime files — and the
+#     whole tree is removed with one rm -rf on teardown. Kept short (in /tmp, not
+#     under the deep $SANDBOX path) so planted unix socket paths stay under the
+#     ~103-char sun_path limit.
+#   - $TNAME is unique per test, so names/topics still can't collide across
+#     concurrent tests sharing the machine
 
 sandbox_up() {
   SANDBOX=$(mktemp -d "${TMPDIR:-/tmp}/frame-test.XXXXXX")
@@ -29,6 +34,11 @@ sandbox_up() {
 EOF
   export PATH="$TESTS_DIR/stubs:$PATH"
   export TNAME="proj$RANDOM$RANDOM"
+  # Private runtime dir for this test — every frame command and every planted
+  # socket resolves here instead of the shared /tmp/frame, so tests are isolated
+  # from each other and from real sessions. Short path (see sandbox note above).
+  export FRAME_RUNDIR="/tmp/frame-test.$TNAME"
+  mkdir -m 700 -p "$FRAME_RUNDIR"
   # Keep frame_open_window's workers-window recording out of the real /tmp —
   # a test run must never clobber (or read) a live session's window id.
   export FRAME_WORKERS_WINDOW="$SANDBOX/frame-workers.window"
@@ -53,12 +63,9 @@ EOF
 sandbox_down() {
   cd /
   [[ -n "${SANDBOX:-}" ]] && rm -rf "$SANDBOX"
-  [[ -n "${TNAME:-}" ]] && rm -f /tmp/$TNAME-*.teardown.log(N) \
-                                 /tmp/*-$TNAME.nvim(N) /tmp/$TNAME-*.nvim(N) \
-                                 /tmp/*-$TNAME.nvim.info(N) /tmp/$TNAME-*.nvim.info(N) \
-                                 /tmp/*-$TNAME.nvim.hang(N) /tmp/$TNAME-*.nvim.hang(N) \
-                                 /tmp/*-$TNAME.nvim.ready(N) /tmp/$TNAME-*.nvim.ready(N) \
-                                 /tmp/*-$TNAME.nvim.gtab(N) /tmp/$TNAME-*.nvim.gtab(N) \
-                                 /tmp/*-$TNAME.prompt(N) /tmp/$TNAME-*.prompt(N)
+  # Every runtime file this test created — sockets, .info/.hang/.ready stubs,
+  # .gtab, .prompt, .teardown.log — lives under the private FRAME_RUNDIR, so one
+  # rm -rf reaps them all (no per-suffix glob sweep to keep in sync).
+  [[ -n "${FRAME_RUNDIR:-}" ]] && rm -rf "$FRAME_RUNDIR"
   return 0
 }

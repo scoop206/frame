@@ -10,7 +10,7 @@ A frame has **two identity channels, and they don't share fate:**
 
 | Channel | Source | User-mutable? | Depended on by |
 |---|---|---|---|
-| **Canonical identity** | nvim socket `/tmp/<name>-<topic>.nvim` + `FRAME_NAME` / `FRAME_TOPIC` env | **No** — stamped at boot, immutable for the session's life | `frame ls`, `frame status`, `frame notify` |
+| **Canonical identity** | nvim socket `/tmp/frame/<name>-<topic>.nvim` + `FRAME_NAME` / `FRAME_TOPIC` env | **No** — stamped at boot, immutable for the session's life | `frame ls`, `frame status`, `frame notify` |
 | **Window title** | nvim `titlestring` (a *display* artifact) | Somewhat | `frame focus` **only** |
 
 **Principle: the socket + env is the identity; the title is a derived,

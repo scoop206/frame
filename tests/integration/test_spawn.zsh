@@ -6,7 +6,7 @@
 # stub / FAKE_OPEN_LOG). Readiness is the socket plus FrameReady() over RPC,
 # where a planted AF_UNIX socket with a `.ready` companion stands in for a
 # fully-booted session (without one the nvim stub answers 0 — still booting).
-# Worker topics are $TNAME so sandbox_down's /tmp/*-$TNAME.nvim* patterns reap
+# Worker topics are $TNAME so sandbox_down's $FRAME_RUNDIR/*-$TNAME.nvim* patterns reap
 # the plants.
 source "${${(%):-%x}:A:h:h}/helpers/harness.zsh"
 
@@ -21,8 +21,8 @@ s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$1"; }
 in_head() { export FRAME_NAME=$TNAME FRAME_TOPIC=head; }
 
 _plant_booted_worker() {
-  _mksock "/tmp/shell-$TNAME.nvim"
-  touch "/tmp/shell-$TNAME.nvim.ready"
+  _mksock "$FRAME_RUNDIR/shell-$TNAME.nvim"
+  touch "$FRAME_RUNDIR/shell-$TNAME.nvim.ready"
 }
 
 test_no_args_shows_usage() {
@@ -64,8 +64,8 @@ test_spawn_wt_boots_project_worker_as_tab() {
   write_config <<'EOF'
 NAME=stompy
 EOF
-  _mksock "/tmp/stompy-$TNAME.nvim"
-  touch "/tmp/stompy-$TNAME.nvim.ready"
+  _mksock "$FRAME_RUNDIR/stompy-$TNAME.nvim"
+  touch "$FRAME_RUNDIR/stompy-$TNAME.nvim.ready"
   run_frame spawn wt $TNAME
   assert_status 0
   assert_contains "$OUT" "spawned tab for stompy/$TNAME"
@@ -74,7 +74,7 @@ EOF
   assert_contains "$log" "cd $REPO"
   assert_contains "$log" "frame wt $TNAME"
   assert_contains "$log" "frame spawn close-tab stompy/$TNAME"
-  assert_eq "$(</tmp/stompy-$TNAME.nvim.gtab)" "fake-win fake-tab"
+  assert_eq "$(<$FRAME_RUNDIR/stompy-$TNAME.nvim.gtab)" "fake-win fake-tab"
 }
 
 test_spawn_wt_cwd_targets_another_project() {
@@ -85,8 +85,8 @@ test_spawn_wt_cwd_targets_another_project() {
   write_config <<'EOF'
 NAME=stompy
 EOF
-  _mksock "/tmp/stompy-$TNAME.nvim"
-  touch "/tmp/stompy-$TNAME.nvim.ready"
+  _mksock "$FRAME_RUNDIR/stompy-$TNAME.nvim"
+  touch "$FRAME_RUNDIR/stompy-$TNAME.nvim.ready"
   cd "$SANDBOX"
   run_frame spawn wt $TNAME --cwd "checkout-$TNAME"
   assert_status 0
@@ -96,11 +96,11 @@ EOF
 
 test_close_tab_accepts_name_topic_form() {
   export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
-  print -r -- "w-7 t-7" > "/tmp/stompy-$TNAME.nvim.gtab"
+  print -r -- "w-7 t-7" > "$FRAME_RUNDIR/stompy-$TNAME.nvim.gtab"
   run_frame spawn close-tab stompy/$TNAME
   assert_status 0
   assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - w-7 t-7"
-  assert_file_absent "/tmp/stompy-$TNAME.nvim.gtab"
+  assert_file_absent "$FRAME_RUNDIR/stompy-$TNAME.nvim.gtab"
 }
 
 test_no_topic_shell_mints_dated_worker() {
@@ -147,8 +147,8 @@ test_refuses_live_topic_before_opening_a_window() {
   # owns the topic → refused, and neither launch path may ever have fired.
   export FAKE_OPEN_LOG="$SANDBOX/open.log"
   export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
-  _mksock "/tmp/other-$TNAME.nvim"
-  print -r -- "other	$TNAME		" > "/tmp/other-$TNAME.nvim.info"
+  _mksock "$FRAME_RUNDIR/other-$TNAME.nvim"
+  print -r -- "other	$TNAME		" > "$FRAME_RUNDIR/other-$TNAME.nvim.info"
   run_frame spawn shell $TNAME
   assert_status 1
   assert_contains "$OUT" "already live"
@@ -173,7 +173,7 @@ test_happy_path_opens_tab_and_reports_up() {
   # The surface ids are recorded for focus/close-tab, and the workers window
   # persists as a WINDOW+TAB pair — reuse validates both, so a recycled
   # window id alone can never pull workers into an unrelated window.
-  assert_eq "$(</tmp/shell-$TNAME.nvim.gtab)" "fake-win fake-tab"
+  assert_eq "$(<$FRAME_RUNDIR/shell-$TNAME.nvim.gtab)" "fake-win fake-tab"
   assert_eq "$(<$FRAME_WORKERS_WINDOW)" "fake-win fake-tab"
 }
 
@@ -203,16 +203,16 @@ test_no_dictionary_falls_back_to_open() {
   local log="$(<$FAKE_OPEN_LOG)"
   assert_contains "$log" "-na Ghostty.app --args --quit-after-last-window-closed=true -e zsh -ic"
   assert_contains "$log" "frame shell $TNAME"
-  assert_file_absent "/tmp/shell-$TNAME.nvim.gtab"
+  assert_file_absent "$FRAME_RUNDIR/shell-$TNAME.nvim.gtab"
 }
 
 test_close_tab_closes_recorded_tab() {
   export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
-  print -r -- "w-1 t-1" > "/tmp/shell-$TNAME.nvim.gtab"
+  print -r -- "w-1 t-1" > "$FRAME_RUNDIR/shell-$TNAME.nvim.gtab"
   run_frame spawn close-tab $TNAME
   assert_status 0
   assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - w-1 t-1"
-  assert_file_absent "/tmp/shell-$TNAME.nvim.gtab"
+  assert_file_absent "$FRAME_RUNDIR/shell-$TNAME.nvim.gtab"
 }
 
 test_close_tab_without_recording_is_silent() {
@@ -240,7 +240,7 @@ test_boot_timeout_exits_3() {
 
 test_not_ready_session_times_out() {
   export FAKE_OPEN_LOG="$SANDBOX/open.log"
-  _mksock "/tmp/shell-$TNAME.nvim"   # socket up, but no .ready — mid-boot
+  _mksock "$FRAME_RUNDIR/shell-$TNAME.nvim"   # socket up, but no .ready — mid-boot
   run_frame spawn shell $TNAME --timeout 1
   assert_status 3
   assert_contains "$OUT" "didn't come up within 1s"

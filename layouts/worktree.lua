@@ -21,6 +21,14 @@ local name = vim.env.FRAME_NAME or '?'
 local topic = vim.env.FRAME_TOPIC or '?'
 local vite_port = vim.env.FRAME_VITE_PORT or ''
 
+-- Where this session's socket + teardown log live. bin/frame exports FRAME_RUNDIR
+-- and creates it before exec'ing nvim, so it's present at boot; but it can be
+-- reaped by macOS's tmp_cleaner during a long idle, so every writer below
+-- re-ensures it via vim.fn.mkdir(rundir, 'p') first. Kept in sync with the shell
+-- default in lib/helpers.sh.
+local rundir = (vim.env.FRAME_RUNDIR ~= nil and vim.env.FRAME_RUNDIR ~= '')
+  and vim.env.FRAME_RUNDIR or '/tmp/frame'
+
 -- Name the terminal window "<name> [ <topic> :<vite port> ]" so parallel
 -- Ghostty windows are tellable apart — bare name, the topic bracketed with the
 -- browser's vite port beside it (omitted when there's no vite port). nvim owns
@@ -647,7 +655,8 @@ end, {
 -- this whole layout (no terminals, no :FrameDown). Probe a conflicting socket:
 -- connectable means a live twin session owns it (leave it alone); otherwise
 -- it's stale debris from a crash — reclaim it.
-local sock = '/tmp/' .. name .. '-' .. topic .. '.nvim'
+vim.fn.mkdir(rundir, 'p')
+local sock = rundir .. '/' .. name .. '-' .. topic .. '.nvim'
 if not pcall(vim.fn.serverstart, sock) then
   local live, chan = pcall(vim.fn.sockconnect, 'pipe', sock, { rpc = true })
   if live and chan > 0 then
@@ -678,7 +687,8 @@ local main_wt = vim.env.FRAME_MAIN_WT or ''
 local frame_bin = (vim.env.FRAME_ROOT or '') .. '/bin/frame'
 if main_wt ~= '' then
   vim.api.nvim_create_user_command('FrameDown', function(opts)
-    local log = '/tmp/' .. name .. '-' .. topic .. '.teardown.log'
+    vim.fn.mkdir(rundir, 'p')   -- outer shell opens `>log` before frame runs; ensure the dir now
+    local log = rundir .. '/' .. name .. '-' .. topic .. '.teardown.log'
     -- Redirect to a log file: once this nvim dies, a write to an inherited
     -- pipe would SIGPIPE the reaper mid-teardown.
     local cmd = string.format('%s wt -d %s%s >%s 2>&1',

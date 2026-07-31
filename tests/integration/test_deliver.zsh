@@ -9,7 +9,7 @@ _mksock() { python3 -c 'import socket,sys
 s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$1"; }
 
 test_delivers_to_named_target() {
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_RESULT=1
   run_frame deliver "$TNAME/hub" "migration finished"
   assert_status 0
@@ -17,7 +17,7 @@ test_delivers_to_named_target() {
 }
 
 test_from_flag_is_accepted() {
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_RESULT=2
   run_frame deliver "$TNAME/hub" --from "$TNAME/auth" "done"
   assert_status 0
@@ -27,7 +27,7 @@ test_from_flag_is_accepted() {
 test_id_flag_is_threaded_to_inbox_add() {
   # --id rides alongside --from and lands as the 3rd FrameInboxAdd arg — the
   # correlation id that lets the recipient's `frame inbox --for` match this reply.
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_RESULT=1
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
   run_frame deliver "$TNAME/hub" --from "$TNAME/auth" --id r7 "done"
@@ -37,7 +37,7 @@ test_id_flag_is_threaded_to_inbox_add() {
 
 test_id_before_from_also_accepted() {
   # The broker emits --from then --id, but order shouldn't matter.
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_RESULT=1
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
   run_frame deliver "$TNAME/hub" --id r7 --from "$TNAME/auth" "done"
@@ -47,7 +47,7 @@ test_id_before_from_also_accepted() {
 
 test_plain_note_has_empty_id() {
   # A hand-written note (no --id) → empty id, so it never matches a --for token.
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_RESULT=1
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
   run_frame deliver "$TNAME/hub" "just a note"
@@ -62,14 +62,14 @@ test_dead_target_fails() {
 }
 
 test_missing_message_is_usage_error() {
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   run_frame deliver "$TNAME/hub"
   assert_status 2
   assert_contains "$OUT" "nothing to deliver"
 }
 
 test_missing_message_after_from_is_usage_error() {
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   run_frame deliver "$TNAME/hub" --from "$TNAME/auth"
   assert_status 2
   assert_contains "$OUT" "nothing to deliver"

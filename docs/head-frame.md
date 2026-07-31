@@ -216,7 +216,7 @@ at the window.
 `frame_open_window` (`lib/helpers.sh`) opens each worker as a **tab in one
 shared workers window** of the running Ghostty — head keeps its own window,
 workers congregate beside it. The last spawn's "WINDOW_ID TAB_ID" persists in
-`/tmp/frame-workers.window`; reuse requires that exact pair to still exist —
+`/tmp/frame/workers.window`; reuse requires that exact pair to still exist —
 Ghostty ids are address-based and recycle, and a bare window id once resolved
 to the head window after a restart, piling workers in as tabs. Invalid pair →
 fresh window, re-recorded. Dragging a tab out of the workers window rehomes it
@@ -237,7 +237,7 @@ there, drag the head tab out; recorded ids follow a tab wherever it lives),
 and avoid `frame shell` from inside a frame (nests nvim-in-nvim — guarded
 with a confirm/refusal, use spawn). The new
 surface runs `/bin/zsh -ic '<bootstrap>'` via the scripting `command`
-configuration and its window/tab ids are recorded to `/tmp/shell-<topic>.nvim.gtab`
+configuration and its window/tab ids are recorded to `/tmp/frame/shell-<topic>.nvim.gtab`
 for `frame focus` (select tab by id — no System Events, no Accessibility) and
 reaping.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # frame notify's quick-turn gate: sending a prompt stamps
-# /tmp/<name>-<topic>.prompt (UserPromptSubmit hook → `frame status --prompt`,
+# $FRAME_RUNDIR/<name>-<topic>.prompt (UserPromptSubmit hook → `frame status --prompt`,
 # which also sets the "working" status; the bare clear form still stamps for
 # projects wired before --prompt existed), and notify skips the banner when
 # the stamp is 10 seconds old or less — the human just prompted, they're
@@ -24,7 +24,7 @@ setup_live_session() {
   setup_frame_env
   export FAKE_NVIM_EXPR_RESULT="shell/$TNAME"
   python3 -c 'import socket, sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])' \
-    "/tmp/shell-$TNAME.nvim"
+    "$FRAME_RUNDIR/shell-$TNAME.nvim"
 }
 
 test_prompt_flag_stamps_and_sets_working() {
@@ -35,7 +35,7 @@ test_prompt_flag_stamps_and_sets_working() {
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs.log"
   run_frame status --prompt
   assert_status 0
-  assert_file_exists "/tmp/shell-$TNAME.prompt"
+  assert_file_exists "$FRAME_RUNDIR/shell-$TNAME.prompt"
   assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameSetStatus('working')"
 }
 
@@ -54,7 +54,7 @@ test_bare_status_writes_prompt_stamp() {
   setup_live_session
   run_frame status
   assert_status 0
-  assert_file_exists "/tmp/shell-$TNAME.prompt"
+  assert_file_exists "$FRAME_RUNDIR/shell-$TNAME.prompt"
 }
 
 test_status_with_text_does_not_stamp() {
@@ -64,12 +64,12 @@ test_status_with_text_does_not_stamp() {
   setup_live_session
   run_frame status milestone
   assert_status 0
-  assert_file_absent "/tmp/shell-$TNAME.prompt"
+  assert_file_absent "$FRAME_RUNDIR/shell-$TNAME.prompt"
 }
 
 test_fresh_prompt_suppresses_banner() {
   setup_frame_env
-  touch "/tmp/shell-$TNAME.prompt"
+  touch "$FRAME_RUNDIR/shell-$TNAME.prompt"
   run_frame notify
   assert_status 0
   assert_file_absent "$FAKE_OSASCRIPT_LOG"
@@ -77,7 +77,7 @@ test_fresh_prompt_suppresses_banner() {
 
 test_stale_prompt_still_banners() {
   setup_frame_env
-  touch -t 202601010000 "/tmp/shell-$TNAME.prompt"
+  touch -t 202601010000 "$FRAME_RUNDIR/shell-$TNAME.prompt"
   run_frame notify
   assert_status 0
   assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - task complete shell [ $TNAME ]"

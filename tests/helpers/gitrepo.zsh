@@ -4,7 +4,7 @@
 make_repo() {
   # make_repo [name] — bare origin + working repo with one pushed commit on
   # main. cds into the repo and sets $REPO. Default name is $TNAME so frame's
-  # NAME defaults line up and /tmp/<NAME>-* paths stay unique per test.
+  # NAME defaults line up and $FRAME_RUNDIR/<NAME>-* paths stay unique per test.
   local name=${1:-$TNAME}
   git init -q --bare "$SANDBOX/origin.git"
   git init -q "$SANDBOX/$name"

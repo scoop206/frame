@@ -12,7 +12,7 @@ in_hub() { export FRAME_NAME=$TNAME FRAME_TOPIC=hub; }
 
 test_shows_inbox_contents() {
   in_hub
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_RESULT="from $TNAME/work:
 widget built, tests green"
   run_frame inbox
@@ -23,7 +23,7 @@ widget built, tests green"
 
 test_empty_inbox_says_so() {
   in_hub
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_RESULT=""
   run_frame inbox
   assert_status 0
@@ -54,7 +54,7 @@ test_rejects_unknown_argument() {
 
 test_wait_returns_immediately_when_mail_present() {
   in_hub
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_RESULT="from $TNAME/calc:
 4"
   run_frame inbox --wait --timeout 5
@@ -66,7 +66,7 @@ test_wait_polls_until_mail_arrives() {
   # Stub answers '' for the first 2 drains, then serves the mail — proves the
   # loop genuinely polls rather than only checking once.
   in_hub
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_RESULT="from $TNAME/calc:
 tests green"
   export FAKE_NVIM_EXPR_EMPTY_POLLS=2
@@ -79,7 +79,7 @@ tests green"
 
 test_wait_times_out_empty() {
   in_hub
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_RESULT=""
   run_frame inbox --wait --timeout 1
   assert_status 3
@@ -88,7 +88,7 @@ test_wait_times_out_empty() {
 
 test_wait_count_reaches_the_session() {
   in_hub
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
   export FAKE_NVIM_EXPR_RESULT="from $TNAME/a: x"
   run_frame inbox --wait --count 3
@@ -120,7 +120,7 @@ test_wait_refuses_when_not_in_a_frame() {
 
 test_for_barrier_reaches_session_by_token() {
   in_hub
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
   export FAKE_NVIM_EXPR_RESULT="from $TNAME/calc:
 4"
@@ -133,7 +133,7 @@ test_for_barrier_reaches_session_by_token() {
 test_for_joins_tokens_with_tab() {
   # Two --for → an exact both-present barrier; tokens ride tab-joined in one call.
   in_hub
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
   export FAKE_NVIM_EXPR_RESULT="two replies"
   run_frame inbox --wait --for "$TNAME/a#r1" --for "$TNAME/b#r2"
@@ -146,7 +146,7 @@ test_for_joins_tokens_with_tab() {
 
 test_for_without_wait_drains_when_all_present() {
   in_hub
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
   export FAKE_NVIM_EXPR_RESULT="from $TNAME/calc:
 4"
@@ -160,7 +160,7 @@ test_for_without_wait_none_present_says_so() {
   # The barrier is unmet (stub returns '') and we're not waiting → a clear message
   # distinct from "inbox empty" (other mail may well be sitting there).
   in_hub
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_RESULT=""
   run_frame inbox --for "$TNAME/calc#r7"
   assert_status 0
@@ -169,7 +169,7 @@ test_for_without_wait_none_present_says_so() {
 
 test_for_polls_until_reply_arrives() {
   in_hub
-  _mksock "/tmp/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   export FAKE_NVIM_EXPR_RESULT="from $TNAME/calc:
 done"
   export FAKE_NVIM_EXPR_EMPTY_POLLS=2

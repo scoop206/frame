@@ -79,7 +79,7 @@ fi
 # title). Port omitted — notify doesn't compute it, and the identity reads fine
 # without it.
 TITLE=$(frame_base_title "$NAME" "$TOPIC")
-SOCKET="/tmp/$NAME-$TOPIC.nvim"
+SOCKET="$FRAME_RUNDIR/$NAME-$TOPIC.nvim"
 
 # Blocked status-gate — the fix for the "phantom blocked" ping. Claude Code's
 # Notification hook (this --blocked path) fires for TWO things: a genuine
@@ -105,7 +105,7 @@ if [[ $_mode == blocked && -S "$SOCKET" ]]; then
   # ps:\t: — the p flag makes \t a real tab in the split spec; a bare s:\t:
   # would split on the literal two chars backslash-t and never see the fields.
   _fields=( "${(@ps:\t:)_info}" )
-  if [[ "${_fields[4]}" == waiting ]]; then
+  if [[ "${_fields[4]:-}" == waiting ]]; then
     exit 0
   fi
 fi
@@ -139,13 +139,13 @@ if [[ $_mode != blocked ]]; then
     fi
   fi
 
-  # Quick-turn gate: sending a prompt stamps /tmp/<name>-<topic>.prompt (the
+  # Quick-turn gate: sending a prompt stamps $FRAME_RUNDIR/<name>-<topic>.prompt (the
   # UserPromptSubmit hook runs the bare `frame status` clear — see status.sh).
   # A stamp this fresh means the human prompted seconds ago and is still
   # looking at the frame — only turns long enough to have walked away from are
   # banner-worthy. No stamp, or an old one → the banner fires. ms-11 = mtime
   # within the last 10 seconds.
-  _recent=( "/tmp/$NAME-$TOPIC.prompt"(N.ms-11) )
+  _recent=( "$FRAME_RUNDIR/$NAME-$TOPIC.prompt"(N.ms-11) )
   if (( $#_recent )); then
     exit 0
   fi

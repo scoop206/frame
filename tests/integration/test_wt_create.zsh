@@ -16,7 +16,7 @@ EOF
 # stub answers FrameInfo() from the planted <sock>.info companion (see
 # test_ls.zsh). Socket name carries $TNAME so sandbox_down sweeps it.
 plant_live_topic() {  # plant_live_topic NAME TOPIC
-  local sock="/tmp/$TNAME-other.nvim"
+  local sock="$FRAME_RUNDIR/$TNAME-other.nvim"
   python3 -c 'import socket,sys
 s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$sock"
   printf '%s\t%s\t%s\t%s\n' "$1" "$2" 5173 '' > "$sock.info"
@@ -161,7 +161,7 @@ test_nested_boot_refused_noninteractively() {
   # $NVIM set = we're inside an existing frame's nvim; a non-tty caller gets a
   # refusal BEFORE any side effect — no worktree, no branch, no nvim.
   setup_project
-  export NVIM=/tmp/fake-parent.sock
+  export NVIM=$FRAME_RUNDIR/fake-parent.sock
   run_frame wt topic < /dev/null
   assert_status 1
   assert_contains "$OUT" "refusing to boot a frame inside this frame's nvim"

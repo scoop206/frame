@@ -44,7 +44,7 @@ test_banner_click_focuses_this_frame() {
 test_quick_turn_gate_still_applies() {
   setup_frame_env
   plant_notifier
-  touch "/tmp/shell-$TNAME.prompt"
+  touch "$FRAME_RUNDIR/shell-$TNAME.prompt"
   run_frame notify
   assert_status 0
   assert_file_absent "$SANDBOX/notifier.log"
