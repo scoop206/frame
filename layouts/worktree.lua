@@ -555,45 +555,39 @@ end, {
   desc = 'Mute/unmute frame notify banners (bare: show state)',
 })
 
--- :[range]FrameClaude [question] — ask THIS frame's claude about the code under
--- the cursor (or the visual selection) and show the reply in a reusable scratch
--- buffer. The in-editor sibling of `frame claude`: same broker, same one claude
--- conversation — but the current file:line range is attached as context and the
--- answer is pushed back in-process via FrameBrokerSubmitCb (no socket, no poll).
--- Bare :FrameClaude uses the current line; a visual selection uses its lines.
--- Note: these turns enter the frame's claude conversation like any other. See
--- docs/claude-broker.md.
-local frameclaude_buf = nil
+-- ── :FrameClaude / :FrameClaudeBuffer ─────────────────────────────────────────
+-- Both open THIS frame's live claude terminal in a far-right vertical split and
+-- drop you into Terminal-mode at the prompt — the in-editor way to reach the same
+-- one claude conversation `frame claude` talks to. The only difference:
+-- :[range]FrameClaude first pastes the current file:line range (or visual
+-- selection, or a leading [question]) into the prompt as context;
+-- :FrameClaudeBuffer opens the bare prompt. Neither submits — you edit and hit
+-- <CR> yourself. NOTE: typing here is a direct write into claude, NOT a brokered
+-- turn (cf. docs/claude-broker.md) — it interleaves with an in-flight turn
+-- exactly as manual typing would.
 
-local function frameclaude_out()
-  if frameclaude_buf and vim.api.nvim_buf_is_valid(frameclaude_buf) then
-    return frameclaude_buf
+-- Open the claude terminal in a vsplit (reusing its window if already visible)
+-- and start Terminal-mode insert. Returns the terminal's job channel so a caller
+-- can paste into the prompt, or nil (with a notified error) when this session
+-- has no claude buffer.
+local function frameclaude_open()
+  local buf = FrameState.buf['claude']
+  if not (buf and vim.api.nvim_buf_is_valid(buf)) then
+    vim.notify('frame: no claude buffer in this session', vim.log.levels.ERROR)
+    return nil
   end
-  local b = vim.api.nvim_create_buf(false, true) -- unlisted scratch (buftype=nofile)
-  pcall(vim.api.nvim_buf_set_name, b, '[FrameClaude]')
-  vim.bo[b].bufhidden = 'hide'
-  vim.bo[b].filetype = 'markdown'
-  frameclaude_buf = b
-  return b
-end
-
--- Show `buf` in a right-hand split without stealing focus from the code.
-local function frameclaude_show(buf)
-  for _, win in ipairs(vim.api.nvim_list_wins()) do
-    if vim.api.nvim_win_get_buf(win) == buf then return end
+  local win
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_buf(w) == buf then win = w; break end
   end
-  local back = vim.api.nvim_get_current_win()
-  vim.cmd('botright vsplit')
-  vim.api.nvim_win_set_buf(0, buf)
-  if vim.api.nvim_win_is_valid(back) then vim.api.nvim_set_current_win(back) end
-end
-
--- Replace the scratch buffer's contents (kept non-modifiable, help/fugitive style).
-local function frameclaude_render(buf, lines)
-  if not vim.api.nvim_buf_is_valid(buf) then return end
-  vim.bo[buf].modifiable = true
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.bo[buf].modifiable = false
+  if win then
+    vim.api.nvim_set_current_win(win)
+  else
+    vim.cmd('botright vsplit')
+    vim.api.nvim_win_set_buf(0, buf)
+  end
+  vim.cmd.startinsert() -- terminal buffer → enter Terminal-mode at the prompt
+  return FrameState.chan['claude']
 end
 
 vim.api.nvim_create_user_command('FrameClaude', function(opts)
@@ -602,36 +596,36 @@ vim.api.nvim_create_user_command('FrameClaude', function(opts)
   local file = vim.fn.expand('%:.')
   if file == '' then file = '[No Name]' end
   local where = file .. ':' .. l1 .. (l2 > l1 and ('-' .. l2) or '')
-  local ask = opts.args ~= '' and opts.args or 'Review this code and give feedback.'
   local ft = vim.bo.filetype
 
-  local prompt = table.concat({
-    ask, '', where, '',
-    '```' .. ft, table.concat(src, '\n'), '```',
-  }, '\n')
+  -- The context we paste in front of the (as-yet-unwritten) question: an
+  -- optional leading [question] arg, the file:line, then the fenced source.
+  local parts = {}
+  if opts.args ~= '' then parts[#parts + 1] = opts.args; parts[#parts + 1] = '' end
+  parts[#parts + 1] = where
+  parts[#parts + 1] = ''
+  parts[#parts + 1] = '```' .. ft
+  parts[#parts + 1] = table.concat(src, '\n')
+  parts[#parts + 1] = '```'
+  -- Trailing newline so your cursor lands on a fresh line below the fence.
+  local text = table.concat(parts, '\n') .. '\n'
 
-  local function head() return { '# ' .. where, '', '> ' .. ask, '' } end
-  local out = frameclaude_out()
-  frameclaude_show(out)
-  local pending = head()
-  pending[#pending + 1] = '⏳ asking claude…'
-  frameclaude_render(out, pending)
-
-  local id = _G.FrameBrokerSubmitCb(prompt, function(answer)
-    local lines = head()
-    local body = answer == '' and '_(no textual answer)_' or answer
-    for _, l in ipairs(vim.split(body, '\n')) do lines[#lines + 1] = l end
-    frameclaude_render(out, lines)
-  end)
-  if not id then
-    local lines = head()
-    lines[#lines + 1] = '⚠️  claude unavailable or queue full — try again.'
-    frameclaude_render(out, lines)
-  end
+  local chan = frameclaude_open()
+  if not chan then return end
+  -- One rapid chansend: claude's TUI paste-detection folds the embedded newlines
+  -- into the input box instead of submitting (same mechanism frame_submit uses;
+  -- here we send NO trailing '\r', so nothing is submitted — you do that).
+  vim.fn.chansend(chan, text)
 end, {
   range = true,
   nargs = '*',
-  desc = "Ask this frame's claude about the code under cursor / selection",
+  desc = "Open this frame's claude with the code under cursor / selection pasted in",
+})
+
+vim.api.nvim_create_user_command('FrameClaudeBuffer', function()
+  frameclaude_open()
+end, {
+  desc = "Open this frame's claude terminal in a vertical split (insert mode)",
 })
 
 -- Register a named socket so `frame wt -d TOPIC` can send :qa! remotely.
