@@ -169,4 +169,52 @@ test_nested_boot_refused_noninteractively() {
   assert_file_absent "$FAKE_NVIM_LOG"
 }
 
+# ── committed-hook drift sniff ────────────────────────────────────────────────
+# A worktree inherits the branch's COMMITTED .claude/settings.json, so a file
+# that drifted from frame's canonical hook set silently breaks the frame's
+# notifications. wt boot greps it (frame_claude_hooks_missing) and exports
+# FRAME_HOOK_DRIFT — the comma-joined missing hooks, empty when in sync — which
+# layouts/worktree.lua turns into a vim.notify warning that survives the exec
+# into nvim. The stub's env dump proves what the boot exported.
+
+commit_claude_settings() {  # commit_claude_settings <<'EOF' … EOF
+  mkdir -p "$REPO/.claude"
+  cat > "$REPO/.claude/settings.json"
+  git -C "$REPO" add .claude/settings.json
+  git -C "$REPO" commit -qm "add claude settings"
+}
+
+test_wt_boot_flags_hook_drift() {
+  setup_project
+  # committed file wired for Stop→notify + UserPromptSubmit only: 'frame reply'
+  # and 'frame notify --blocked' are absent.
+  commit_claude_settings <<'EOF'
+{ "hooks": {
+  "Stop": [{ "hooks": [{ "type": "command", "command": "frame notify" }] }],
+  "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "frame status --prompt" }] }]
+} }
+EOF
+  run_frame wt topic
+  assert_status 0
+  # named in canonical order, so the layout's warning reads predictably
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_HOOK_DRIFT=frame reply, frame notify --blocked"
+}
+
+test_wt_boot_no_drift_when_hooks_complete() {
+  setup_project
+  commit_claude_settings <<'EOF'
+{ "hooks": {
+  "Stop": [{ "hooks": [
+    { "type": "command", "command": "frame notify" },
+    { "type": "command", "command": "frame reply" } ] }],
+  "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "frame status --prompt" }] }],
+  "Notification": [{ "hooks": [{ "type": "command", "command": "frame notify --blocked" }] }]
+} }
+EOF
+  run_frame wt topic
+  assert_status 0
+  # all four present → exported empty (no warning fires in the layout)
+  assert_contains "$(<$FAKE_NVIM_LOG)" $'FRAME_HOOK_DRIFT=\n'
+}
+
 run_tests "$0"

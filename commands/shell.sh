@@ -74,9 +74,7 @@ if [[ ! -f .claude/settings.json ]]; then
   frame_write_claude_hooks
   echo "$OK_MARK wired claude hooks (.claude/settings.json) — Stop → frame notify"
 elif grep -qF 'frame notify' .claude/settings.json \
-  && { ! grep -qF 'frame reply' .claude/settings.json \
-    || ! grep -qF 'frame status --prompt' .claude/settings.json \
-    || ! grep -qF 'frame notify --blocked' .claude/settings.json; }; then
+  && [[ -n "$(frame_claude_hooks_missing .claude/settings.json)" ]]; then
   frame_write_claude_hooks
   echo "$OK_MARK refreshed claude hooks (.claude/settings.json) — stale frame wiring"
 fi

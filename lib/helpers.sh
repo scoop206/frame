@@ -5,22 +5,23 @@
 FRAME_SERVICES_COMPOSE="$FRAME_ROOT/services/docker-compose.yml"
 
 # ── status markers ────────────────────────────────────────────────────────────
-# Colored only when the stream is a terminal (✗ prints to stderr, ✓/▶ to
+# Colored only when the stream is a terminal (✗ prints to stderr, ✓/▶/⚠ to
 # stdout) and NO_COLOR is unset — piped output, logs, and the worktree.lua
-# teardown watcher keep seeing the bare characters.
+# teardown watcher keep seeing the bare characters. Each marker is gated on the
+# stream it actually prints to, so redirecting the other one doesn't drop color.
 if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then
   X_MARK=$'\e[1;31m✗\e[0m'
-  WARN_MARK=$'\e[1;33m⚠\e[0m'
 else
   X_MARK='✗'
-  WARN_MARK='⚠'
 fi
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   OK_MARK=$'\e[32m✓\e[0m'
   RUN_MARK=$'\e[36m▶\e[0m'
+  WARN_MARK=$'\e[1;33m⚠\e[0m'
 else
   OK_MARK='✓'
   RUN_MARK='▶'
+  WARN_MARK='⚠'
 fi
 
 # ── project discovery ─────────────────────────────────────────────────────────
@@ -169,6 +170,30 @@ frame_export_claude_flags() {
 }
 
 # ── claude-code hooks ─────────────────────────────────────────────────────────
+
+# The claude-code hooks every frame relies on for notifications, as the exact
+# command substrings that must appear in .claude/settings.json. THE canonical
+# list — init (drift check), shell (auto-refresh), and wt (boot sniff) all read
+# it from here so they can't drift apart, and frame_write_claude_hooks below
+# writes precisely these. `frame notify` is also frame's fingerprint (present
+# since day one): its absence means the file is the user's own, not a stale
+# frame file. Keep in step with frame_write_claude_hooks.
+frame_claude_required_hooks() {
+  print -rl -- 'frame notify' 'frame reply' 'frame status --prompt' 'frame notify --blocked'
+}
+
+# frame_claude_hooks_missing FILE — print (one per line) the required hooks that
+# FILE lacks; nothing when all are present or FILE is absent (grep -qF on a
+# missing file just reports every hook missing). Substring match on the command
+# string, the same test init/shell have always used. Callers capture with
+#   _missing=(${(f)"$(frame_claude_hooks_missing .claude/settings.json)"})
+# — unquoted, so zsh drops the lone empty element when nothing is missing.
+frame_claude_hooks_missing() {
+  local _f=$1 _h
+  frame_claude_required_hooks | while IFS= read -r _h; do
+    grep -qF "$_h" "$_f" 2>/dev/null || print -r -- "$_h"
+  done
+}
 
 frame_settings_is_frame_only() {
   # Classify .claude/settings.json (path $1) for a `frame init --force`

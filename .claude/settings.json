@@ -23,6 +23,16 @@
           }
         ]
       }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "frame notify --blocked >/dev/null 2>&1 || true"
+          }
+        ]
+      }
     ]
   }
 }

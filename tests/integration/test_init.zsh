@@ -40,7 +40,8 @@ test_init_warns_when_existing_settings_lacks_hooks() {
   print -r -- '{"hooks":{}}' > "$REPO/.claude/settings.json"
   local before=$(cksum "$REPO/.claude/settings.json")
   run_frame init
-  assert_status 0
+  # left out of sync (no --force) → init doubles as a drift check, exit 3
+  assert_status 3
   assert_contains "$OUT" "frame hooks missing, re-sync with --force"
   assert_contains "$OUT" "frame's notification hooks"
   assert_contains "$OUT" "frame notify"
@@ -78,7 +79,8 @@ test_init_force_refuses_custom_content() {
   print -r -- '{"permissions":{"allow":["Bash"]},"hooks":{}}' > "$REPO/.claude/settings.json"
   local before=$(cksum "$REPO/.claude/settings.json")
   run_frame init --force
-  assert_status 0
+  # --force refused (custom content) → still out of sync → exit 3
+  assert_status 3
   assert_contains "$OUT" "has custom content"
   assert_contains "$OUT" "merge these in by hand"
   assert_eq "$(cksum "$REPO/.claude/settings.json")" "$before" "--force clobbered custom content"
@@ -134,7 +136,8 @@ test_init_flags_wiring_predating_notification_hook() {
   print -r -- '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"frame notify"},{"type":"command","command":"frame reply"}]}],"UserPromptSubmit":[{"hooks":[{"type":"command","command":"frame status --prompt"}]}]}}' \
     > "$REPO/.claude/settings.json"
   run_frame init
-  assert_status 0
+  # stale pre-Notification wiring, no --force → out of sync → exit 3
+  assert_status 3
   assert_contains "$OUT" "frame hooks missing, re-sync with --force"
   assert_contains "$OUT" "frame notify --blocked"
 }

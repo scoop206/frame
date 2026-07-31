@@ -849,6 +849,19 @@ if #missing > 0 then
     .. table.concat(missing, ', '), vim.log.levels.WARN)
 end
 
+-- Committed-hook drift: commands/wt.sh sniffs .claude/settings.json against
+-- frame's canonical hook set and hands us the comma-joined list of missing
+-- hooks (empty when in sync). Surfaced here rather than in the boot shell so it
+-- survives the exec into nvim — a scrolled-away warning is exactly how the
+-- missing-notification bite goes unnoticed. Warn only; wt.sh never rewrites a
+-- tracked settings.json.
+local hook_drift = vim.env.FRAME_HOOK_DRIFT or ''
+if hook_drift ~= '' then
+  vim.notify('frame: .claude/settings.json is missing frame hooks (' .. hook_drift
+    .. ') — notifications may not fire here. Re-sync: frame init --force',
+    vim.log.levels.WARN)
+end
+
 -- Land in the focus buffer (without one, stay in the last opened), in
 -- terminal-insert mode, ready to type.
 if focus then vim.cmd.buffer(focus) end
