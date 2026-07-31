@@ -106,3 +106,8 @@ else
   echo "→ not pushed. To push:  git -C $MAIN_WT push origin $MAIN_BRANCH"
   echo "  (or re-run with --push)"
 fi
+
+# PROTOTYPE: hardwired teardown nudge — the step agents merge but forget. Inlined
+# to test whether the nudge actually changes behavior before building the
+# pluggable merge_epilog hook + machine config. If it works, promote to the hook.
+$DRY || echo "→ done with '$TOPIC'? tear it down:  frame wt -d $TOPIC   (or :FrameDown from inside)"
