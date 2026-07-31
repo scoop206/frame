@@ -107,7 +107,13 @@ else
   echo "  (or re-run with --push)"
 fi
 
-# PROTOTYPE: hardwired teardown nudge — the step agents merge but forget. Inlined
-# to test whether the nudge actually changes behavior before building the
-# pluggable merge_epilog hook + machine config. If it works, promote to the hook.
-$DRY || echo "→ done with '$TOPIC'? tear it down:  frame wt -d $TOPIC   (or :FrameDown from inside)"
+# Optional project hook, run after a successful merge: merge_epilog TOPIC PUSHED
+# (PUSHED = true when --push / :FrameMerge! was used). Merging is not always the
+# end — plenty of flows merge mid-stream and keep working — so the tool prints
+# nothing on its own; a project that wants a wrap-up nudge (e.g. "now tear down
+# the frame") defines merge_epilog in .frame/config.sh (or the machine-wide
+# ~/.config/frame/config.sh) and decides, from the push flag or anything else,
+# when to speak. Same seam as stack_up / app_env. Skipped on a dry run.
+if ! $DRY && (( $+functions[merge_epilog] )); then
+  merge_epilog "$TOPIC" "$PUSH"
+fi
