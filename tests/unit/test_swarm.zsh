@@ -38,20 +38,20 @@ test_on_off_aliases_map_to_1_and_0() {
   assert_contains "$OUT" "level 0"
 }
 
-test_singularity_clamps_to_max_and_says_so() {
-  run_frame swarm singularity
-  assert_status 0
-  assert_contains "$OUT" "clamped to level 2"
-  assert_contains "$OUT" "isn't implemented yet"
-  # the dial is really armed at the ceiling, not left off
-  run_frame swarm
-  assert_contains "$OUT" "level 2 (ask)"
-}
-
-test_unbuilt_level_refused() {
+test_unbuilt_level_3_refused_and_names_ceiling() {
   run_frame swarm 3
   assert_status 2
   assert_contains "$OUT" "isn't built yet"
+  assert_contains "$OUT" "current ceiling"
+  # refusing must not disturb the stored dial
+  run_frame swarm
+  assert_contains "$OUT" "level 0"
+}
+
+test_singularity_no_longer_a_command() {
+  run_frame swarm singularity
+  assert_status 2
+  assert_contains "$OUT" "Usage: frame swarm"
 }
 
 test_bad_arg_exits_2() {
