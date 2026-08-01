@@ -27,6 +27,7 @@ frame - an AI harness built on: zsh, ghostty, neovim, and claude code
 - [Frame Merge](#frame-merge)
 - [Frame Removal](#frame-removal)
 - [Notifications](#notifications)
+- [Swarm: telling agents they're in a frame](#swarm-telling-agents-theyre-in-a-frame)
 - [How a project plugs in](#how-a-project-plugs-in)
 - [Buffer Definitions](#buffer-definitions)
 - [Shared (Centralized) Services](#shared-centralized-services)
@@ -52,6 +53,7 @@ for the full list:
 | `frame services up`          | bring up the shared postgres/minio stack               |
 | `frame focus [TOPIC]`        | raise a frame's window                                 |
 | `frame yolo on\|off`         | toggle `--dangerously-skip-permissions` everywhere     |
+| `frame swarm on\|off`        | tell each frame's claude it's a frame (default off)    |
 
 `worktree` is a synonym for `wt`; `list` for `ls`. Not shown here: `spawn`,
 `deliver`, `reply`, `view`, `status`, `notify`, `notification`, and every
@@ -345,6 +347,44 @@ If the new badge is still not working you can also try (they will respawn):
 
 ```
 killall usernoted NotificationCenter
+```
+
+## Swarm: telling agents they're in a frame
+
+By default a frame's Claude doesn't know it's in a frame — it behaves as a lone
+worker, blind to its own identity and its siblings. `frame swarm on` changes
+that: at every session start, a short block is injected telling the agent
+
+- **who it is** — `NAME/TOPIC` and its dev-server URL, read from the frame's
+  own environment (so it's present only inside a real frame);
+- **the frame-safe way to act** — merge and tear down via `frame merge` /
+  `frame wt -d` (not raw git), local merges are the agent's but pushing to
+  origin stays with you, and subagents it waits on run in the foreground;
+- **how to reach siblings** — `frame ls`, `frame claude`, `frame req`.
+
+```bash
+frame swarm on      # every new frame's claude is told it's a frame
+frame swarm off     # back to no injection (the default)
+frame swarm         # show the current state
+```
+
+Like `frame yolo`, it's a machine-global switch that takes effect on the next
+frame boot (or `/clear`, resume, compact) — running sessions keep what they
+started with. When off, the injection is a no-op that costs nothing, so solo
+repos that never coordinate don't pay for it. It's wired through a `SessionStart`
+hook that `frame init` scaffolds into `.claude/settings.json`.
+
+**Extending the block per project.** Define `swarm_context()` in
+`.frame/config.sh` (or `~/.config/frame/config.sh`, or `.frame/local/config.sh`)
+and its output is appended after the built-in core — a natural home for a
+one-line "this frame owns X" or a shared-infra heads-up. The core safety rules
+are never overridable, so an append can only add, never drop a rule.
+
+```sh
+# .frame/config.sh
+swarm_context() {
+  echo "This frame owns pactduo-infra — the shared pg (5432) + minio (9000)."
+}
 ```
 
 ## How a project plugs in
