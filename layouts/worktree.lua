@@ -97,6 +97,54 @@ _G.FrameInfo = function()
   return table.concat({ name, topic, vite_port, FrameState.status, health }, '\t')
 end
 
+-- _G.FrameReload(path) — the whole editor-reload feature: reload PATH from disk
+-- into its nvim buffer, if that buffer is open here and clean. Driven over this
+-- frame's socket by `frame reload-editor` (the PostToolUse hook) after every
+-- Claude Edit/Write, so a buffer-tied viewer (markdown-preview) follows Claude's
+-- edits instantly, with zero manual :e. Returns a short word for the caller/tests:
+--   noop   file isn't open in a loaded buffer → nothing to do
+--   dirty  buffer has unsaved changes → NOT reloaded (warned), edits preserved
+--   ok     reload scheduled
+--
+-- Deliberately self-contained: frame changes NO global editor settings and
+-- registers NO autocmds — reloading the user's buffers is their editor's job to
+-- configure (nvim's autoread is on by default; a user who wants an idle catch-up
+-- puts checktime in their own init), not frame's to impose from a layout that
+-- sources AFTER init.lua and would silently override it. This function's entire
+-- footprint is the one buffer Claude just edited, touched only when it's edited:
+--   * modified buffer → never clobbered; warn and skip (two-writer safety).
+--   * clean buffer → set autoread BUFFER-LOCALLY (vim.bo, never vim.o/vim.go, so
+--     the user's global setting and every other buffer are untouched) and
+--     checktime just that buffer. Buffer-local autoread guarantees a silent,
+--     in-place reload — no cursor move, no W12 prompt to wedge the RPC — even if
+--     the user disabled autoread globally.
+--   * markdown → nudge the preview: a disk reload fires FileChangedShellPost but
+--     NOT TextChanged, which markdown-preview.nvim refreshes on, so re-emit it
+--     scoped to this buffer. Plugin-agnostic; harmless if no viewer is loaded.
+-- Scheduled (non-blocking) so the RPC returns at once — the hook never waits on
+-- nvim's redraw.
+_G.FrameReload = function(path)
+  local full = vim.fn.fnamemodify(path, ':p')
+  local bufnr = vim.fn.bufnr(full)
+  if bufnr < 0 or vim.fn.bufloaded(bufnr) == 0 then return 'noop' end
+  if vim.bo[bufnr].modified then
+    vim.schedule(function()
+      vim.notify('frame: ' .. vim.fn.fnamemodify(full, ':t')
+        .. ' changed on disk (Claude edit) but has unsaved changes here — not reloaded',
+        vim.log.levels.WARN)
+    end)
+    return 'dirty'
+  end
+  vim.schedule(function()
+    vim.bo[bufnr].autoread = true
+    pcall(vim.cmd, 'checktime ' .. bufnr)
+    if vim.bo[bufnr].filetype == 'markdown' then
+      pcall(vim.api.nvim_exec_autocmds, 'TextChanged', { buffer = bufnr })
+    end
+  end)
+  return 'ok'
+end
+
 -- _G.FrameDebug() — the full attribute dump behind `frame view`: one
 -- `key<TAB>value` record per line (value is the rest of the line, so it may hold
 -- spaces). Read straight from the running session — its own env, FrameState, and

@@ -222,7 +222,8 @@ test_wt_boot_no_drift_when_hooks_complete() {
     { "type": "command", "command": "frame reply" } ] }],
   "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "frame status --prompt" }] }],
   "Notification": [{ "hooks": [{ "type": "command", "command": "frame notify --blocked" }] }],
-  "SessionStart": [{ "hooks": [{ "type": "command", "command": "frame swarm --context" }] }]
+  "SessionStart": [{ "hooks": [{ "type": "command", "command": "frame swarm --context" }] }],
+  "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{ "type": "command", "command": "frame reload-editor" }] }]
 } }
 EOF
   run_frame wt topic

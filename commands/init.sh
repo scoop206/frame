@@ -170,6 +170,7 @@ if [[ -n $_hooks_hint ]]; then
       'frame notify') print -- "      Stop             → 'frame notify'  (banner + \"waiting\" status)" ;;
       'frame reply')  print -- "      Stop             → 'frame reply'   (route the reply to a requester)" ;;
       'frame status --prompt') print -- "      UserPromptSubmit → 'frame status --prompt'  (\"working\" status + turn stamp)" ;;
+      'frame reload-editor') print -- "      PostToolUse      → 'frame reload-editor'  (enables immediate nvim buffer reload on Claude's edits)" ;;
     esac
   done
 

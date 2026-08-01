@@ -104,6 +104,12 @@ case "$cmd" in
     # by `frame init` as its own process (not in the usage text above)
     source "$FRAME_ROOT/commands/notifier.sh" "$@"
     ;;
+  reload-editor)
+    # internal hook target, run by claude-code's PostToolUse hook (not for humans,
+    # not in the usage text above): reads the hook JSON on stdin and reloads the
+    # edited file into this frame's nvim buffer. See commands/reload-editor.sh.
+    source "$FRAME_ROOT/commands/reload-editor.sh" "$@"
+    ;;
   ""|-h|--help|help)
     # print the header comment block verbatim (stops at the first non-comment line)
     awk 'NR == 1 { next } !/^#/ { exit } { sub(/^# ?/, ""); print }' "$0"
