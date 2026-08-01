@@ -94,4 +94,10 @@ export FRAME_VITE_PORT=""
 export FRAME_BUFFERS="claude local"
 frame_export_claude_flags
 
+# Refuse before exec if a boot-critical dependency is missing (see frame_require).
+# A shell frame has no git repo, so git isn't required; it always opens a claude
+# buffer. Terminal mismatch is a soft warning, not a refusal.
+frame_check_terminal
+frame_require zsh nvim claude
+
 exec nvim -S "$FRAME_ROOT/layouts/worktree.lua"

@@ -286,4 +286,12 @@ export SERVER_CMD="${SERVER_CMD:-}"
 export PORT_PREFIX
 frame_export_claude_flags
 
+# Refuse before exec if a boot-critical dependency is missing (see frame_require).
+# git/nvim always; claude only when this project's frames actually open a claude
+# buffer. Terminal mismatch is a soft warning, not a refusal.
+frame_check_terminal
+_req=(zsh git nvim)
+[[ " $FRAME_BUFFERS " == *" claude "* ]] && _req+=(claude)
+frame_require "$_req[@]"
+
 exec nvim -S "$FRAME_ROOT/layouts/worktree.lua"

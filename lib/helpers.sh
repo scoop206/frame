@@ -200,6 +200,52 @@ frame_export_claude_flags() {
   fi
 }
 
+# ── dependency preflight ──────────────────────────────────────────────────────
+# Frame shells out to its dependencies with no upfront check, so a missing one
+# fails deep inside with a raw "command not found": no nvim fails the `exec`
+# outright, and no claude leaves its buffer at a bare shell while the frame
+# never reports ready (FrameReady waits for a claude prompt that never renders).
+# The boot paths (wt.sh, shell.sh) call frame_require just before exec'ing nvim
+# so the frame refuses up front, naming the dep and how to install it, instead
+# of coming up half-alive.
+
+frame_dep_hint() {
+  # frame_dep_hint CMD — one-line "how to get it" for a missing dependency.
+  case "$1" in
+    zsh)    print -r -- "the shell frame runs on — ships with macOS; else 'brew install zsh'" ;;
+    git)    print -r -- "'brew install git', or 'xcode-select --install'" ;;
+    nvim)   print -r -- "neovim, frame's buffer layer — 'brew install neovim'" ;;
+    claude) print -r -- "Claude Code CLI — https://claude.com/claude-code" ;;
+    *)      print -r -- "not found on PATH" ;;
+  esac
+}
+
+frame_require() {
+  # frame_require CMD... — hard-check that each CMD is on PATH. On any miss,
+  # print every missing dep with its install hint and exit 127 (the shell's own
+  # command-not-found code). All-present is a silent success.
+  local _cmd; local -a _missing
+  for _cmd in "$@"; do
+    command -v "$_cmd" >/dev/null 2>&1 || _missing+=("$_cmd")
+  done
+  (( $#_missing )) || return 0
+  local _noun="dependency"; (( $#_missing > 1 )) && _noun="dependencies"
+  print -r -- "$X_MARK frame: missing required $_noun:" >&2
+  for _cmd in "${_missing[@]}"; do
+    print -r -- "  $X_MARK $_cmd — $(frame_dep_hint "$_cmd")" >&2
+  done
+  exit 127
+}
+
+frame_check_terminal() {
+  # Soft, non-blocking. Frame boots in any terminal (it just `exec nvim`s), but
+  # the Ghostty-specific window management — `frame focus`, `frame spawn` tabs,
+  # click-to-focus on the notify banner — only works when you're in Ghostty.
+  # Warn once at boot so it isn't a silent surprise later; never gate on it.
+  [[ "${TERM_PROGRAM:-}" == ghostty ]] && return 0
+  print -r -- "$WARN_MARK frame: not running in Ghostty (TERM_PROGRAM=${TERM_PROGRAM:-unset}) — frame boots fine here, but focus/spawn window management needs Ghostty" >&2
+}
+
 # ── claude-code hooks ─────────────────────────────────────────────────────────
 
 # The claude-code hooks every frame relies on for notifications, as the exact
