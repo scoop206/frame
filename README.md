@@ -2,10 +2,8 @@
 
 [![tests](https://github.com/scoop206/frame/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/scoop206/frame/actions/workflows/test.yml)
 
-frame - an AI harness built on: zsh, ghostty, neovim, and claude code
-
 <p align="center">
-  <img src="assets/frame_badge.png" alt="frame badge: three ordered tabs over a window with a neovim-chamfered N on terracotta" width="216">
+  <img src="assets/frame_banner.png" alt="frame - an AI harness built on zsh, ghostty, neovim, and claude code" width="760">
 </p>
 
 <!-- Record with: vhs assets/demo.tape  (see assets/demo.tape) -->
