@@ -18,6 +18,8 @@
 #                                       no branch, just the claude + local buffers
 #     frame shell                       infer TOPIC from the cwd if it's a shell
 #                                       frame dir, else mint a fresh dated one
+#     frame shell -d [TOPIC]            tear down a shell frame (default: current)
+#                                       — just quits the session; the dir is kept
 #
 #     frame spawn shell TOPIC [--req TEXT] [--timeout N] [--ephemeral]
 #                                       boot a shell frame into a tab group
