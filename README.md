@@ -16,13 +16,12 @@ frame - an AI harness built on: zsh, ghostty, neovim, and claude code
 ## Table of Contents
 
 - [What Frame does](#what-frame-does)
-- [Features](#features)
-- [Installation](#installation)
+- [Other Features](#other-features)
+- [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Install Frame](#install-frame)
-  - [Recommended extras](#recommended-extras)
-- [Getting Started](#getting-started)
-- [Concepts: Frames](#concepts-frames)
+  - [Onboarding a project](#onboarding-a-project)
+- [Worktrees](#worktrees)
 - [Vim commands](#vim-commands)
 - [Frame Merge](#frame-merge)
 - [Frame Removal](#frame-removal)
@@ -35,70 +34,53 @@ frame - an AI harness built on: zsh, ghostty, neovim, and claude code
 
 ## What Frame does
 
-Everyday commands — run `frame <command> --help` for flags, or `frame --help`
-for the full list:
+- A frame is a terminal running one Neovim instance provisioned with an RPC socket (a named nvim server, so other frames and the CLI can drive it).
+- Each frame has one Claude buffer.
+- The frame CLI injects lua and puts a message broker in front of claude.
+- frames join the pool and become discoverable via `frame ls`
+- In addition to claude you will typically have services like Vite and or binary backend service running in their own buffers. Frame manages the port assignments so you can stand up a frame per worktree/Topic.  
+  They are self contained and disposable: once a topic is merged (`frame merge`;`:FrameMerge`), tear the frame down (`frame wt -d`;`:FrameDown`). Merge and teardown are separate guarded steps to ensure a clean delivery back to main before frame disassembly.
+- Ghostty is the intended terminal — window focus and spawn-into-tabs use its scripting — but a frame still runs in other terminals.
 
-| command                      | what it does                                           |
-| ---------------------------- | ------------------------------------------------------ |
-| `frame init`                 | scaffold frame into a project (`.frame/*`, hooks)      |
-| `frame wt TOPIC`             | create/reuse a branch + worktree, boot it              |
-| `frame wt`                   | boot the worktree you're already in                    |
-| `frame wt -d [TOPIC]`        | tear down a frame (default: the current one)           |
-| `frame shell TOPIC`          | a frame with no repo — just the claude + local buffers |
-| `frame ls`                   | list every live frame across projects                  |
-| `frame merge [TOPIC]`        | merge a topic branch into main                         |
-| `frame claude TEXT…`         | ask this frame's claude, block for the answer          |
-| `frame req NAME/TOPIC TEXT…` | ask another frame's claude (async)                     |
-| `frame inbox`                | read replies routed back to you                        |
-| `frame services up`          | bring up the shared postgres/minio stack               |
-| `frame focus [TOPIC]`        | raise a frame's window                                 |
-| `frame yolo on\|off`         | toggle `--dangerously-skip-permissions` everywhere     |
-| `frame swarm [off\|1\|2]`    | how much each frame's claude knows it's a frame (def 0) |
+| command                      | what it does                                                                           |
+| ---------------------------- | -------------------------------------------------------------------------------------- |
+| `frame wt TOPIC`             | create/reuse a branch and worktree, boot it                                            |
+| `frame wt`                   | boot the worktree you're already in                                                    |
+| `frame wt -d [TOPIC]`        | tear down a frame (default: the current one)                                           |
+| `frame shell TOPIC`          | a frame with no repo — just the claude and local buffers                               |
+| `frame ls`                   | list every live frame across projects                                                  |
+| `frame merge [TOPIC]`        | merge a topic branch into main                                                         |
+| `frame claude TEXT…`         | ask this frame's claude, block for the answer                                          |
+| `frame req NAME/TOPIC TEXT…` | ask another frame's claude (async)                                                     |
+| `frame inbox`                | read replies routed back to you                                                        |
+| `frame services up`          | bring up the shared services stack                                                     |
+| `frame focus [TOPIC]`        | raise a frame's window                                                                 |
+| `frame yolo on\|off`         | toggle `--dangerously-skip-permissions` everywhere                                     |
+| `frame swarm [off\|1\|2]`    | how much frame context each frame's claude gets — 0 off · 1 aware · 2 ask (starts off) |
 
-`worktree` is a synonym for `wt`; `list` for `ls`. Not shown here: `spawn`,
+`worktree` is a synonym for `wt`; `list` for `ls`.  
+Not shown here: `spawn`,
 `deliver`, `reply`, `view`, `status`, `notify`, `notification`, and every
 `--flag` — see `frame --help`.
 
-### Inbox filtering
+## Other Features
 
-When you send a `frame req`, Frame prints a **token** (`token: frame/topic#id`) — a
-globally-unique id for that request. Your inbox is shared: replies from every
-`frame req` you've fired land there together, so reading in order can't guarantee
-you're looking at the answer to a _specific_ request.
+- **Vim/Claude integration** - `:FrameClaude` allows for quick conversations and code analysis
+- **Shared Services** - Databases and Object Stores can be stood up once in the frame repo and share their services between all your projects
+- OSs level **Notifications** - a from has **Completed** it's task, a frame Needs **Attention**, a frame is **Blocked**.
+- **swarm** - uses a SessionStart hook to inform claude about the frame tool and teach it how to self-discover the other frames. It's a dial: level 1 makes a frame aware, level 2 lets it ask siblings read-only questions — but frames should not initiate actions on each other's behalf. See [Swarm: telling agents they're in a frame](#swarm-telling-agents-theyre-in-a-frame) for the per-level breakdown.
+- **shell** - a thin (non worktree) frame for raw claude work
+- Easily enable/disable **YOLO mode** (--dangerously-skip-permissions)
 
-Pass `--for <token>` to `frame inbox` to retrieve only the reply for that request:
-
-```bash
-frame inbox --for frame/comms2#r7        # just that one answer
-```
-
-`--for` is repeatable, which makes it a fan-in barrier for correlated fan-out:
-fire N reqs, capture each `token:` line, then wait for exactly those N answers —
-unrelated mail landing mid-wait is left behind, not counted:
-
-```bash
-frame inbox --wait --for $t1 --for $t2   # blocks until both r1 and r2 arrive
-```
-
-See [docs/claude-broker.md](docs/claude-broker.md) for the full model.
-
-## Features
-
-- A frame per feature
-- Parallel sessions you can tell apart
-- notifications when claude is
-- Shared postgres + minio (or whatever) across all your projects
-- minimal neovim, zsh, git worktrees
-
-## Installation
+## Getting Started
 
 ### Prerequisites
 
 - zsh
 - git ≥ 2.5
-- neovim (no plugins required)
+- neovim (no plugins required) — validated with both a minimalist bare Vim setup and LazyVim
 - claude (Claude Code CLI) — permission prompts stay on unless you opt in with `frame yolo on`
-- docker with the compose v2 plugin
+- docker with the compose v2 plugin (if running shared services)
 - macOS + OrbStack (any docker provider works if already running; auto-start is OrbStack-only)
 - curl, lsof
 
@@ -107,76 +89,66 @@ Frame also assumes **every project's default branch is named `main`**.
 ### Install Frame
 
 ```bash
-# 1. Clone Frame — location doesn't matter
+# 1. Clone Frame
 git clone https://github.com/scoop206/frame.git
+
+# 2. Enter the repo
 cd frame
 
-# 2. Put frame on your PATH (this line persists it in ~/.zshrc)
+# 3. Put frame on your PATH (this line persists it in ~/.zshrc)
 echo "export PATH=\"$PWD/bin:\$PATH\"" >> ~/.zshrc
-exec zsh
+source ~/.zshrc
 
-# 3. Verify
+# 4. Verify
 frame --help
 ```
 
-### Recommended extras
+### Onboarding a project
 
-- **Ghostty ≥ 1.3** — the terminal Frame was built with; on others your YMMV.
-  1.3+ ships an AppleScript dictionary that Frame uses for the good spawn
-  UX: workers congregate as tabs in a shared window, `frame focus` selects
-  the exact tab by id, and ephemeral workers reap their own tabs. On older
-  Ghostty (or if scripting fails) every spawn opens a separate app instance —
-  it works, and `frame spawn` tells you when it fell back.
+Scaffold a project's Frame config and boot your first frame in four steps.
 
-  **Automation permission:** Ghostty scripting itself needs no grant, so
-  frames spawning frames just works. Running frame commands from _another_
-  app (a different terminal, Raycast, the notify banner) makes macOS prompt
-  once — "… wants to control Ghostty" — allow it. If it was dismissed or
-  denied: System Settings → Privacy & Security → Automation, or
-  `tccutil reset AppleEvents <bundle-id-of-the-caller>` to re-prompt.
-
-- **Raycast** — window fuzzy-find lets you leverage the waiting and TOPIC name of your frames.
-- **homebrew + terminal-notifier** — optional; `brew install terminal-notifier`,
-  then `frame notification init` (or the first `frame init`) builds the frame-icon,
-  click-to-focus banner app (without them, plain osascript banners still fire).
-
-## Getting Started
-
-From inside any project, scaffold its Frame config and start a worktree:
+**1. Go to your project.**
 
 ```bash
-cd your-project
-
-# 1. Scaffold .frame/config.sh and gitignore .frame/local/
-frame init
-
-# 2. (optional) let Claude run with permissions skipped in every frame
-frame yolo on
-
-# 3. Create a topic worktree and boot it
-frame wt scratch-topic
+cd $YOUR_PROJECT
 ```
 
-Neovim will fire up with the Claude buffer in the foreground.
-
-A bare-bones `.frame/config.sh` needs only your buffer list — if you'd rather write
-it by hand instead of running `frame init`:
+**2. Scaffold the Frame config.**
 
 ```bash
-cd your-project && mkdir -p .frame && echo "BUFFERS(claude local)" > .frame/config.sh
+frame init
+```
+
+This writes three things:
+
+- `.frame/config.sh` — the project config
+- `.frame/local/` — gitignored, for personal overrides
+- `.claude/settings.json` — claude-code hooks that put each frame's Claude into
+  frame's lifecycle signaling:
+  - `Stop` → `frame notify` (banner + "waiting" title) and `frame reply` (route a reply to a requester)
+  - `UserPromptSubmit` → `frame status --prompt` ("working" title + turn-start stamp)
+  - `Notification` → `frame notify --blocked` ("blocked" title + banner)
+  - `SessionStart` → `frame swarm --context` (frame-awareness, when swarm ≥ 1)
+  - `PostToolUse` → `frame reload-editor` (reloads the just-edited file into this frame's nvim buffer, when it's open)
+
+**3. (Optional) Change which buffers your frames open.**
+`frame init` already scaffolds a working default — `BUFFERS=(claude local)` — so you can skip straight
+to booting a frame. Edit `.frame/config.sh` only if you want different buffers
+(e.g. add `vite` or a backend `server`).
+
+```bash
+$EDITOR .frame/config.sh
+```
+
+**4. Boot a topic/worktree frame.** Neovim fires up with the Claude buffer in front.
+
+```bash
+frame wt scratch-topic
 ```
 
 See [How a project plugs in](#how-a-project-plugs-in) for the full config.
 
-## Concepts: Frames
-
-A frame is a terminal window running neovim as its buffer management layer (multiplexer).
-This is usually one buffer running Claude and then whatever else is appropriate.
-Frames assumes a 1:1:1 mapping between a frame:worktree:branch.
-
-All work happens in topic worktrees, each a self-sufficient peer — `frame wt` runs the
-project's idempotent `stack_up()`, so whichever frame boots first brings up
-the shared services.
+## Worktrees
 
 Worktrees are created beside the primary checkout as `../_<name>-<topic>`.
 The leading underscore marks them as frame-managed and keeps them sorted
@@ -201,28 +173,24 @@ You can see vite's rendered web app at http://localhost:PORT
 When frame instantiates the nvim instance it injects these user commands
 (defined in `layouts/worktree.lua`), available from any buffer in the session:
 
-| command                   | action                                                                                                              |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `:FrameStatus TEXT…`      | append "- TEXT" to the window title's status suffix (no TEXT clears it)                                             |
-| `:FrameNotify off`        | 'on' or 'off' to unmute/mute banners; no arg shows state                                                            |
-| `:FrameQuit`              | quit the session only — worktree and branch stay for a later `frame wt TOPIC`                                       |
-| `:FrameDown`              | tear down the whole frame: quit nvim, remove the worktree, delete the branch                                        |
-| `:FrameDown!`             | force teardown — discard uncommitted changes and unmerged commits                                                   |
-| `:FrameMerge`             | merge this frame's branch into main (same safeguards as `frame merge`)                                              |
-| `:FrameMerge!`            | merge, then push main to origin (mirrors `frame merge --push`)                                                      |
-| `:[range]FrameClaude [Q]` | ask this frame's claude about the current line / visual selection; answer opens in a `[FrameClaude]` scratch buffer |
-
-In a shell frame (`frame shell`) there is no worktree or branch, so
-`:FrameDown` simply quits and deletes the topic directory — the safeguards
-below don't apply, and the bang changes nothing. `:FrameQuit` keeps the
-directory for a later `frame shell TOPIC`.
+| command                   | action                                                                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `:FrameStatus TEXT…`      | append "- TEXT" to the window title's status suffix (no TEXT clears it)                                |
+| `:FrameNotify off`        | 'on' or 'off' to unmute/mute banners; no arg shows state                                               |
+| `:FrameQuit`              | quit the session only — worktree and branch stay for a later `frame wt TOPIC`                          |
+| `:FrameDown`              | tear down the whole frame: quit nvim, remove the worktree, delete the branch                           |
+| `:FrameDown!`             | force teardown — discard uncommitted changes and unmerged commits                                      |
+| `:FrameMerge`             | merge this frame's branch into main (same safeguards as `frame merge`)                                 |
+| `:FrameMerge!`            | merge, then push main to origin (mirrors `frame merge --push`)                                         |
+| `:[range]FrameClaude [Q]` | open Claude buffer or use [range[ to ask this frame's claude about the current line / visual selection |
 
 ### Asking claude from the editor — `:FrameClaude`
 
 `:FrameClaude` is the in-editor sibling of `frame claude`: it asks **this
 frame's** claude about the code you're looking at, without leaving the buffer.
 
-- **Bare `:FrameClaude`** sends the current line; **`:'<,'>FrameClaude`** (or any
+- **Bare `:FrameClaude`** sends the current line;
+  **`:'<,'>FrameClaude`** (or any
   `:[range]`) sends the selected lines. The file and line range are attached as
   context, so claude knows what it's looking at.
 - **`:FrameClaude <question>`** asks your own question about that code; with no
@@ -349,6 +317,29 @@ If the new badge is still not working you can also try (they will respawn):
 killall usernoted NotificationCenter
 ```
 
+### Inbox filtering
+
+When you send a `frame req`, Frame prints a **token** (`token: frame/topic#id`) — a
+globally-unique id for that request. Your inbox is shared: replies from every
+`frame req` you've fired land there together, so reading in order can't guarantee
+you're looking at the answer to a _specific_ request.
+
+Pass `--for <token>` to `frame inbox` to retrieve only the reply for that request:
+
+```bash
+frame inbox --for frame/comms2#r7        # just that one answer
+```
+
+`--for` is repeatable, which makes it a fan-in barrier for correlated fan-out:
+fire N reqs, capture each `token:` line, then wait for exactly those N answers —
+unrelated mail landing mid-wait is left behind, not counted:
+
+```bash
+frame inbox --wait --for $t1 --for $t2   # blocks until both r1 and r2 arrive
+```
+
+See [docs/claude-broker.md](docs/claude-broker.md) for the full model.
+
 ## Swarm: telling agents they're in a frame
 
 By default a frame's Claude doesn't know it's in a frame — it behaves as a lone
@@ -361,16 +352,16 @@ behavior grow together.
 frame swarm            # show the current level
 frame swarm off        # (= 0) no injection — the default
 frame swarm 1          # aware
-frame swarm 2          # ask
-frame swarm singularity  # clamp to the highest built level, and say so
+frame swarm 2          # ask (the current ceiling)
+frame swarm 3          # lead-frame fan-out/gather — not built yet, refused
 ```
 
-| level | what the agent is told |
-| ----- | ---------------------- |
-| **0 · off** | nothing (the default) |
-| **1 · aware** | **who it is** — `NAME/TOPIC` + its dev-server URL, read from the frame's own environment (present only inside a real frame); and **the frame-safe way to act** — merge/tear down via `frame merge` / `frame wt -d` (not raw git), local merges are the agent's but pushing to origin stays with you, subagents it waits on run in the foreground, and a request from a sibling gets an answer, not an action. No sibling coordination. |
-| **2 · ask** | level 1 **plus** a bounded recipe for asking sibling frames read-only questions (`frame req` → `frame inbox --wait --for`, with a per-turn budget and a 2-hop limit). Find who to ask with `frame ls`. |
-| **∞ · singularity** | the ambitious top — lead-frame fan-out/gather. Not built yet: selecting it arms the highest real level and tells you the rest is dragons. |
+| level           | what the agent is told                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0 · off**     | nothing (the default)                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **1 · aware**   | **who it is** — `NAME/TOPIC` + its dev-server URL, read from the frame's own environment (present only inside a real frame); and **the frame-safe way to act** — merge/tear down via `frame merge` / `frame wt -d` (not raw git), local merges are the agent's but pushing to origin stays with you, subagents it waits on run in the foreground, and a request from a sibling gets an answer, not an action. No sibling coordination. |
+| **2 · ask**     | level 1 **plus** a bounded recipe for asking sibling frames read-only questions (`frame req` → `frame inbox --wait --for`, with a per-turn budget and a 2-hop limit). Find who to ask with `frame ls`.                                                                                                                                                                                                                                 |
+| **3 · fan-out** | the ambitious top — lead-frame fan-out/gather. Not built yet, so **2 is the current ceiling**: selecting 3 is refused and points you back at 2.                                                                                                                                                                                                                                                                                        |
 
 Like `frame yolo`, it's a machine-global dial that takes effect on the next
 frame boot (or `/clear`, resume, compact) — running sessions keep what they

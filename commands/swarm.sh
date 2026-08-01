@@ -1,6 +1,6 @@
-# frame swarm [off|1|2|singularity] — how much the agent inside each frame is
-# told about being a frame. A dial, not a switch: each level injects strictly
-# more at session start, so token cost and permitted behavior grow together.
+# frame swarm [off|1|2] — how much the agent inside each frame is told about
+# being a frame. A dial, not a switch: each level injects strictly more at
+# session start, so token cost and permitted behavior grow together.
 #
 #   frame swarm            show the current level
 #   frame swarm off        (= 0) no injection — the default
@@ -10,10 +10,9 @@
 #                          coordination.
 #   frame swarm 2          ask: level 1 PLUS a bounded recipe for asking sibling
 #                          frames read-only questions (req → inbox --wait, with
-#                          a per-turn budget + hop limit).
-#   frame swarm singularity  clamp to the highest built level and say so — the
-#                          full thing (lead-frame fan-out/gather, tier 4) isn't
-#                          implemented. Selecting above what exists tells you.
+#                          a per-turn budget + hop limit). The current ceiling.
+#   frame swarm 3          the ambitious top — lead-frame fan-out/gather. Not
+#                          built yet: refused, with 2 named as the ceiling.
 #
 #   on = 1 and off = 0 are accepted as aliases (back-compat with the old switch).
 #
@@ -47,7 +46,6 @@ _swarm_level() {
   case "$_raw" in
     on|1)     print -r -- 1 ;;
     2)        print -r -- 2 ;;
-    3)        print -r -- 3 ;;
     *)        print -r -- 0 ;;   # "", off, 0, or anything unrecognized
   esac
 }
@@ -181,19 +179,14 @@ case "${1:-}" in
   on|1)  _swarm_set 1 ;;
   2)     _swarm_set 2 ;;
   3)
-    print -r -- "$X_MARK level 3 (broadcast) isn't built yet — highest is $_SWARM_MAX (ask)." >&2
-    print -r -- "  For the top of what exists: frame swarm singularity" >&2
+    # The ambitious top — lead-frame fan-out/gather — isn't built. Refuse
+    # honestly and name the real ceiling rather than pretend we lit it up.
+    print -r -- "$X_MARK level 3 (lead-frame fan-out/gather) isn't built yet — $_SWARM_MAX (ask) is the current ceiling." >&2
+    print -r -- "  For the top of what exists: frame swarm $_SWARM_MAX" >&2
     exit 2
     ;;
-  singularity)
-    # Honest ceiling: arm the highest built level, but say plainly it's not the
-    # real thing rather than pretend we lit up tier 4.
-    frame_global_set swarm "$_SWARM_MAX"
-    print -r -- "$OK_MARK swarm clamped to level $_SWARM_MAX ($(_swarm_name $_SWARM_MAX)) — the highest built."
-    print -r -- "  The full singularity — lead-frame fan-out/gather — isn't implemented yet. Here be dragons."
-    ;;
   *)
-    print -r -- "Usage: frame swarm [off|1|2|singularity]   (0=off, 1=aware, 2=ask)" >&2
+    print -r -- "Usage: frame swarm [off|1|2]   (0=off, 1=aware, 2=ask; 3 reserved, not built)" >&2
     exit 2
     ;;
 esac
