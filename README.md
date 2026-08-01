@@ -28,6 +28,7 @@ frame - an AI harness built on: zsh, ghostty, neovim, and claude code
 - [Notifications](#notifications)
 - [Swarm: telling agents they're in a frame](#swarm-telling-agents-theyre-in-a-frame)
 - [How a project plugs in](#how-a-project-plugs-in)
+  - [Examples](#examples)
 - [Buffer Definitions](#buffer-definitions)
 - [Shared (Centralized) Services](#shared-centralized-services)
 - [License](#license)
@@ -166,68 +167,59 @@ This starts neovim w/ custom layout which is usually 4 buffers:
 - local - bare terminal
 
 The ghostty window will now be named `$REPO [ $TOPIC :PORT ]`
-You can see vite's rendered web app at http://localhost:PORT
+You can see vite's rendered web app at `http://localhost:PORT`
 
 ## Vim commands
 
 When frame instantiates the nvim instance it injects these user commands
 (defined in `layouts/worktree.lua`), available from any buffer in the session:
 
-| command                   | action                                                                                                 |
-| ------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `:FrameStatus TEXT…`      | append "- TEXT" to the window title's status suffix (no TEXT clears it)                                |
-| `:FrameNotify off`        | 'on' or 'off' to unmute/mute banners; no arg shows state                                               |
-| `:FrameQuit`              | quit the session only — worktree and branch stay for a later `frame wt TOPIC`                          |
-| `:FrameDown`              | tear down the whole frame: quit nvim, remove the worktree, delete the branch                           |
-| `:FrameDown!`             | force teardown — discard uncommitted changes and unmerged commits                                      |
-| `:FrameMerge`             | merge this frame's branch into main (same safeguards as `frame merge`)                                 |
-| `:FrameMerge!`            | merge, then push main to origin (mirrors `frame merge --push`)                                         |
-| `:[range]FrameClaude [Q]` | open Claude buffer or use [range[ to ask this frame's claude about the current line / visual selection |
+| command                   | action                                                                                                                 |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `:FrameStatus TEXT…`      | append "- TEXT" to the window title's status suffix (no TEXT clears it)                                                |
+| `:FrameNotify off`        | 'on' or 'off' to unmute/mute banners; no arg shows state                                                               |
+| `:FrameQuit`              | quit the session only — worktree and branch stay for a later `frame wt TOPIC`                                          |
+| `:FrameDown`              | tear down the whole frame: quit nvim, remove the worktree, delete the branch                                           |
+| `:FrameDown!`             | force teardown — discard uncommitted changes and unmerged commits                                                      |
+| `:FrameMerge`             | merge this frame's branch into main (same safeguards as `frame merge`)                                                 |
+| `:FrameMerge!`            | merge, then push main to origin (mirrors `frame merge --push`)                                                         |
+| `:[range]FrameClaude [Q]` | open this frame's claude terminal; with a `[range]` paste the line/selection as context; with a question `Q` submit it |
 
 ### Asking claude from the editor — `:FrameClaude`
 
-`:FrameClaude` is the in-editor sibling of `frame claude`: it asks **this
-frame's** claude about the code you're looking at, without leaving the buffer.
+`:FrameClaude` is the in-editor way to reach **this frame's** claude — the same
+single conversation `frame claude` talks to. It opens that claude's live
+terminal in a far-right vertical split and drops you into Terminal-mode at the
+prompt. Its behavior is keyed on two things: a **range** (attaches context) and
+a **question** (submits).
 
-- **Bare `:FrameClaude`** sends the current line;
-  **`:'<,'>FrameClaude`** (or any
-  `:[range]`) sends the selected lines. The file and line range are attached as
-  context, so claude knows what it's looking at.
-- **`:FrameClaude <question>`** asks your own question about that code; with no
-  question it defaults to "Review this code and give feedback."
-- The reply renders in a reusable, read-only `[FrameClaude]` markdown scratch
-  buffer that opens in a right-hand split (your cursor stays in the code). It
-  shows a placeholder while claude works, then rewrites in place with the answer.
+- **Bare `:FrameClaude`** (no range, no question) just opens the prompt — your
+  cursor lands in claude's terminal, nothing is sent.
+- **`:'<,'>FrameClaude`** (a range or visual selection, no question) pastes the
+  `file:line` plus the fenced source into the prompt and leaves it there for you
+  to type your question and submit.
+- **`:FrameClaude <question>`** attaches the current line (or the
+  range/selection) as context and **submits** it right away.
 
-It shares the same broker and the same single claude conversation as
-`frame claude` — so these turns enter that conversation like any other, and a
-question asked while claude is busy simply queues. Unlike the socket clients, the
-answer is pushed back in-process (no polling), so there's nothing to await. See
-[docs/claude-broker.md](docs/claude-broker.md).
+Unlike `frame claude` and `frame req`, this is a **direct write** into claude's
+terminal, not a [brokered](docs/claude-broker.md) turn — it interleaves with an
+in-flight turn exactly as manual typing would, rather than queuing behind it.
+
+#### PostToolUse Hook
+
+The naive approach for this is to have both neovim and claude modifying the same file on disk.
+So any mods by claude will cause you, the editor, to have to reload the file.
+With frame's PostToolUse hook in place, claude will send the edit event to your neovim instance, allowing your buffer to update automatically (in general no need to reload).
+It's not perfect, and if you are making your own edits at the same time then you might need to reload from disk (as your buffer will now be considered 'dirty').
+A good rule of thumb is to save often. That should mitigate the chance of a clobber happening.
+You could also sit back and let claude do all the work, but let's be real.
 
 ## Frame Merge
 
-When you are done working on the feature you (or claude) can merge to main —
-from wherever you are:
-
-```
-frame merge                merge the current worktree's branch
-frame merge TOPIC          merge branch TOPIC
-frame merge TOPIC --push   …and push main to origin afterward
-frame merge --ff           fast-forward instead of a merge commit
-frame merge -n             dry run: print the plan, change nothing
-```
-
-The worktrees share one object store, so the primary checkout already sees
-every topic branch. `frame merge` drives that primary worktree via `git -C`:
-fast-forward main to origin, merge the topic branch, and (only when asked)
-push — all without leaving whichever worktree you're in.
-
-From inside the session, `:FrameMerge` runs the same thing for the current
-frame's branch (`:FrameMerge!` also pushes); a blocked merge reports the
-reason without leaving nvim.
-
-Safeguards, in the order they run:
+When a topic is done, `frame merge [TOPIC]` — or `:FrameMerge` from inside the
+frame — merges its branch into main from wherever you are, pushing to origin
+only when you ask (`--push`, or `:FrameMerge!`). What makes it safe is the
+guardrails, in the order they run:
 
 - **Primary must be clean** — refuses if the primary worktree has uncommitted
   tracked changes on main.
@@ -391,6 +383,20 @@ Everything project-side lives under one `.frame/` directory:
 | ------------------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `.frame/config.sh` | yes                | project facts:<br>`NAME=`<br>`SERVER_CMD=`<br>`API_PORT=` `VITE_PORT=` `HMR_PORT=`<br>`BUFFERS=(…)`<br>`stack_up()`<br>`app_env()` |
 | `.frame/local/`    | never (gitignored) | personal overrides — a `config.sh` here wins                                                                                       |
+
+### Examples
+
+Three worked, copyable integrations live in [`examples/`](examples) — each a
+complete `.frame/config.sh` plus the `.claude/settings.json` that `frame init`
+writes:
+
+- [`barebones/`](examples/barebones) — the minimum: a `config.sh` with just `NAME`
+- [`standard-web/`](examples/standard-web) — a server + vite app on the shared postgres/minio
+- [`sidecar/`](examples/sidecar) — everything above, plus its own project-unique container
+
+Copy the closest one (or run `frame init` and edit) and the project is fully
+wired; there's nothing else to add. See [`examples/README.md`](examples/README.md)
+for the field-by-field walkthrough.
 
 ### config.sh
 
