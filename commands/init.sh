@@ -164,14 +164,14 @@ if [[ -n $_hooks_hint ]]; then
       print -- "    frame's hooks before overwriting it, and jq isn't installed. Install"
       print -- "    it (brew install jq) and re-run, or add the missing hooks by hand:" ;;
   esac
-  for _h in $_missing; do
-    case $_h in
-      'frame notify --blocked') print -- "      Notification     → 'frame notify --blocked'  (banner + \"blocked\" status when claude needs input)" ;;
-      'frame notify') print -- "      Stop             → 'frame notify'  (banner + \"waiting\" status)" ;;
-      'frame reply')  print -- "      Stop             → 'frame reply'   (route the reply to a requester)" ;;
-      'frame status --prompt') print -- "      UserPromptSubmit → 'frame status --prompt'  (\"working\" status + turn stamp)" ;;
-      'frame reload-editor') print -- "      PostToolUse      → 'frame reload-editor'  (enables immediate nvim buffer reload on Claude's edits)" ;;
-    esac
+  # Walk the canonical hooks table (helpers.sh) and print a labelled line for
+  # each hook that's in $_missing. Driving both the drift check and this warning
+  # from that one table means every missing hook necessarily has a row here — no
+  # hook can be detected-but-unlabelled, which is exactly the gap this replaced.
+  # Table order (Stop, UserPromptSubmit, …) groups the output by event for free.
+  frame_claude_hooks_table | while IFS='|' read -r _cmd _event _why; do
+    (( ${_missing[(Ie)$_cmd]} )) || continue
+    printf "      %-16s → '%s'  (%s)\n" "$_event" "$_cmd" "$_why"
   done
 
   # A left-untouched, out-of-sync settings.json is a failure to signal, not just

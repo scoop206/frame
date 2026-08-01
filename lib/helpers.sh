@@ -248,21 +248,43 @@ frame_check_terminal() {
 
 # ── claude-code hooks ─────────────────────────────────────────────────────────
 
-# The claude-code hooks every frame relies on for notifications, as the exact
-# command substrings that must appear in .claude/settings.json. THE canonical
-# list — init (drift check), shell (auto-refresh), and wt (boot sniff) all read
-# it from here so they can't drift apart, and frame_write_claude_hooks below
-# writes precisely these. `frame notify` is also frame's fingerprint (present
-# since day one): its absence means the file is the user's own, not a stale
-# frame file. Keep in step with frame_write_claude_hooks.
+# THE canonical table of claude-code hooks every frame relies on, one row per
+# hook: `COMMAND|EVENT|WHY`. Everything reads from here so nothing can drift —
+# frame_claude_required_hooks maps the COMMAND column (init's drift check,
+# shell's auto-refresh, wt's boot sniff all go through it); init's missing-hooks
+# warning maps EVENT+WHY to label each gap; frame_write_claude_hooks writes
+# precisely these COMMANDs. Add a hook in ONE place (a row here) and the drift
+# check, the write, and the warning label all pick it up together.
+#
+#   COMMAND  the exact substring that must appear in .claude/settings.json — the
+#            drift key. `frame notify` is also frame's fingerprint (present since
+#            day one): its absence means the file is the user's own, not a stale
+#            frame file.
+#   EVENT    the claude-code hook event the command lives under.
+#   WHY      the one-line reason, shown when init reports the hook missing.
 #
 # `frame reload-editor` (PostToolUse) is listed so a frame predating it reads as
 # drifted — init --force / shell re-sync then propagate the hook into existing
 # frame projects. It's a pure enhancement at runtime (without it, nvim's own
 # autoread and a manual :e still work), but it IS part of the canonical wiring,
-# so drift detection tracks it.
+# so drift detection tracks it. Keep this table in step with
+# frame_write_claude_hooks.
+frame_claude_hooks_table() {
+  print -rl -- \
+    'frame notify|Stop|banner + "waiting" status' \
+    'frame reply|Stop|route the reply to a requester' \
+    'frame status --prompt|UserPromptSubmit|"working" status + turn stamp' \
+    'frame notify --blocked|Notification|banner + "blocked" status when claude needs input' \
+    'frame swarm --context|SessionStart|injects frame-awareness context at session start' \
+    "frame reload-editor|PostToolUse|enables immediate nvim buffer reload on Claude's edits"
+}
+
+# frame_claude_required_hooks — the COMMAND column of the table above, one per
+# line. The command-substring list init/shell/wt/tests have always consumed;
+# now derived from the table so it can never fall out of step with the labels.
 frame_claude_required_hooks() {
-  print -rl -- 'frame notify' 'frame reply' 'frame status --prompt' 'frame notify --blocked' 'frame swarm --context' 'frame reload-editor'
+  local _row
+  frame_claude_hooks_table | while IFS= read -r _row; do print -r -- "${_row%%|*}"; done
 }
 
 # frame_claude_hooks_missing FILE — print (one per line) the required hooks that

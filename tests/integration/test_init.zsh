@@ -1,6 +1,10 @@
 #!/usr/bin/env zsh
 # frame init end-to-end in scratch repos.
 source "${${(%):-%x}:A:h:h}/helpers/harness.zsh"
+# The canonical hooks table (helpers.sh) drives both init's drift check and the
+# labels it prints; source it so the warns-test can assert EVERY row is surfaced.
+export FRAME_ROOT="$FRAME_CHECKOUT"
+source "$FRAME_ROOT/lib/helpers.sh"
 
 test_init_fresh_repo() {
   make_repo
@@ -44,7 +48,14 @@ test_init_warns_when_existing_settings_lacks_hooks() {
   assert_status 3
   assert_contains "$OUT" "frame hooks missing, re-sync with --force"
   assert_contains "$OUT" "frame's notification hooks"
-  assert_contains "$OUT" "frame notify"
+  # every missing hook must be called out — not just the first one found. The
+  # file has NO frame hooks, so every table row is missing; assert each row's
+  # command AND its event label appear, driven off the same table init reads so
+  # a newly-added hook is auto-covered (this is the drift the table prevents).
+  frame_claude_hooks_table | while IFS='|' read -r _cmd _event _why; do
+    assert_contains "$OUT" "$_cmd"    "missing hook '$_cmd' not surfaced"
+    assert_contains "$OUT" "$_event"  "event '$_event' for '$_cmd' not surfaced"
+  done
   # the caution points at --force as the one-shot fix
   assert_contains "$OUT" "frame init --force"
   # the existing file must be left byte-for-byte untouched
