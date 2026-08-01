@@ -1,0 +1,8 @@
+#!/usr/bin/env zsh
+# Test stub for claude. The boot preflight (frame_require) checks `command -v
+# claude` before exec'ing nvim; this keeps the suite hermetic on machines
+# without Claude Code installed. It should never actually be executed — the
+# nvim stub becomes the frame process, so the claude buffer's command never
+# runs — so treat any real invocation as a tripwire.
+print -r -- "✗ test stub: unexpected claude invocation: claude $*" >&2
+exit 1
