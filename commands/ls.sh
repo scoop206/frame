@@ -12,8 +12,8 @@
 # from prompt (UserPromptSubmit → frame status --prompt) to "waiting" at
 # Stop (frame notify).
 #
-# DUR / QUEUE / INBOX are a read-only peek at the claude broker
-# (docs/claude-broker.md), straight off the same FrameInfo RPC — never draining.
+# DUR / QUEUE / INBOX are a read-only peek at the claude broker, straight off the
+# same FrameInfo RPC — never draining.
 # Each shows '-' when there's nothing to report:
 #   DUR    how long the current in-flight turn has been running (Ns/Nm) — the
 #          turn's duration so far. STUCK Nm once past FRAME_STUCK_SECS (default

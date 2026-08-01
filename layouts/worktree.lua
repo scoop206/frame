@@ -51,7 +51,7 @@ vim.o.titlestring = base_title
 --   buf          per-buffer buffer handles (name → bufnr), so FrameReady can
 --                read claude's rendered screen
 --   inbox        reports routed home here (frame deliver / remote broker replies)
---   broker       the request queue in front of claude (docs/claude-broker.md)
+--   broker       the request queue in front of claude
 -- The notify mute switch is deliberately NOT a field here: it stays
 -- vim.g.frame_notify_muted because `frame notify` reads it over RPC as
 -- get(g:, 'frame_notify_muted', 0), so sessions predating it degrade to
@@ -228,7 +228,7 @@ end
 -- claude; clients submit requests and it feeds them one at a time. Because
 -- exactly one request is in flight, each Stop is unambiguously that request's
 -- answer — bound to its turn by being the sole in-flight job, to its client by
--- its id. See docs/claude-broker.md.
+-- its id.
 --
 -- A request: { id, text, ret, status, answer }. ret says where the answer goes:
 --   { kind = 'local' }           awaited over this socket by id (frame claude)
@@ -278,7 +278,7 @@ end
 -- claude is idle by construction — submit straight away. from_stop=false is a
 -- cold nudge from Submit: only submit if claude's prompt is up (else re-arm a
 -- deferred pump while it boots) and no turn is already running (a human's — its
--- Stop will re-pump). See the accepted assumption in docs/claude-broker.md.
+-- Stop will re-pump).
 local function pump(from_stop)
   local b = FrameState.broker
   if b.inflight then return end
@@ -480,7 +480,7 @@ end
 -- _G.FrameOnStop(text) — the Stop-hook entry point: every turn-end flows here
 -- (via FrameReplyFromHook) into the broker, which routes the in-flight request's
 -- answer home and feeds claude the next queued one. The stable name the hook
--- targets; the broker is the sole router now. See docs/claude-broker.md.
+-- targets; the broker is the sole router now.
 _G.FrameOnStop = function(text)
   return _G.FrameBrokerOnTurnEnd(text)
 end
@@ -625,9 +625,8 @@ end, {
 -- So `<leader>c → :FrameClaude<cr>` opens claude; selecting code then bare
 -- :FrameClaude drops that code in for you; `<leader>ca → :FrameClaude ` (normal
 -- or visual) leaves you typing the question, submitted on <CR>.
--- NOTE: this is a direct write into claude, NOT a brokered turn (cf.
--- docs/claude-broker.md) — it interleaves with an in-flight turn exactly as
--- manual typing would.
+-- NOTE: this is a direct write into claude, NOT a brokered turn — it
+-- interleaves with an in-flight turn exactly as manual typing would.
 
 -- Open the claude terminal in a vsplit (reusing its window if already visible)
 -- and start Terminal-mode insert. Returns the terminal's job channel so a caller

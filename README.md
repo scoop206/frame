@@ -211,8 +211,8 @@ a **question** (submits).
   range/selection) as context and **submits** it right away.
 
 Unlike `frame claude` and `frame req`, this is a **direct write** into claude's
-terminal, not a [brokered](docs/claude-broker.md) turn — it interleaves with an
-in-flight turn exactly as manual typing would, rather than queuing behind it.
+terminal, not a brokered turn — it interleaves with an in-flight turn exactly as
+manual typing would, rather than queuing behind it.
 
 #### PostToolUse Hook
 
@@ -333,8 +333,6 @@ unrelated mail landing mid-wait is left behind, not counted:
 ```bash
 frame inbox --wait --for $t1 --for $t2   # blocks until both r1 and r2 arrive
 ```
-
-See [docs/claude-broker.md](docs/claude-broker.md) for the full model.
 
 ## Swarm: telling agents they're in a frame
 

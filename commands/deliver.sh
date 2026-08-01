@@ -9,10 +9,10 @@
 # The broker (FrameBrokerOnTurnEnd) calls this to route an agent's turn home;
 # you can also call it directly to leave a note. --from records the sender for
 # display in the recipient's inbox; --id carries the answering request's broker
-# id so the reply forms a `from#id` correlation token (see `frame inbox --for` and
-# docs/claude-broker.md) — the broker sets it, a hand-written note omits it.
+# id so the reply forms a `from#id` correlation token (see `frame inbox --for`)
+# — the broker sets it, a hand-written note omits it.
 # NAME/TOPIC reaches any project; a bare TOPIC pairs with the current frame's own
-# NAME. See docs/agent-messaging.md.
+# NAME.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 if (( $# < 1 )); then
