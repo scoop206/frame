@@ -12,5 +12,5 @@
   <polygon points="71,52 82,52 82,84 76,90 71,90" fill="#A94F33" stroke="#171613" stroke-width="3.5" stroke-linejoin="round"/>
 </g>
   <text x="378" y="196" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="800" font-size="150" fill="#FFFDF6" letter-spacing="-4">frame</text>
-  <text x="382" y="250" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="400" font-size="30" fill="#C9A896" letter-spacing="0.5">an AI harness built on zsh · ghostty · neovim · claude code</text>
+  <text x="773" y="250" text-anchor="end" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-weight="400" font-size="30" fill="#C9A896" letter-spacing="0.5">an AI harness</text>
 </svg>
