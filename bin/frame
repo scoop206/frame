@@ -70,11 +70,12 @@
 #                                       launches --dangerously-skip-permissions
 #                                       (default off; bare form shows the state)
 #
-#     frame swarm on|off                master switch: every new frame's claude
-#                                       is told, at session start, that it's a
-#                                       frame — its identity, the frame-safe way
-#                                       to merge/tear down, how to reach siblings
-#                                       (default off; bare form shows the state)
+#     frame swarm [off|1|2|singularity] how much each frame's claude is told,
+#                                       at session start, about being a frame:
+#                                       0 off · 1 aware (identity + safe-action
+#                                       rules) · 2 ask (+ query siblings) ·
+#                                       singularity clamps to the highest built
+#                                       (default off; bare form shows the level)
 #
 # Example:
 #     cd $YOUR_GIT_REPO && frame init

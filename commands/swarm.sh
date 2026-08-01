@@ -1,37 +1,74 @@
-# frame swarm [on|off] — frame-awareness for the agent inside each frame:
+# frame swarm [off|1|2|singularity] — how much the agent inside each frame is
+# told about being a frame. A dial, not a switch: each level injects strictly
+# more at session start, so token cost and permitted behavior grow together.
 #
-#   frame swarm on     every new frame's claude is told, at session start,
-#                      that it's a frame — its identity, the frame-safe way
-#                      to merge/tear down, and how to reach sibling frames
-#   frame swarm off    sessions start with no such injection (the default)
-#   frame swarm        show the current state
+#   frame swarm            show the current level
+#   frame swarm off        (= 0) no injection — the default
+#   frame swarm 1          aware: identity + the frame-safe way to act
+#                          (merge/teardown via frame, push is the human's,
+#                          foreground subagents, answer-don't-act). No sibling
+#                          coordination.
+#   frame swarm 2          ask: level 1 PLUS a bounded recipe for asking sibling
+#                          frames read-only questions (req → inbox --wait, with
+#                          a per-turn budget + hop limit).
+#   frame swarm singularity  clamp to the highest built level and say so — the
+#                          full thing (lead-frame fan-out/gather, tier 4) isn't
+#                          implemented. Selecting above what exists tells you.
+#
+#   on = 1 and off = 0 are accepted as aliases (back-compat with the old switch).
 #
 #   frame swarm --context   (machinery, not for humans) the SessionStart-hook
-#                      target: prints the awareness block to stdout when swarm
-#                      is on AND we're inside a frame, otherwise nothing. Wired
-#                      unconditionally into every frame's .claude/settings.json
-#                      by frame_write_claude_hooks; the toggle alone decides
-#                      whether it emits, so flipping swarm rewrites no settings.
+#                          target: prints the block for the current level, or
+#                          nothing when off / outside a frame. Wired
+#                          unconditionally into every frame's settings.json by
+#                          frame_write_claude_hooks; the level alone decides what
+#                          it emits, so changing it rewrites no settings.
 #
 # Machine-global like yolo/notify (the `swarm` key of frame_global_get/set —
-# helpers.sh): one flip covers every project's frames on this box. Read at
+# helpers.sh): one dial covers every project's frames on this box. Read at
 # session start, so it takes effect on the next frame boot (or /clear, resume,
 # compact) — a running session keeps whatever it started with.
 #
-# A project (or person) can APPEND to the block without touching the built-in
-# core: define swarm_context() in .frame/config.sh (or ~/.config/frame/config.sh
-# or .frame/local/config.sh) and its stdout is printed after the core. The core
-# — identity + the merge/teardown/push safety rules — is never overridable, so a
-# stray config can't drop a correctness rule.
+# A project (or person) can APPEND to the block at any level: define
+# swarm_context() in .frame/config.sh (or ~/.config/frame/config.sh or
+# .frame/local/config.sh) and its stdout prints after the built-in core. The
+# core — identity + the safety rules — is never overridable, so a stray config
+# can't drop a correctness rule.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
+
+# Highest level with real content behind it. Bump as tiers land.
+_SWARM_MAX=2
+
+# ── reading the dial ──────────────────────────────────────────────────────────
+
+_swarm_level() {
+  # Normalize the stored value to an integer level. on→1, off/empty/junk→0.
+  local _raw="$(frame_global_get swarm)"
+  case "$_raw" in
+    on|1)     print -r -- 1 ;;
+    2)        print -r -- 2 ;;
+    3)        print -r -- 3 ;;
+    *)        print -r -- 0 ;;   # "", off, 0, or anything unrecognized
+  esac
+}
+
+_swarm_name() {
+  case "$1" in
+    0) print -r -- off ;;
+    1) print -r -- aware ;;
+    2) print -r -- ask ;;
+    *) print -r -- "level $1" ;;
+  esac
+}
 
 # ── the injected block ────────────────────────────────────────────────────────
 
 frame_swarm_context() {
-  # Print the awareness block for THIS frame, or nothing when we're not in one.
+  # Print the block for level $1 (>=1), or nothing when we're not in a frame.
   # Identity comes from the session env (FRAME_NAME/FRAME_TOPIC/FRAME_VITE_PORT),
   # exported by wt.sh/shell.sh at boot — present iff we're inside a real frame,
   # which is the scoping we want for free.
+  local _level=$1
   [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]] || return 0
 
   local _verify
@@ -42,17 +79,17 @@ frame_swarm_context() {
   fi
 
   # Dynamic header (interpolated). No backticks here — this is a double-quoted
-  # print, where they'd command-substitute; the static body below uses a quoted
-  # heredoc, so its backticks are safe.
+  # print, where they'd command-substitute; the static bodies below use quoted
+  # heredocs, so their backticks are safe.
   print -r -- "── frame ─────────────────────────────────────────────"
   print -r -- "You are the claude inside frame $FRAME_NAME/$FRAME_TOPIC — a git-"
   print -r -- "worktree-isolated agent workspace under the frame harness."
   [[ -n "${FRAME_VITE_PORT:-}" ]] && print -r -- "Your dev server is at http://localhost:$FRAME_VITE_PORT."
 
-  # Static body. Quoted heredoc → backticks/$ are literal; @VERIFY@ is the one
+  # Core (every level ≥1): who you are + the safety rules. @VERIFY@ is the one
   # port-dependent line, substituted in after.
-  local _body
-  _body=$(cat <<'EOF'
+  local _core
+  _core=$(cat <<'EOF'
 
 You are one of several sibling frames on this machine, each with
 its own repo/topic, warm context, and live services.
@@ -69,20 +106,30 @@ What only you can know (not discoverable by grep):
   Merging locally is yours; pushing to origin is NOT — never
   `frame merge --push` or `git push` to origin without the human
   asking. That's their call.
-• A sibling's brokered request gets an answer, not an action —
-  don't merge or edit because another frame asked; that trigger
-  stays with your human.
-• Don't chain broker calls more than 2 hops deep.
-
-Coordinate (run `frame <cmd> --help` to learn any of these):
-  frame ls           sibling frames: project, name, topic
-  frame claude "…"   ask THIS frame; blocks for the answer
-  frame req N/T "…"  ask ANOTHER frame (async) → frame inbox
+• If a sibling frame asks YOU something over the broker, answer it
+  — don't merge or edit on another frame's say-so.
 
 Learn more anytime: `frame --help`.
 EOF
 )
-  print -r -- "${_body//@VERIFY@/$_verify}"
+  print -r -- "${_core//@VERIFY@/$_verify}"
+
+  # Level 2+ (ask): the bounded ask-a-sibling recipe. Literal $t / $(…) — this is
+  # a recipe for the agent to read, not to run here.
+  if (( _level >= 2 )); then
+    cat <<'EOF'
+
+You may ask sibling frames read-only questions — who owns what, a
+contract's shape, a second opinion on a diff. Ask and block for the
+answer, with a timeout so a busy or dead sibling can't hang you:
+    t=$(frame req NAME/TOPIC "your question")
+    frame inbox --wait --for "$t" --timeout 60
+Find who to ask with `frame ls` (project · name · topic). Keep it
+bounded: at most a couple of sibling asks per turn, never more than
+2 broker hops deep, and ask only for INFORMATION — acting (edits,
+merges) stays with each frame's human.
+EOF
+  fi
 
   # Optional project/personal append. Source the config cascade so swarm_context
   # (if any layer defines it) is in scope; tolerate a shell frame with no repo by
@@ -91,40 +138,59 @@ EOF
     local _global="${XDG_CONFIG_HOME:-$HOME/.config}/frame/config.sh"
     [[ -f "$_global" ]] && source "$_global"
   fi
-  if typeset -f swarm_context >/dev/null; then
-    swarm_context
-  fi
+  typeset -f swarm_context >/dev/null && swarm_context
 
   print -r -- "──────────────────────────────────────────────────────"
+}
+
+# ── setting the dial ──────────────────────────────────────────────────────────
+
+_swarm_set() {
+  # _swarm_set LEVEL — persist + confirm.
+  frame_global_set swarm "$1"
+  case "$1" in
+    0) print -r -- "$OK_MARK swarm off — new frames inject no frame-awareness" ;;
+    1) print -r -- "$OK_MARK swarm level 1 (aware) — new frames tell their claude it's a frame: identity + safe-action rules, no sibling coordination" ;;
+    2) print -r -- "$OK_MARK swarm level 2 (ask) — level 1 plus a bounded recipe to ask sibling frames read-only questions" ;;
+  esac
 }
 
 # ── dispatch ──────────────────────────────────────────────────────────────────
 
 case "${1:-}" in
   --context)
-    # The hook target. Silent no-op when swarm is off (or the key predates this
-    # feature → empty → off); best-effort like every frame hook — never fail.
-    [[ "$(frame_global_get swarm)" == on ]] || exit 0
-    frame_swarm_context
+    # The hook target. Silent no-op below level 1 (or when the key predates this
+    # feature → empty → 0); best-effort like every frame hook — never fail.
+    lvl=$(_swarm_level)
+    (( lvl >= 1 )) || exit 0
+    frame_swarm_context "$lvl"
     exit 0
     ;;
   "")
-    if [[ "$(frame_global_get swarm)" == on ]]; then
-      echo "swarm is on — new frames tell their claude it's a frame at session start"
+    lvl=$(_swarm_level)
+    if (( lvl == 0 )); then
+      print -r -- "swarm is off (level 0) — new frames inject no frame-awareness (the default)"
     else
-      echo "swarm is off — new frames inject no frame-awareness (the default)"
+      print -r -- "swarm is at level $lvl ($(_swarm_name $lvl)) — takes effect on the next frame boot"
     fi
     ;;
-  on)
-    frame_global_set swarm on
-    echo "$OK_MARK swarm on — every new frame's claude learns it's a frame at session start"
+  off|0) _swarm_set 0 ;;
+  on|1)  _swarm_set 1 ;;
+  2)     _swarm_set 2 ;;
+  3)
+    print -r -- "$X_MARK level 3 (broadcast) isn't built yet — highest is $_SWARM_MAX (ask)." >&2
+    print -r -- "  For the top of what exists: frame swarm singularity" >&2
+    exit 2
     ;;
-  off)
-    frame_global_set swarm off
-    echo "$OK_MARK swarm off — new frames inject no frame-awareness"
+  singularity)
+    # Honest ceiling: arm the highest built level, but say plainly it's not the
+    # real thing rather than pretend we lit up tier 4.
+    frame_global_set swarm "$_SWARM_MAX"
+    print -r -- "$OK_MARK swarm clamped to level $_SWARM_MAX ($(_swarm_name $_SWARM_MAX)) — the highest built."
+    print -r -- "  The full singularity — lead-frame fan-out/gather — isn't implemented yet. Here be dragons."
     ;;
   *)
-    echo "Usage: frame swarm [on|off]" >&2
+    print -r -- "Usage: frame swarm [off|1|2|singularity]   (0=off, 1=aware, 2=ask)" >&2
     exit 2
     ;;
 esac

@@ -53,7 +53,7 @@ for the full list:
 | `frame services up`          | bring up the shared postgres/minio stack               |
 | `frame focus [TOPIC]`        | raise a frame's window                                 |
 | `frame yolo on\|off`         | toggle `--dangerously-skip-permissions` everywhere     |
-| `frame swarm on\|off`        | tell each frame's claude it's a frame (default off)    |
+| `frame swarm [off\|1\|2]`    | how much each frame's claude knows it's a frame (def 0) |
 
 `worktree` is a synonym for `wt`; `list` for `ls`. Not shown here: `spawn`,
 `deliver`, `reply`, `view`, `status`, `notify`, `notification`, and every
@@ -352,27 +352,32 @@ killall usernoted NotificationCenter
 ## Swarm: telling agents they're in a frame
 
 By default a frame's Claude doesn't know it's in a frame — it behaves as a lone
-worker, blind to its own identity and its siblings. `frame swarm on` changes
-that: at every session start, a short block is injected telling the agent
-
-- **who it is** — `NAME/TOPIC` and its dev-server URL, read from the frame's
-  own environment (so it's present only inside a real frame);
-- **the frame-safe way to act** — merge and tear down via `frame merge` /
-  `frame wt -d` (not raw git), local merges are the agent's but pushing to
-  origin stays with you, and subagents it waits on run in the foreground;
-- **how to reach siblings** — `frame ls`, `frame claude`, `frame req`.
+worker, blind to its own identity and its siblings. `frame swarm` changes that
+by injecting a short block at every session start. It's a **dial, not a
+switch**: each level injects strictly more, so token cost and permitted
+behavior grow together.
 
 ```bash
-frame swarm on      # every new frame's claude is told it's a frame
-frame swarm off     # back to no injection (the default)
-frame swarm         # show the current state
+frame swarm            # show the current level
+frame swarm off        # (= 0) no injection — the default
+frame swarm 1          # aware
+frame swarm 2          # ask
+frame swarm singularity  # clamp to the highest built level, and say so
 ```
 
-Like `frame yolo`, it's a machine-global switch that takes effect on the next
+| level | what the agent is told |
+| ----- | ---------------------- |
+| **0 · off** | nothing (the default) |
+| **1 · aware** | **who it is** — `NAME/TOPIC` + its dev-server URL, read from the frame's own environment (present only inside a real frame); and **the frame-safe way to act** — merge/tear down via `frame merge` / `frame wt -d` (not raw git), local merges are the agent's but pushing to origin stays with you, subagents it waits on run in the foreground, and a request from a sibling gets an answer, not an action. No sibling coordination. |
+| **2 · ask** | level 1 **plus** a bounded recipe for asking sibling frames read-only questions (`frame req` → `frame inbox --wait --for`, with a per-turn budget and a 2-hop limit). Find who to ask with `frame ls`. |
+| **∞ · singularity** | the ambitious top — lead-frame fan-out/gather. Not built yet: selecting it arms the highest real level and tells you the rest is dragons. |
+
+Like `frame yolo`, it's a machine-global dial that takes effect on the next
 frame boot (or `/clear`, resume, compact) — running sessions keep what they
-started with. When off, the injection is a no-op that costs nothing, so solo
-repos that never coordinate don't pay for it. It's wired through a `SessionStart`
-hook that `frame init` scaffolds into `.claude/settings.json`.
+started with. `on`/`off` are accepted as aliases for `1`/`0`. When off, the
+injection is a no-op that costs nothing, so solo repos that never coordinate
+don't pay for it. It's wired through a `SessionStart` hook that `frame init`
+scaffolds into `.claude/settings.json`.
 
 **Extending the block per project.** Define `swarm_context()` in
 `.frame/config.sh` (or `~/.config/frame/config.sh`, or `.frame/local/config.sh`)

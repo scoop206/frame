@@ -260,8 +260,8 @@ frame_write_claude_hooks() {
   # without it a blocked frame reads as "working" forever. Working/waiting/blocked
   # between them put claude's lifecycle in the window title and `frame ls`.
   # SessionStart → `frame swarm --context`, which injects the frame-awareness
-  # block iff `frame swarm` is on (and we're in a frame) — wired unconditionally
-  # here; the toggle, not this file, decides whether it emits.
+  # block iff the `frame swarm` level is ≥1 (and we're in a frame) — wired
+  # unconditionally here; the dial, not this file, decides what it emits.
   # `frame reply` reads the hook JSON on stdin (transcript path) — the redirects
   # touch stdout/stderr only, so stdin still flows. Callers guard the file-exists
   # case — this always writes.
