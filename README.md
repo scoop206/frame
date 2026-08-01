@@ -40,6 +40,7 @@
 
 ## What Frame does
 
+- Treat Neovim like a multiplexer.
 - A frame is a terminal running one Neovim instance provisioned with an RPC socket (a named nvim server, so other frames and the CLI can drive it).
 - Each frame has one Claude buffer.
 - The frame CLI injects lua and puts a message broker in front of claude.
