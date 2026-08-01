@@ -480,7 +480,7 @@ end
 -- _G.FrameOnStop(text) — the Stop-hook entry point: every turn-end flows here
 -- (via FrameReplyFromHook) into the broker, which routes the in-flight request's
 -- answer home and feeds claude the next queued one. The stable name the hook
--- targets; the broker is the sole router now.
+-- targets; the broker is the sole router.
 _G.FrameOnStop = function(text)
   return _G.FrameBrokerOnTurnEnd(text)
 end

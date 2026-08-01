@@ -4,8 +4,7 @@
 # which routes the in-flight request's answer home and feeds claude the next
 # queued one. Wired into the Stop hook alongside `frame notify` (see
 # frame_write_claude_hooks); like notify it must never disrupt the hook, so it
-# always exits 0. Takes no arguments — routing is the broker's job now (the old
-# explicit `frame reply TEXT` form is retired).
+# always exits 0. Takes no arguments — routing is the broker's job.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 if (( $# )); then
