@@ -98,6 +98,9 @@ What only you can know (not discoverable by grep):
 • Subagents you'll wait on → run FOREGROUND. Backgrounding ends
   your turn early and fires a false "done" banner.
 • @VERIFY@
+• This worktree, on your topic branch, is where your work goes.
+  Never cd into the primary checkout to edit main directly — that
+  bypasses your branch and the frame merge guards below.
 • Merge and teardown go through frame, never raw git:
     frame merge   → into main (guards clean-primary, ff-to-origin,
                     conflict-abort; raw git skips them)
