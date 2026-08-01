@@ -23,12 +23,19 @@ frame - an AI harness built on: zsh, ghostty, neovim, and claude code
   - [Onboarding a project](#onboarding-a-project)
 - [Worktrees](#worktrees)
 - [Vim commands](#vim-commands)
+  - [Asking claude from the editor](#asking-claude-from-the-editor--frameclaude)
 - [Frame Merge](#frame-merge)
 - [Frame Removal](#frame-removal)
+  - [Teardown Safeguards](#teardown-safeguards)
 - [Notifications](#notifications)
+  - [Fixing the banner badge](#fixing-the-banner-badge)
+  - [Inbox filtering](#inbox-filtering)
 - [Swarm: telling agents they're in a frame](#swarm-telling-agents-theyre-in-a-frame)
+  - [Extending the swarm instructions](#extending-the-swarm-instructions)
 - [How a project plugs in](#how-a-project-plugs-in)
   - [Examples](#examples)
+  - [config.sh](#configsh)
+  - [Port assignment](#port-assignment)
 - [Buffer Definitions](#buffer-definitions)
 - [Shared (Centralized) Services](#shared-centralized-services)
 - [License](#license)
@@ -68,10 +75,12 @@ Not shown here: `spawn`,
 
 - **Vim/Claude integration** - `:FrameClaude` allows for quick conversations and code analysis
 - **Shared Services** - Databases and Object Stores can be stood up once in the frame repo and share their services between all your projects
-- OSs level **Notifications** - a from has **Completed** it's task, a frame Needs **Attention**, a frame is **Blocked**.
-- **swarm** - uses a SessionStart hook to inform claude about the frame tool and teach it how to self-discover the other frames. It's a dial: level 1 makes a frame aware, level 2 lets it ask siblings read-only questions — but frames should not initiate actions on each other's behalf. See [Swarm: telling agents they're in a frame](#swarm-telling-agents-theyre-in-a-frame) for the per-level breakdown.
+- OSs level **Notifications** - a frame has **Completed** it's task, a frame Needs **Attention**, a frame is **Blocked**.
+- **swarm** - uses the SessionStart hook to inform all frame claudes that they are frames and how to find their siblings. See [Swarm: telling agents they're in a frame](#swarm-telling-agents-theyre-in-a-frame) for the per-level breakdown.
 - **shell** - a thin (non worktree) frame for raw claude work
-- Easily enable/disable **YOLO mode** (--dangerously-skip-permissions)
+- **YOLO mode** to globally enable/disable `--dangerously-skip-permissions`.
+
+  Note: once changed, only newly booted frames follow the new setting.
 
 ## Getting Started
 
@@ -80,7 +89,7 @@ Not shown here: `spawn`,
 - zsh
 - git ≥ 2.5
 - neovim (no plugins required) — validated with both a minimalist bare Vim setup and LazyVim
-- claude (Claude Code CLI) — permission prompts stay on unless you opt in with `frame yolo on`
+- claude (Claude Code CLI)
 - docker with the compose v2 plugin (if running shared services)
 - macOS + OrbStack (any docker provider works if already running; auto-start is OrbStack-only)
 - curl, lsof
@@ -240,8 +249,7 @@ Teardown always runs from within the project's git tree — a frame worktree, th
 primary checkout, or another frame of the same project. Where you're standing
 decides whether you name the topic.
 
-If you're **in the worktree you want to remove** (any shell `cd`'d into it — it
-needn't be the frame's own terminal), leave it bare — frame reads the topic from
+If you're **in the worktree you want to remove**, frame reads the topic from
 your location:
 
 - `frame wt -d`
@@ -308,7 +316,7 @@ detailed resolution steps.
 ### Inbox filtering
 
 When you send a `frame req`, Frame prints a **token** (`token: frame/topic#id`) — a
-globally-unique id for that request. Your inbox is shared: replies from every
+unique id for that request. Your inbox is shared: replies from every
 `frame req` you've fired land there together, so reading in order can't guarantee
 you're looking at the answer to a _specific_ request.
 
@@ -330,8 +338,7 @@ See [docs/claude-broker.md](docs/claude-broker.md) for the full model.
 
 ## Swarm: telling agents they're in a frame
 
-By default a frame's Claude doesn't know it's in a frame — it behaves as a lone
-worker, blind to its own identity and its siblings. `frame swarm` changes that
+By default a frame's Claude doesn't know it's in a frame. `frame swarm` changes that
 by injecting a [short block](commands/swarm.sh) at every session start.
 
 ```bash
@@ -455,14 +462,14 @@ Every buffer type a project can instantiate needs to be in the [buffers.json](bu
 
 Per entry:
 
-| field   | meaning                                                                    |
-| ------- | -------------------------------------------------------------------------- |
-| name    | buffer name (targeted by `BUFFERS`)                                        |
+| field   | meaning                                                                                                                                                    |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| name    | buffer name (targeted by `BUFFERS`)                                                                                                                        |
 | mode    | `durable` (default) runs the command then drops to a shell on exit; `prefill` types the command at the prompt without running it; `bare` is an empty shell |
-| command | the command the buffer runs                                                |
-| dir     | subdirectory to run in                                                     |
-| env     | vars the command reads — a declared contract; frame warns at boot if unset |
-| focus   | land here after boot                                                       |
+| command | the command the buffer runs                                                                                                                                |
+| dir     | subdirectory to run in                                                                                                                                     |
+| env     | vars the command reads — a declared contract; frame warns at boot if unset                                                                                 |
+| focus   | land here after boot                                                                                                                                       |
 
 ## Shared (Centralized) Services
 
