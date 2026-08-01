@@ -131,9 +131,9 @@ frame_session_down_hint() {
   # at boot, so every terminal INSIDE a live frame carries them. Absent → the
   # caller is at a bare shell that merely cd'd into the NAME/TOPIC checkout, so
   # frame_self_identity derived NAME/TOPIC from git and there was never a session
-  # here to hold anything (the common "doing comms from a bare CLI" mistake, and
-  # the one docs/head-frame.md warns against — the operator commands from inside
-  # a frame, not a bare shell). Present → a real session that has since exited.
+  # here to hold anything (the common "doing comms from a bare CLI" mistake — the
+  # operator commands from inside a frame, not a bare shell). Present → a real
+  # session that has since exited.
   local _name=$1 _topic=$2
   if [[ -z "${FRAME_NAME:-}" || -z "${FRAME_TOPIC:-}" ]]; then
     echo "  You're at a bare shell in the $_name/$_topic checkout, not inside a" >&2

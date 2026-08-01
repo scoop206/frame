@@ -11,7 +11,7 @@
 # request is queued), the target's broker answers home when the turn finishes.
 # So `frame req` must be run from inside a frame — that frame is the reply's
 # return address. NAME/TOPIC reaches any project; a bare TOPIC pairs with the
-# current frame's own NAME. See docs/claude-broker.md and docs/agent-messaging.md.
+# current frame's own NAME.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 if (( $# < 1 )); then

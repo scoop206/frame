@@ -34,8 +34,8 @@
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 # Hook target only. The bare form is the Stop hook; --blocked is the
-# Notification hook. Any other arg (including the old on|off|init spellings) is
-# a usage error — fine hook-wise, since the hooks always call one of these two.
+# Notification hook. Any other arg is a usage error — fine hook-wise, since the
+# hooks always call one of these two.
 _mode=stop
 if [[ "${1:-}" == --blocked ]]; then
   _mode=blocked

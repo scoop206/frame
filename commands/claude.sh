@@ -1,4 +1,4 @@
-# frame claude — a client of THIS frame's claude broker (docs/claude-broker.md).
+# frame claude — a client of THIS frame's claude broker.
 #
 #   frame claude [--timeout N] TEXT…   ask this frame's claude and block for the
 #                                      answer. Queues behind anything already
@@ -10,7 +10,6 @@
 # detaches rather than drops — the answer lands in `frame inbox` once the turn
 # finishes — as does a timeout. Exit codes: 0 answered, 2 usage, 3 timed out
 # (answer → inbox), 4 queue full, 1 everything else. Run from inside a frame.
-# See docs/claude-broker.md and docs/agent-messaging.md.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 # Identity + socket — both modes need them. --headless for the same reason as

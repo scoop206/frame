@@ -17,7 +17,6 @@
 # leaving unrelated mail — so a fan-out caller collects exactly its own answers.
 # --for and --count are two ways to say "how many", so they're mutually exclusive.
 # Run from inside a frame — the inbox is that frame's, read over its own socket.
-# See docs/claude-broker.md, docs/head-frame.md and docs/agent-messaging.md.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 WAIT=0 TIMEOUT=900 COUNT=1 MODIFIER=""
