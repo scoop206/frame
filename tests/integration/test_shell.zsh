@@ -185,6 +185,96 @@ test_notify_outside_any_frame_still_exits_0() {
   assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - task complete ? [ ? ]"
 }
 
+_plant_shell_socket() {
+  # Stand in for a live shell-frame session: a real unix socket at the path
+  # `frame shell -d` probes ($FRAME_RUNDIR/shell-<topic>.nvim). The nvim stub
+  # ignores it and just logs the --remote-send it receives.
+  local sock="$FRAME_RUNDIR/shell-$1.nvim"
+  python3 -c 'import socket,sys
+s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$sock"
+}
+
+test_shell_down_quits_session_and_keeps_dir() {
+  # frame shell -d TOPIC: a shell has no branch/worktree, so teardown is just a
+  # quit — send :qa! to the session's socket and leave the scratch dir alone.
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  mkdir -p "$SANDBOX/frames/jam"
+  _plant_shell_socket jam
+  run_frame shell -d jam
+  assert_status 0
+  assert_contains "$OUT" "quit shell frame jam"
+  # the quit went to nvim as a mode-agnostic :qa! over the right socket…
+  local log=$(<$FAKE_NVIM_LOG)
+  assert_contains "$log" "--server $FRAME_RUNDIR/shell-jam.nvim"
+  assert_contains "$log" "--remote-send <Cmd>qa!<CR>"
+  # …and the disposable dir is kept for a later `frame shell jam`
+  assert_dir_exists "$SANDBOX/frames/jam"
+}
+
+test_shell_down_infers_topic_from_cwd() {
+  # No TOPIC: standing in a shell frame's own dir, its name is the topic.
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  mkdir -p "$SANDBOX/frames/jam"
+  _plant_shell_socket jam
+  cd "$SANDBOX/frames/jam"
+  run_frame shell -d
+  assert_status 0
+  assert_contains "$OUT" "quit shell frame jam"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "--server $FRAME_RUNDIR/shell-jam.nvim"
+}
+
+test_shell_down_infers_topic_from_session_env() {
+  # No TOPIC and cwd isn't a shell dir, but the session identity is exported
+  # (a shell frame's claude carries FRAME_NAME=shell / FRAME_TOPIC) — use it.
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  export FRAME_NAME=shell FRAME_TOPIC=jam
+  _plant_shell_socket jam
+  cd "$SANDBOX"
+  run_frame shell -d
+  assert_status 0
+  assert_contains "$OUT" "quit shell frame jam"
+}
+
+test_shell_down_not_running_is_benign() {
+  # No live socket → nothing to quit. Idempotent teardown: succeed with a note,
+  # not an error (a claude that already went down shouldn't see a failure).
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  run_frame shell -d jam
+  assert_status 0
+  assert_contains "$OUT" "not running"
+}
+
+test_shell_down_no_topic_outside_frame_errors() {
+  # No TOPIC, no session env, cwd isn't a shell dir → can't tell what to quit.
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  mkdir -p "$SANDBOX/nowhere"
+  cd "$SANDBOX/nowhere"
+  run_frame shell -d
+  assert_status 1
+  assert_contains "$OUT" "Usage: frame shell -d"
+}
+
+test_shell_down_accepts_force_noop() {
+  # -f is accepted for muscle-memory parity with `frame wt -d -f`; a scratch
+  # dir has no git safeguards for it to override, so it changes nothing.
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  _plant_shell_socket jam
+  run_frame shell -d -f jam
+  assert_status 0
+  assert_contains "$OUT" "quit shell frame jam"
+}
+
+test_shell_down_rejects_second_topic() {
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  run_frame shell -d a b
+  assert_status 2
+  assert_contains "$OUT" "more than one topic given"
+}
+
 test_nested_boot_refused_noninteractively() {
   # $NVIM set = we're inside an existing frame's nvim; a non-tty caller (an
   # agent, a script) gets a refusal, not a hanging y/N prompt.

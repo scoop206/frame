@@ -10,11 +10,76 @@
 # non-git about a frame still works — window title shell/TOPIC, frame
 # status / frame notify (and the claude Stop hook), :FrameQuit — for
 # scratch work that deserves its own claude instance and directory but has
-# no project behind it. :FrameDown quits and deletes the topic dir — no
-# branch or worktree here, so there are no git safeguards and no bang needed.
+# no project behind it.
+#
+#   frame shell -d [TOPIC]   tear down: just quit the session. A shell has no
+#                            branch or worktree to reap, so teardown collapses
+#                            to a quit (the scratch dir is disposable and kept —
+#                            `frame shell TOPIC` reboots it). TOPIC defaults to
+#                            the shell frame you're standing in. This is the CLI
+#                            a shell's OWN claude runs to tear itself down: it
+#                            lives in a terminal buffer and can't type :FrameDown,
+#                            so it reaches nvim over the socket instead (:FrameDown
+#                            is the same quit from inside the editor).
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 SHELL_HOME="${FRAME_SHELL_HOME:-$HOME/frames}"
+
+# -d [-f] [TOPIC]: tear down a shell frame. No git branch/worktree means there's
+# nothing to reap and no dir to remove out from under ourselves — so unlike
+# `frame wt -d` there's no reaper handoff, just a :qa! to the session's socket.
+# Works from inside the target frame too (that's the point): the send lands
+# before nvim exits and SIGHUPs this terminal.
+if [[ "${1:-}" == "-d" ]]; then
+  shift
+  # -f is accepted (no-op) for muscle-memory parity with `frame wt -d -f`; a
+  # scratch dir carries no git safeguards for a force flag to override.
+  TOPIC=""
+  for _arg in "$@"; do
+    case "$_arg" in
+      -f|--force) ;;
+      -*) echo "$X_MARK unknown flag: $_arg" >&2; exit 2 ;;
+      *)
+        if [[ -n "$TOPIC" ]]; then
+          echo "$X_MARK more than one topic given ($TOPIC, $_arg)" >&2; exit 2
+        fi
+        TOPIC=$_arg ;;
+    esac
+  done
+  if [[ -z "$TOPIC" ]]; then
+    # Inside a shell frame, infer the topic: prefer the exported session
+    # identity (a shell frame's claude carries FRAME_NAME=shell / FRAME_TOPIC),
+    # else the cwd if it's a direct child of $FRAME_SHELL_HOME.
+    if [[ "${FRAME_NAME:-}" == shell && -n "${FRAME_TOPIC:-}" ]]; then
+      TOPIC="$FRAME_TOPIC"
+    elif [[ "${PWD:h}" == "$SHELL_HOME" ]]; then
+      TOPIC="${PWD:t}"
+    else
+      echo "Usage: frame shell -d [-f] [TOPIC]  (TOPIC only optional inside a shell frame)" >&2
+      exit 1
+    fi
+  fi
+
+  SOCKET="$FRAME_RUNDIR/shell-$TOPIC.nvim"
+  if [[ -S "$SOCKET" ]]; then
+    echo "$RUN_MARK tearing down shell $TOPIC — quitting the session (:qa! → $SOCKET)…"
+    # <Cmd>qa!<CR> runs from any mode — the session sits in terminal-insert,
+    # where raw ':qa!' keys would just type into the foreground program; the !
+    # bypasses any vimrc quit guards. --remote-send returns once the keys are
+    # delivered (it doesn't wait for them to run), so even though nvim then
+    # exits and SIGHUPs this terminal, the quit has already been handed off.
+    if nvim --server "$SOCKET" --remote-send '<Cmd>qa!<CR>' 2>/dev/null; then
+      echo "$OK_MARK quit shell frame $TOPIC (dir kept: $SHELL_HOME/$TOPIC — reboot with: frame shell $TOPIC)"
+    else
+      echo "⚠ socket is stale (no nvim listening) — removing it"
+      rm -f "$SOCKET"
+      echo "$OK_MARK shell frame $TOPIC was already down"
+    fi
+  else
+    echo "$OK_MARK shell frame $TOPIC is not running — nothing to tear down"
+  fi
+  exit 0
+fi
 
 if (( $# > 1 )) || [[ "${1:-}" == -* ]]; then
   echo "Usage: frame shell [TOPIC]  (no TOPIC: reuse the cwd if it's a shell frame dir, else a fresh dated one)" >&2
@@ -84,7 +149,7 @@ frame_record_gtab "$NAME" "$TOPIC"
 
 # Same layout as worktree frames — it's parameterized entirely by env, and
 # an empty FRAME_MAIN_WT is the "no primary checkout" signal that selects
-# the shell-frame :FrameDown (dir delete) over the worktree one.
+# the shell-frame :FrameDown (quit only) over the worktree one.
 # FRAME_NAME/FRAME_TOPIC double as the session's identity
 # for status/notify run from its buffers, where no git repo can answer.
 export FRAME_NAME="$NAME"

@@ -212,11 +212,6 @@ When frame instantiates the nvim instance it injects these user commands
 | `:FrameMerge!`            | merge, then push main to origin (mirrors `frame merge --push`)                                                      |
 | `:[range]FrameClaude [Q]` | ask this frame's claude about the current line / visual selection; answer opens in a `[FrameClaude]` scratch buffer |
 
-In a shell frame (`frame shell`) there is no worktree or branch, so
-`:FrameDown` simply quits and deletes the topic directory — the safeguards
-below don't apply, and the bang changes nothing. `:FrameQuit` keeps the
-directory for a later `frame shell TOPIC`.
-
 ### Asking claude from the editor — `:FrameClaude`
 
 `:FrameClaude` is the in-editor sibling of `frame claude`: it asks **this

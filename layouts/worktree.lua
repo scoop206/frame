@@ -741,31 +741,19 @@ if main_wt ~= '' then
     end)
   end, { bang = true, desc = 'Merge this frame into main (! also pushes)' })
 else
-  -- Shell frame (frame shell): no worktree or branch — teardown means
-  -- deleting the topic directory itself. Scratch dirs are disposable by
-  -- design, so plain :FrameDown just does it; there are no git safeguards
-  -- for a bang to override (it's accepted as a no-op for muscle-memory
-  -- parity with worktree frames). :FrameQuit keeps the dir.
-  -- Same reaper shape as above — nvim can't rm its own cwd out from under
-  -- its terminal buffers, so a detached job waits for the socket to unlink
-  -- (nvim removes it on exit) and only then deletes; if nvim somehow
-  -- survives, the timeout leaves the directory alone.
-  local shell_dir = vim.fn.getcwd()
+  -- Shell frame (frame shell): no worktree or branch to reap, so teardown
+  -- collapses to quitting the session — same as :FrameQuit. The scratch dir is
+  -- disposable and kept (`frame shell TOPIC` reboots it), so unlike the
+  -- worktree branch there's nothing to remove out from under us and no reaper
+  -- is needed: nvim just quits itself directly. Bang is a no-op — there are no
+  -- git safeguards for it to override, accepted for muscle-memory parity. The
+  -- CLI twin `frame shell -d` does this same quit over the socket, which is how
+  -- a shell's own claude (a terminal buffer, no way to run :commands) tears
+  -- itself down.
   vim.api.nvim_create_user_command('FrameDown', function()
-    if shell_dir == '' or shell_dir == '/' or shell_dir == vim.env.HOME then
-      vim.notify('frame: refusing to delete ' .. shell_dir, vim.log.levels.ERROR)
-      return
-    end
-    local cmd = string.format(
-      'n=0; while [ -e %s ] && [ $n -lt 100 ]; do sleep 0.2; n=$((n+1)); done; '
-      .. '[ -e %s ] || rm -rf %s',
-      vim.fn.shellescape(sock), vim.fn.shellescape(sock),
-      vim.fn.shellescape(shell_dir))
-    vim.fn.jobstart({ 'zsh', '-c', cmd },
-      { cwd = vim.fn.fnamemodify(shell_dir, ':h'), detach = true })
     vim.cmd('qa!')
   end, { bang = true,
-    desc = 'Tear down this casual frame (delete its directory — no git net)' })
+    desc = 'Tear down this casual frame (quit the session; the scratch dir is kept)' })
 end
 
 local function term(cmd_name, cmd)
