@@ -137,6 +137,19 @@ test_init_scaffolds_sessionstart_hook() {
   assert_contains "$(<$REPO/.claude/settings.json)" "frame swarm --context"
 }
 
+test_init_scaffolds_posttooluse_hook() {
+  # A fresh scaffold wires the PostToolUse hook → `frame reload-editor` (matcher
+  # Edit|Write|MultiEdit|NotebookEdit), so this frame's nvim buffer follows
+  # Claude's on-disk edits without a manual :e.
+  make_repo
+  run_frame init
+  assert_status 0
+  local body=$(<$REPO/.claude/settings.json)
+  assert_contains "$body" '"PostToolUse"'
+  assert_contains "$body" "frame reload-editor"
+  assert_contains "$body" "Edit|Write|MultiEdit|NotebookEdit"
+}
+
 test_init_flags_wiring_predating_notification_hook() {
   # A settings.json carrying the pre-Notification frame hooks (fingerprint
   # present, --blocked hook absent) is stale: flag it for a hand-merge rather

@@ -255,8 +255,14 @@ frame_check_terminal() {
 # writes precisely these. `frame notify` is also frame's fingerprint (present
 # since day one): its absence means the file is the user's own, not a stale
 # frame file. Keep in step with frame_write_claude_hooks.
+#
+# `frame reload-editor` (PostToolUse) is listed so a frame predating it reads as
+# drifted — init --force / shell re-sync then propagate the hook into existing
+# frame projects. It's a pure enhancement at runtime (without it, nvim's own
+# autoread and a manual :e still work), but it IS part of the canonical wiring,
+# so drift detection tracks it.
 frame_claude_required_hooks() {
-  print -rl -- 'frame notify' 'frame reply' 'frame status --prompt' 'frame notify --blocked' 'frame swarm --context'
+  print -rl -- 'frame notify' 'frame reply' 'frame status --prompt' 'frame notify --blocked' 'frame swarm --context' 'frame reload-editor'
 }
 
 # frame_claude_hooks_missing FILE — print (one per line) the required hooks that
@@ -288,7 +294,7 @@ frame_settings_is_frame_only() {
   jq -re '
     def frame_ok:
       (keys - ["hooks"] | length == 0)
-      and ((.hooks // {}) | keys - ["Stop","UserPromptSubmit","Notification","SessionStart"] | length == 0)
+      and ((.hooks // {}) | keys - ["Stop","UserPromptSubmit","Notification","SessionStart","PostToolUse"] | length == 0)
       and ([(.hooks // {}) | to_entries[] | .value[]? | .hooks[]? | .command | select(. != null)]
             | all(startswith("frame ")));
     if frame_ok then "safe" else "custom" end
@@ -308,9 +314,15 @@ frame_write_claude_hooks() {
   # SessionStart → `frame swarm --context`, which injects the frame-awareness
   # block iff the `frame swarm` level is ≥1 (and we're in a frame) — wired
   # unconditionally here; the dial, not this file, decides what it emits.
-  # `frame reply` reads the hook JSON on stdin (transcript path) — the redirects
-  # touch stdout/stderr only, so stdin still flows. Callers guard the file-exists
-  # case — this always writes.
+  # PostToolUse (Edit|Write|MultiEdit|NotebookEdit) → `frame reload-editor`, which
+  # reloads the just-edited file into this frame's nvim buffer if it's open and
+  # clean, so a buffer-tied viewer (markdown-preview) follows Claude's edits with
+  # zero manual action. A pure enhancement: a no-op outside a frame, and nvim's
+  # own autoread (or a manual :e) still works if the RPC hook is absent or fails.
+  # `frame reply` and `frame reload-editor` both read the hook JSON on stdin
+  # (transcript path / edited file_path) — the redirects touch stdout/stderr
+  # only, so stdin still flows. Callers guard the file-exists case — this always
+  # writes.
   mkdir -p .claude
   cat > .claude/settings.json <<'EOF'
 {
@@ -355,6 +367,17 @@ frame_write_claude_hooks() {
           {
             "type": "command",
             "command": "frame swarm --context 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "frame reload-editor >/dev/null 2>&1 || true"
           }
         ]
       }
