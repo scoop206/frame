@@ -221,12 +221,13 @@ test_wt_boot_no_drift_when_hooks_complete() {
     { "type": "command", "command": "frame notify" },
     { "type": "command", "command": "frame reply" } ] }],
   "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "frame status --prompt" }] }],
-  "Notification": [{ "hooks": [{ "type": "command", "command": "frame notify --blocked" }] }]
+  "Notification": [{ "hooks": [{ "type": "command", "command": "frame notify --blocked" }] }],
+  "SessionStart": [{ "hooks": [{ "type": "command", "command": "frame swarm --context" }] }]
 } }
 EOF
   run_frame wt topic
   assert_status 0
-  # all four present → exported empty (no warning fires in the layout)
+  # all present → exported empty (no warning fires in the layout)
   assert_contains "$(<$FAKE_NVIM_LOG)" $'FRAME_HOOK_DRIFT=\n'
 }
 

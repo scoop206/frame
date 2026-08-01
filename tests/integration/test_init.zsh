@@ -127,6 +127,16 @@ test_init_scaffolds_notification_hook() {
   assert_contains "$(<$REPO/.claude/settings.json)" "frame notify --blocked"
 }
 
+test_init_scaffolds_sessionstart_hook() {
+  # A fresh scaffold wires the SessionStart hook → `frame swarm --context`, the
+  # frame-awareness injection point (a no-op until `frame swarm on`).
+  make_repo
+  run_frame init
+  assert_status 0
+  assert_contains "$(<$REPO/.claude/settings.json)" '"SessionStart"'
+  assert_contains "$(<$REPO/.claude/settings.json)" "frame swarm --context"
+}
+
 test_init_flags_wiring_predating_notification_hook() {
   # A settings.json carrying the pre-Notification frame hooks (fingerprint
   # present, --blocked hook absent) is stale: flag it for a hand-merge rather

@@ -210,7 +210,7 @@ frame_export_claude_flags() {
 # since day one): its absence means the file is the user's own, not a stale
 # frame file. Keep in step with frame_write_claude_hooks.
 frame_claude_required_hooks() {
-  print -rl -- 'frame notify' 'frame reply' 'frame status --prompt' 'frame notify --blocked'
+  print -rl -- 'frame notify' 'frame reply' 'frame status --prompt' 'frame notify --blocked' 'frame swarm --context'
 }
 
 # frame_claude_hooks_missing FILE — print (one per line) the required hooks that
@@ -242,7 +242,7 @@ frame_settings_is_frame_only() {
   jq -re '
     def frame_ok:
       (keys - ["hooks"] | length == 0)
-      and ((.hooks // {}) | keys - ["Stop","UserPromptSubmit","Notification"] | length == 0)
+      and ((.hooks // {}) | keys - ["Stop","UserPromptSubmit","Notification","SessionStart"] | length == 0)
       and ([(.hooks // {}) | to_entries[] | .value[]? | .hooks[]? | .command | select(. != null)]
             | all(startswith("frame ")));
     if frame_ok then "safe" else "custom" end
@@ -259,6 +259,9 @@ frame_write_claude_hooks() {
   # any input) — the one state Stop/UserPromptSubmit structurally can't see, so
   # without it a blocked frame reads as "working" forever. Working/waiting/blocked
   # between them put claude's lifecycle in the window title and `frame ls`.
+  # SessionStart → `frame swarm --context`, which injects the frame-awareness
+  # block iff `frame swarm` is on (and we're in a frame) — wired unconditionally
+  # here; the toggle, not this file, decides whether it emits.
   # `frame reply` reads the hook JSON on stdin (transcript path) — the redirects
   # touch stdout/stderr only, so stdin still flows. Callers guard the file-exists
   # case — this always writes.
@@ -296,6 +299,16 @@ frame_write_claude_hooks() {
           {
             "type": "command",
             "command": "frame notify --blocked >/dev/null 2>&1 || true"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "frame swarm --context 2>/dev/null || true"
           }
         ]
       }

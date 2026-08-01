@@ -70,6 +70,12 @@
 #                                       launches --dangerously-skip-permissions
 #                                       (default off; bare form shows the state)
 #
+#     frame swarm on|off                master switch: every new frame's claude
+#                                       is told, at session start, that it's a
+#                                       frame — its identity, the frame-safe way
+#                                       to merge/tear down, how to reach siblings
+#                                       (default off; bare form shows the state)
+#
 # Example:
 #     cd $YOUR_GIT_REPO && frame init
 #     frame wt TOPIC
@@ -89,7 +95,7 @@ case "$cmd" in
   ls|list)
     source "$FRAME_ROOT/commands/ls.sh" "$@"
     ;;
-  init|shell|merge|services|status|notify|notification|focus|yolo|claude|req|reply|deliver|inbox|spawn|view)
+  init|shell|merge|services|status|notify|notification|focus|yolo|swarm|claude|req|reply|deliver|inbox|spawn|view)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   notifier)
