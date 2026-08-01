@@ -209,10 +209,9 @@ in-flight turn exactly as manual typing would, rather than queuing behind it.
 
 The naive approach for this is to have both neovim and claude modifying the same file on disk.
 So any mods by claude will cause you, the editor, to have to reload the file.
-With frame's PostToolUse hook in place, claude will send the edit event to your neovim instance, allowing your buffer to update automatically (in general no need to reload).
+With frame's [PostToolUse hook](commands/reload-editor.sh) in place, claude will send the edit event to your neovim instance, allowing your buffer to update automatically (in general no need to reload).
 It's not perfect, and if you are making your own edits at the same time then you might need to reload from disk (as your buffer will now be considered 'dirty').
 A good rule of thumb is to save often. That should mitigate the chance of a clobber happening.
-You could also sit back and let claude do all the work, but let's be real.
 
 ## Frame Merge
 
@@ -237,43 +236,34 @@ Worktree and branch cleanup stays with `frame wt -d` (below).
 
 ## Frame Removal
 
-Tear down from _inside_ the frame — either entry point works:
+Teardown always runs from within the project's git tree — a frame worktree, the
+primary checkout, or another frame of the same project. Where you're standing
+decides whether you name the topic.
 
-- in nvim: `:FrameDown`
-- in any terminal buffer: `frame wt -d`
+If you're **in the worktree you want to remove** (any shell `cd`'d into it — it
+needn't be the frame's own terminal), leave it bare — frame reads the topic from
+your location:
 
-From outside the frame — the project's primary checkout, or another frame of
-the same project: `frame wt -d TOPIC`. TOPIC is resolved in the current
-project's namespace, so you must run it from inside that project's git tree.
+- `frame wt -d`
+- or `:FrameDown` from inside the frame's nvim
+
+From **anywhere else in the project** — the primary checkout, or another
+worktree — name the topic (`frame ls` helps you find it):
+
+- `frame wt -d TOPIC`
 
 ### Teardown Safeguards
 
-Teardown refuses if the worktree has uncommitted changes or the branch has
-commits not yet on main — merge first (`frame merge`), or force with
-`frame wt -d -f [TOPIC]` / `:FrameDown!`. These checks run _before_ nvim is
-quit, so a refusal never leaves you editor-less. Reaper output lands in
-`/tmp/frame/<name>-<topic>.teardown.log`.
+Teardown refuses when either of these is true:
 
-### Closing a window vs. tearing down
+- the worktree has **uncommitted changes**, or
+- the branch has **commits not yet on main**.
 
-Just closing a frame's window or tab (⌘W, the close button) is **suspend**,
-not delete — and it's always safe:
+Clear it by merging first (`frame merge`), or force through with
+`frame wt -d -f [TOPIC]` / `:FrameDown!`.
 
-- The frame's dir (or worktree + branch) survives. `frame shell TOPIC` /
-  `frame wt TOPIC` later picks the frame back up where it left off —
-  claude's session files and your work intact. Only `:FrameDown` /
-  `frame wt -d` actually deletes.
-- Processes die with the surface: if claude was mid-turn that work is lost,
-  no reply routes home, and a head blocked on `frame inbox --wait` for it
-  runs to its timeout.
-- Bookkeeping self-heals. The nvim socket dies with nvim; a stale spawn
-  recording (`.gtab`) is detected and dropped by `frame focus`; the next
-  `frame spawn` validates its workers-window recording before reuse.
-- One special case: an `--ephemeral` worker closed by hand never gets to
-  self-reap, so its dir lingers in `~/frames` like any other closed frame.
-
-Rule of thumb: close freely to get a worker out of the way; `:FrameDown`
-when the topic should be gone.
+These checks run _before_ nvim is quit, so a refusal never leaves you
+editor-less. Reaper output lands in `/tmp/frame/<name>-<topic>.teardown.log`.
 
 ## Notifications
 
@@ -309,6 +299,12 @@ If the new badge is still not working you can also try (they will respawn):
 killall usernoted NotificationCenter
 ```
 
+If the badge remains stuck, or continues to display an outdated icon after the
+art has changed, this indicates an icon-cache issue rather than a notifier
+problem. Refer to
+[docs/fixing-stuck-banner-badge.md](docs/fixing-stuck-banner-badge.md) for
+detailed resolution steps.
+
 ### Inbox filtering
 
 When you send a `frame req`, Frame prints a **token** (`token: frame/topic#id`) — a
@@ -336,37 +332,33 @@ See [docs/claude-broker.md](docs/claude-broker.md) for the full model.
 
 By default a frame's Claude doesn't know it's in a frame — it behaves as a lone
 worker, blind to its own identity and its siblings. `frame swarm` changes that
-by injecting a short block at every session start. It's a **dial, not a
-switch**: each level injects strictly more, so token cost and permitted
-behavior grow together.
+by injecting a [short block](commands/swarm.sh) at every session start.
 
 ```bash
-frame swarm            # show the current level
-frame swarm off        # (= 0) no injection — the default
-frame swarm 1          # aware
-frame swarm 2          # ask (the current ceiling)
-frame swarm 3          # lead-frame fan-out/gather — not built yet, refused
+frame swarm             # show the current level
+frame swarm LEVEL       # set the level per table below
 ```
 
-| level           | what the agent is told                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0 · off**     | nothing (the default)                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| **1 · aware**   | **who it is** — `NAME/TOPIC` + its dev-server URL, read from the frame's own environment (present only inside a real frame); and **the frame-safe way to act** — merge/tear down via `frame merge` / `frame wt -d` (not raw git), local merges are the agent's but pushing to origin stays with you, subagents it waits on run in the foreground, and a request from a sibling gets an answer, not an action. No sibling coordination. |
-| **2 · ask**     | level 1 **plus** a bounded recipe for asking sibling frames read-only questions (`frame req` → `frame inbox --wait --for`, with a per-turn budget and a 2-hop limit). Find who to ask with `frame ls`.                                                                                                                                                                                                                                 |
-| **3 · fan-out** | the ambitious top — lead-frame fan-out/gather. Not built yet, so **2 is the current ceiling**: selecting 3 is refused and points you back at 2.                                                                                                                                                                                                                                                                                        |
+| level | mode        | agent guidance                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ----- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0** | **off**     | nothing (the default)                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **1** | **aware**   | **who it is** — `NAME/TOPIC` + its dev-server URL, read from the frame's own environment (present only inside a real frame); and **the frame-safe way to act** — merge/tear down via `frame merge` / `frame wt -d` (not raw git), local merges are the agent's but pushing to origin stays with you, subagents it waits on run in the foreground, and a request from a sibling gets an answer, not an action. No sibling coordination. |
+| **2** | **ask**     | level 1 **plus** a bounded recipe for asking sibling frames read-only questions (`frame req` → `frame inbox --wait --for`, with a per-turn budget and a 2-hop limit). Find who to ask with `frame ls`.                                                                                                                                                                                                                                 |
+| **3** | **fan-out** | the ambitious top — lead-frame fan-out/gather. Not built yet, so **2 is the current ceiling**: selecting 3 is refused and points you back at 2.                                                                                                                                                                                                                                                                                        |
 
-Like `frame yolo`, it's a machine-global dial that takes effect on the next
-frame boot (or `/clear`, resume, compact) — running sessions keep what they
-started with. `on`/`off` are accepted as aliases for `1`/`0`. When off, the
-injection is a no-op that costs nothing, so solo repos that never coordinate
-don't pay for it. It's wired through a `SessionStart` hook that `frame init`
-scaffolds into `.claude/settings.json`.
+### Extending the swarm instructions
 
-**Extending the block per project.** Define `swarm_context()` in
-`.frame/config.sh` (or `~/.config/frame/config.sh`, or `.frame/local/config.sh`)
-and its output is appended after the built-in core — a natural home for a
-one-line "this frame owns X" or a shared-infra heads-up. The core safety rules
-are never overridable, so an append can only add, never drop a rule.
+Define `swarm_context()` in one of the config files below and its output is
+appended after the built-in core — a natural home for a one-line "this frame
+owns X". Where you define it sets the scope; later scopes override earlier ones,
+and the core safety rules are never overridable, so an append can only add,
+never drop a rule.
+
+| path                        | scope                                      |
+| --------------------------- | ------------------------------------------ |
+| `~/.config/frame/config.sh` | machine-wide — every project               |
+| `.frame/config.sh`          | this project, committed (shared with team) |
+| `.frame/local/config.sh`    | this project, personal (gitignored)        |
 
 ```sh
 # .frame/config.sh
@@ -379,10 +371,10 @@ swarm_context() {
 
 Everything project-side lives under one `.frame/` directory:
 
-| path               | committed?         | contents                                                                                                                           |
-| ------------------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `.frame/config.sh` | yes                | project facts:<br>`NAME=`<br>`SERVER_CMD=`<br>`API_PORT=` `VITE_PORT=` `HMR_PORT=`<br>`BUFFERS=(…)`<br>`stack_up()`<br>`app_env()` |
-| `.frame/local/`    | never (gitignored) | personal overrides — a `config.sh` here wins                                                                                       |
+| path               | committed?         | contents                                              |
+| ------------------ | ------------------ | ----------------------------------------------------- |
+| `.frame/config.sh` | yes                | the project's config — keys and hooks, detailed below |
+| `.frame/local/`    | never (gitignored) | personal overrides — a `config.sh` here wins          |
 
 ### Examples
 
@@ -400,13 +392,14 @@ for the field-by-field walkthrough.
 
 ### config.sh
 
-config: `NAME`  
-required: yes  
-value: the project name; window titles, worktree dirs, and PORT_PREFIX derive from it
+The keys a project sets:
 
-config: `BUFFERS(...)`  
-required: yes  
-value: which buffers this project's frames open, e.g. BUFFERS=(claude local) — see Buffers below
+| key                                             | required | purpose                                                                                                                  |
+| ----------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `NAME`                                          | yes      | project name; window titles, worktree dirs, and `PORT_PREFIX` derive from it (defaults to the checkout's directory name) |
+| `BUFFERS=(…)`                                   | yes      | which buffers each frame opens, e.g. `(claude local)` — see [Buffer Definitions](#buffer-definitions)                    |
+| `SERVER_CMD`                                    | no       | the command that starts your dev server; runs verbatim in the [`server`](buffers.json) buffer type and must bind `$PORT` |
+| `API_PORT` `VITE_PORT` `HMR_PORT` `PORT_PREFIX` | no       | port configuration — see [Port assignment](#port-assignment) below                                                       |
 
 Hooks:
 
@@ -422,16 +415,50 @@ Hooks:
   a re-export of it here (e.g. `export SERVICE_PORT="$PORT"`). Exported vars
   win over `.env` (dotenvy never overrides the environment).
 
+### Port assignment
+
+Frames run in parallel, so two worktrees of the same project can't share a port.
+Rather than assign fixed ports, the config declares **base** ports and frame
+finds a free one at each boot: on `frame wt` it scans **upward** from each base
+until it hits a port nothing is listening on. The first frame lands on the bases
+themselves (`3000` / `5173` / `24678`), the next worktree one higher (`3001` /
+`5174` / `24679`), and so on.
+
+You set the bases (all optional — omit them for a project with no web server and
+nothing is scanned or exported):
+
+| key           | default                      | base port for                    |
+| ------------- | ---------------------------- | -------------------------------- |
+| `API_PORT`    | `3000`                       | your server buffer's dev server  |
+| `VITE_PORT`   | `5173`                       | the vite dev server              |
+| `HMR_PORT`    | `24678`                      | vite's HMR websocket             |
+| `PORT_PREFIX` | `NAME`, upper-cased, `-`→`_` | prefixes the exported vars below |
+
+Frame exports the ports it actually picked; your app and `vite.config.*` read
+them:
+
+| var                  | example                  | what it is                                           |
+| -------------------- | ------------------------ | ---------------------------------------------------- |
+| `PORT`               | `3001`                   | the chosen server port — `SERVER_CMD` must bind this |
+| `<PREFIX>_API_PORT`  | `FLIPNEM_API_PORT=3001`  | the server port, under your project prefix           |
+| `<PREFIX>_VITE_PORT` | `FLIPNEM_VITE_PORT=5174` | the chosen vite port                                 |
+| `<PREFIX>_HMR_PORT`  | `FLIPNEM_HMR_PORT=24679` | the chosen HMR websocket port                        |
+
+`PORT` is the generic handle the `server` buffer binds; the `<PREFIX>_*` vars are
+those same values namespaced, so several projects' frames can coexist in one
+environment without stepping on each other. If your app reads its port under yet
+another name, re-export it in `app_env()` (e.g. `export SERVICE_PORT="$PORT"`).
+
 ## Buffer Definitions
 
-Every buffer type a project can instantiate needs to be in the `buffers.json` Frame registry.
+Every buffer type a project can instantiate needs to be in the [buffers.json](buffers.json) Frame registry.
 
 Per entry:
 
 | field   | meaning                                                                    |
 | ------- | -------------------------------------------------------------------------- |
 | name    | buffer name (targeted by `BUFFERS`)                                        |
-| mode    | `durable` auto-runs and drops to a shell on exit; `bare` is an empty shell |
+| mode    | `durable` (default) runs the command then drops to a shell on exit; `prefill` types the command at the prompt without running it; `bare` is an empty shell |
 | command | the command the buffer runs                                                |
 | dir     | subdirectory to run in                                                     |
 | env     | vars the command reads — a declared contract; frame warns at boot if unset |
