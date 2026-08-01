@@ -140,6 +140,10 @@ This writes three things:
   - `SessionStart` → `frame swarm --context` (frame-awareness, when swarm ≥ 1)
   - `PostToolUse` → `frame reload-editor` (reloads the just-edited file into this frame's nvim buffer, when it's open)
 
+  If this file drifts from what frame writes (an older file missing a hook, say),
+  `frame init --force` re-syncs it — but only when it holds nothing but frame's
+  own hooks, so it never clobbers custom settings.
+
 **3. (Optional) Change which buffers your frames open.**
 `frame init` already scaffolds a working default — `BUFFERS=(claude local)` — so you can skip straight
 to booting a frame. Edit `.frame/config.sh` only if you want different buffers
@@ -470,8 +474,24 @@ Per entry:
 
 ## Shared (Centralized) Services
 
-Within the Frame repo is `services/docker-compose.yml`. Helper functions in
-`lib/helpers.sh` create roles/databases/buckets idempotently.
+The centralized postgres/minio belong to frame itself
+([`services/docker-compose.yml`](services/docker-compose.yml)), not to any
+project — one postgres on `:5432` and one minio on `:9000`/`:9001` serve every
+project. There is no per-project setup.
+
+- **First boot:** nothing to do in advance. `frame wt` runs the project's
+  `stack_up()`, whose `frame_services_up` call starts the containers
+  (auto-starting OrbStack if docker isn't up) and waits for them to be healthy.
+  Whichever frame boots first brings the stack up for everyone.
+- **Manually:** `frame services up` / `frame services down` / `frame services ps`
+  from anywhere.
+- **Multi-tenancy:** each project claims its slice in `stack_up()` — helper
+  functions in `lib/helpers.sh` create roles/databases/buckets idempotently.
+  `ensure_pg_db NAME` creates a role + database owned by that role (so one
+  project's tests can't touch another's data), `ensure_minio_bucket BUCKET`
+  creates its bucket. Standard ports, no per-project offsets.
+- **Data** lives in named docker volumes (`pgdata`, `miniodata`) and survives
+  `frame services down`.
 
 ## License
 
