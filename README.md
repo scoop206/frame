@@ -77,9 +77,7 @@ Not shown here: `spawn`,
 - OSs level **Notifications** - a frame has **Completed** it's task, a frame Needs **Attention**, a frame is **Blocked**.
 - **swarm** - uses the SessionStart hook to inform all frame claudes that they are frames and how to find their siblings. See [Swarm: telling agents they're in a frame](#swarm-telling-agents-theyre-in-a-frame) for the per-level breakdown.
 - **shell** - a thin (non worktree) frame for raw claude work
-- **YOLO mode** to globally enable/disable `--dangerously-skip-permissions`.
-
-  Note: once changed, only newly booted frames follow the new setting.
+- **YOLO mode** to globally enable/disable `--dangerously-skip-permissions`. (Note: once changed, only newly booted frames follow the new setting.)
 
 ## Getting Started
 
@@ -223,7 +221,7 @@ The naive approach for this is to have both neovim and claude modifying the same
 So any mods by claude will cause you, the editor, to have to reload the file.
 With frame's [PostToolUse hook](commands/reload-editor.sh) in place, claude will send the edit event to your neovim instance, allowing your buffer to update automatically (in general no need to reload).
 It's not perfect, and if you are making your own edits at the same time then you might need to reload from disk (as your buffer will now be considered 'dirty').
-A good rule of thumb is to save often. That should mitigate the chance of a clobber happening.
+A good rule of thumb is to save often. That should mitigate the chance of a clobber happening if you and claude are modding at the same time.
 
 ## Frame Merge
 
