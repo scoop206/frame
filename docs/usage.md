@@ -78,8 +78,8 @@ Usage:
                                       launches --dangerously-skip-permissions
                                       (default off; bare form shows the state)
 
-    frame swarm [off|1|2]             how much each frame's claude is told,
-                                      at session start about being a frame:
+    frame swarm [off|1|2]             how much each frame's claude is told
+                                      at session start, about being a frame:
                                       0 off · 1 aware (identity + safe-action
                                       rules) · 2 ask (+ query siblings), the
                                       current ceiling (3 reserved, not built)
