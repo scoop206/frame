@@ -12,5 +12,7 @@ jobs:
       - uses: actions/checkout@v5
       - name: Lint
         run: zsh tests/run.sh --lint
+      - name: Usage doc is current
+        run: make check-usage
       - name: Test
         run: zsh tests/run.sh
