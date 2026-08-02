@@ -38,8 +38,7 @@
 #
 #     frame claude [--timeout N] TEXT…  talk to THIS frame's own claude: type
 #                                       TEXT into it and block until it answers,
-#                                       then print the answer. Needs it idle;
-#                                       refuses (exit 4) mid-turn
+#                                       then print the answer
 #
 #     frame req TOPIC|NAME/TOPIC TEXT…  send a request to ANOTHER frame's Claude
 #                                       (types TEXT into its prompt); arms a
@@ -73,7 +72,7 @@
 #                                       (default off; bare form shows the state)
 #
 #     frame swarm [off|1|2]             how much each frame's claude is told,
-#                                       at session start, about being a frame:
+#                                       at session start about being a frame:
 #                                       0 off · 1 aware (identity + safe-action
 #                                       rules) · 2 ask (+ query siblings), the
 #                                       current ceiling (3 reserved, not built)
