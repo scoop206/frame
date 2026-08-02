@@ -1,3 +1,6 @@
 
 # frame — personal/local harness overrides, never committed
 .frame/local/
+
+# generated at build time from bin/frame's usage header
+docs/usage.md
