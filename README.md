@@ -9,9 +9,7 @@
 <!-- Record with: vhs assets/demo.tape  (see assets/demo.tape) -->
 <p align="center">
   <img src="assets/demo.gif" alt="frame wt booting a worktree into neovim with a Claude buffer" width="900">
-</p>
-
-<p align="center">
+  <br>
   <sub><a href="https://www.youtube.com/watch?v=Z2tggjBM5w4">youtube demo</a></sub>
 </p>
 
