@@ -44,7 +44,8 @@ EOF
   export FRAME_WORKERS_WINDOW="$SANDBOX/frame-workers.window"
   unset FAKE_NVIM_LOG FAKE_BUSY_PORTS FAKE_OSASCRIPT_LOG FAKE_NVIM_EXPR_RESULT \
         FAKE_OSASCRIPT_RESULT FAKE_NVIM_EXPR_LOG FAKE_NVIM_EXPR_EMPTY_POLLS \
-        FAKE_NVIM_POLL_COUNT_FILE FAKE_OPEN_LOG
+        FAKE_NVIM_POLL_COUNT_FILE FAKE_OPEN_LOG \
+        FAKE_NVIM_BUFTYPE FAKE_NVIM_BUFLINES_FILE
   # The suite may itself be running inside a frame session, whose exports
   # (PORT_PREFIX, FRAME_*, SERVER_CMD, <PREFIX>_*_PORT, …) would leak into
   # frame_load_config's ${VAR:=default} lines. Strip them. FRAME_ROOT is

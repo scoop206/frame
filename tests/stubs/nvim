@@ -60,6 +60,19 @@ if [[ "${1:-}" == "--server" ]]; then
     *FrameBrokerStatus*)
       [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
       print -rn -- "${FAKE_BROKER_STATUS:-}"; exit 0 ;;
+    # bin/buf-preview.sh probes a buffer's type, then a terminal's line tail.
+    # FAKE_NVIM_BUFTYPE answers the type probe ('' when unset — a normal file
+    # buffer, exactly what getbufvar returns for one); FAKE_NVIM_BUFLINES_FILE's
+    # contents stand in for the getbufline tail (absent → RPC error, as a
+    # just-wiped buffer would). Both log to FAKE_NVIM_EXPR_LOG so a test can
+    # assert which bufnr was queried.
+    *getbufvar*buftype*)
+      [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
+      print -rn -- "${FAKE_NVIM_BUFTYPE:-}"; exit 0 ;;
+    *getbufline*)
+      [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
+      [[ -f "${FAKE_NVIM_BUFLINES_FILE:-}" ]] && { cat "$FAKE_NVIM_BUFLINES_FILE"; exit 0; }
+      exit 1 ;;
     # `frame notify` reads-and-clears this to skip the banner for brokered turns.
     # FAKE_BROKERED (default 0 = a human turn) stands in for the flag; a dedicated
     # case so it doesn't collide with the mute switch's FAKE_NVIM_EXPR_RESULT.
