@@ -3,7 +3,7 @@
 # viewer — markdown-preview.nvim, a README the user is reading — follows the edit
 # with zero manual :e. Reads the PostToolUse JSON Claude Code pipes in on stdin,
 # pulls the edited path, and drives this frame's nvim over its socket:
-# v:lua.FrameReload(path). See layouts/worktree.lua FrameReload for the buffer
+# v:lua.FrameReload(path). See layouts/session.lua FrameReload for the buffer
 # logic (open? clean? reload; dirty → warn, never clobber) and the docs above it.
 #
 # Wired by frame_write_claude_hooks as

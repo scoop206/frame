@@ -9,7 +9,7 @@
 #
 # The base name/topic part never changes — the status is purely appended.
 # nvim owns the title for the whole session, so this works by RPC over the
-# frame's named socket (calls FrameSetStatus in layouts/worktree.lua). Run it
+# frame's named socket (calls FrameSetStatus in layouts/session.lua). Run it
 # from any terminal buffer inside the session — including claude marking a
 # milestone — or from outside the frame while its session is up.
 #

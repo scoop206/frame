@@ -1,6 +1,6 @@
 # frame req <TOPIC | NAME/TOPIC> TEXT… — send a request (a COMMAND) to the
 # Claude agent running inside ANOTHER frame. The request is handed to that
-# frame's claude broker (FrameBrokerSubmit in layouts/worktree.lua) with a
+# frame's claude broker (FrameBrokerSubmit in layouts/session.lua) with a
 # remote return address, so when its turn ends the answer is delivered back to
 # THIS frame's inbox — read it with `frame inbox`.
 #

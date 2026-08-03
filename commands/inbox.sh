@@ -1,7 +1,7 @@
 # frame inbox [--wait [--timeout N] [--count K | --for TOKEN…]] — show and clear
 # THIS frame's inbox: the reports other frames have delivered here (replies to
 # your `frame req` messages, or notes left with `frame deliver`). Reading drains
-# it (FrameInboxDrain in layouts/worktree.lua), so each message is shown once.
+# it (FrameInboxDrain in layouts/session.lua), so each message is shown once.
 #
 # The bare form returns immediately (empty inbox → "inbox empty"). --wait
 # blocks until mail arrives, then drains and prints it — the receive half of a

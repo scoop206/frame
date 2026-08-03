@@ -9,7 +9,7 @@ FRAME_SERVICES_COMPOSE="$FRAME_ROOT/services/docker-compose.yml"
 # stamps, teardown logs, the workers-window record — instead of strewing them
 # across /tmp's root. Grouped so `ls "$FRAME_RUNDIR"` is legible and
 # `rm -rf "$FRAME_RUNDIR"` resets all frame runtime state. Exported so the nvim
-# layout (worktree.lua) and any child resolve the same path; overridable so the
+# layout (session.lua) and any child resolve the same path; overridable so the
 # test sandbox can point it at a private, per-test dir.
 #
 # Unlike /tmp itself, /tmp/frame is NOT guaranteed to exist: macOS's daily
@@ -29,7 +29,7 @@ frame_rundir() {
 
 # ── status markers ────────────────────────────────────────────────────────────
 # Colored only when the stream is a terminal (✗ prints to stderr, ✓/▶/⚠ to
-# stdout) and NO_COLOR is unset — piped output, logs, and the worktree.lua
+# stdout) and NO_COLOR is unset — piped output, logs, and the session.lua
 # teardown watcher keep seeing the bare characters. Each marker is gated on the
 # stream it actually prints to, so redirecting the other one doesn't drop color.
 if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then
@@ -418,7 +418,7 @@ frame_base_title() {
   # Name stays bare so it reads as an owner; the topic (the thing you tell
   # frames apart by) is wrapped, with the browser's vite port beside it. The
   # mutable " - STATUS" suffix is appended elsewhere — this is only the base.
-  # layouts/worktree.lua rebuilds the same shape in Lua (it owns the title once
+  # layouts/session.lua rebuilds the same shape in Lua (it owns the title once
   # nvim starts); keep the two in step.
   local _name=$1 _topic=$2 _port=${3:-}
   if [[ -n "$_port" ]]; then

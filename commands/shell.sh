@@ -165,4 +165,4 @@ frame_export_claude_flags
 frame_check_terminal
 frame_require zsh nvim claude
 
-exec nvim -S "$FRAME_ROOT/layouts/worktree.lua"
+exec nvim -S "$FRAME_ROOT/layouts/session.lua"

@@ -10,7 +10,7 @@ test_shell_creates_dir_and_boots() {
   assert_status 0
   assert_dir_exists "$SANDBOX/frames/jam"
   local log=$(<$FAKE_NVIM_LOG)
-  assert_contains "$log" "argv: -S $FRAME_CHECKOUT/layouts/worktree.lua"
+  assert_contains "$log" "argv: -S $FRAME_CHECKOUT/layouts/session.lua"
   assert_contains "$log" "cwd: $SANDBOX/frames/jam"
   assert_contains "$log" "FRAME_NAME=shell"
   assert_contains "$log" "FRAME_TOPIC=jam"

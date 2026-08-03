@@ -1,7 +1,7 @@
 # frame deliver <TOPIC | NAME/TOPIC> [--from NAME/TOPIC] MESSAGE… — drop a
 # REPORT into a frame's inbox. The mirror of `frame req`: req injects a
 # command into a frame's prompt; deliver appends a message to its inbox
-# (FrameInboxAdd in layouts/worktree.lua), to be read later with `frame inbox`.
+# (FrameInboxAdd in layouts/session.lua), to be read later with `frame inbox`.
 #
 #   frame deliver hub "migration finished, tests green"
 #   frame deliver flipnem/hub --from flipnem/auth "done"
