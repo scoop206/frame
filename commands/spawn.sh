@@ -86,6 +86,17 @@ APPLESCRIPT
     exit 2 ;;
 esac
 
+# The launch surface (frame_open_window) is Ghostty's AppleScript dictionary —
+# macOS-only, even under Linux Ghostty. Refuse here, after close-tab: that
+# kind's osascript is already a guarded no-op, and a Linux worker shell
+# running it must still exit 0. Guarding shell|wt keeps the error readable in
+# the caller's terminal instead of failing inside a window that never opens.
+if ! frame_is_macos; then
+  echo "$X_MARK frame spawn is macOS-only — worker tabs open via Ghostty's AppleScript dictionary;" >&2
+  echo "  boot the worker by hand instead: frame shell TOPIC / frame wt TOPIC in another terminal" >&2
+  exit 1
+fi
+
 # TOPIC is the frame's dir/handle. A shell worker may omit it — like `frame
 # shell`, spawn then mints a fresh dated scratch topic so a bare `frame spawn
 # shell` always dispatches a new worker. wt still needs one (it names a branch).

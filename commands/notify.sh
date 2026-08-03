@@ -20,8 +20,9 @@
 #              phantom "blocked". See the gate for the full story.
 #
 # Two channels, both best-effort: the window-title status (frame status —
-# needs the session's nvim socket) and a macOS banner (the Frame notifier
-# app when `frame notifier` has built it, else osascript). Built to be the
+# needs the session's nvim socket) and a desktop banner (macOS: the Frame
+# notifier app when `frame notifier` has built it, else osascript; Linux:
+# notify-send when libnotify is installed). Built to be the
 # target of Claude Code hooks, so a channel failing must never fail the hook:
 # every step is guarded and the command always exits 0. The banner (never the
 # title status) is skipped when the global switch is off (machine-global config,
@@ -173,16 +174,22 @@ fi
 # the click callback runs under a bare /bin/sh env. -group: a frame's new
 # banner replaces its previous one instead of stacking. Without the app,
 # the osascript banner (Script Editor icon, click opens it) still fires.
+# On Linux neither exists — notify-send (libnotify) carries the banner
+# instead: no click-to-focus (that callback is the notifier app's -execute),
+# but the ping itself lands. No channel at all → silent, like every other
+# best-effort step here.
 NOTIFIER="$HOME/.local/share/frame/Frame.app/Contents/MacOS/terminal-notifier"
 if [[ -x "$NOTIFIER" ]]; then
   "$NOTIFIER" -title "$TITLE" -message "$TEXT" -sound Glass \
     -group "frame-$NAME-$TOPIC" \
     -execute "${(q)FRAME_ROOT}/bin/frame focus ${(q)NAME}/${(q)TOPIC}" \
     >/dev/null 2>&1 || true
-else
+elif (( $+commands[osascript] )); then
   osascript - "$TEXT" "$TITLE" >/dev/null 2>&1 <<'EOF' || true
 on run argv
   display notification (item 1 of argv) with title (item 2 of argv) sound name "Glass"
 end run
 EOF
+elif (( $+commands[notify-send] )); then
+  notify-send --app-name=frame "$TITLE" "$TEXT" >/dev/null 2>&1 || true
 fi

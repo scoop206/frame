@@ -246,6 +246,14 @@ frame_check_terminal() {
   print -r -- "$WARN_MARK frame: not running in Ghostty (TERM_PROGRAM=${TERM_PROGRAM:-unset}) — frame boots fine here, but focus/spawn window management needs Ghostty" >&2
 }
 
+frame_is_macos() {
+  # The gate for the macOS-only surfaces: window management (focus/spawn ride
+  # AppleScript, not Ghostty IPC — Linux Ghostty doesn't help) and banner
+  # plumbing. Everything else — worktrees, broker, layout, services — is
+  # platform-agnostic and must never call this.
+  [[ "$OSTYPE" == darwin* ]]
+}
+
 # ── claude-code hooks ─────────────────────────────────────────────────────────
 
 # THE canonical table of claude-code hooks every frame relies on, one row per
@@ -749,9 +757,21 @@ frame_assert_topic_free() {
 # ── docker / shared services ──────────────────────────────────────────────────
 
 ensure_docker() {
+  # Auto-start is OrbStack-only. Anywhere `open -a OrbStack` can't work —
+  # Linux, or a mac without OrbStack — fail with instructions rather than
+  # entering the wait loop: docker will never come up on its own there, and
+  # the until-loop would hang forever.
   if ! docker info >/dev/null 2>&1; then
+    if ! frame_is_macos; then
+      echo "$X_MARK docker isn't running — auto-start is OrbStack (macOS) only;" >&2
+      echo "  start your docker daemon (e.g. 'systemctl start docker') and retry" >&2
+      return 1
+    fi
     echo "$RUN_MARK starting OrbStack…"
-    open -a OrbStack
+    if ! open -a OrbStack 2>/dev/null; then
+      echo "$X_MARK couldn't launch OrbStack — start your docker provider and retry" >&2
+      return 1
+    fi
     until docker info >/dev/null 2>&1; do sleep 0.5; done
   fi
 }

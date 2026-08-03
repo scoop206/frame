@@ -38,6 +38,44 @@ test_dep_hint_names_installer() {
   assert_contains "$(frame_dep_hint git)"    "git"
 }
 
+# OSTYPE can be reassigned in-process (zsh only pins it at startup), so the
+# platform gate and the docker-refusal paths are testable here — but NOT via
+# run_frame: a child zsh recomputes OSTYPE and ignores the exported fake.
+# docker/open are shadowed as functions so the PATH tripwire stubs never fire.
+
+test_is_macos_matches_ostype() {
+  local rc
+  ( OSTYPE=darwin25.0; frame_is_macos ) && rc=0 || rc=$?
+  assert_eq "$rc" 0
+  ( OSTYPE=linux-gnu; frame_is_macos ) && rc=0 || rc=$?
+  assert_eq "$rc" 1
+}
+
+test_ensure_docker_quiet_when_daemon_up() {
+  local out rc
+  docker() { return 0 }
+  out=$( ensure_docker 2>&1 ) && rc=0 || rc=$?
+  assert_eq "$rc" 0
+  assert_eq "$out" ""
+}
+
+test_ensure_docker_refuses_off_macos_instead_of_hanging() {
+  local out rc
+  docker() { return 1 }
+  out=$( OSTYPE=linux-gnu; ensure_docker 2>&1 ) && rc=0 || rc=$?
+  assert_eq "$rc" 1
+  assert_contains "$out" "start your docker daemon"
+}
+
+test_ensure_docker_refuses_when_orbstack_launch_fails() {
+  local out rc
+  docker() { return 1 }
+  open() { return 1 }
+  out=$( OSTYPE=darwin25.0; ensure_docker 2>&1 ) && rc=0 || rc=$?
+  assert_eq "$rc" 1
+  assert_contains "$out" "couldn't launch OrbStack"
+}
+
 test_check_terminal_quiet_in_ghostty() {
   local out
   out=$( TERM_PROGRAM=ghostty frame_check_terminal 2>&1 )
