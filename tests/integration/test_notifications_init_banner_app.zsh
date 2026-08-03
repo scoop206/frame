@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
-# The banner-app build (notifier.sh), reached as `frame notification init`.
+# The banner-app build (notifier.sh), reached as `frame notifications init`.
 # `frame init` no longer builds it — the build/repair lives here alone (split
-# out in d182db2), so it's exercised through `frame notification init`.
+# out in d182db2), so it's exercised through `frame notifications init`.
 #
 # The macOS notification grant is keyed to the bundle's code signature, so
 # re-inits must skip the rebuild unless an input actually changed — a no-op
@@ -41,12 +41,12 @@ EOF
 test_first_notification_init_builds_then_reinit_skips() {
   [[ $OSTYPE == darwin* ]] || { skip "banner-app build needs the macOS toolchain"; return }
   plant_brew_and_source
-  run_frame notification init
+  run_frame notifications init
   assert_status 0
   assert_contains "$OUT" "built $(APP_DIR)"
   assert_file_exists "$(APP_DIR)/Contents/Resources/frame-fingerprint"
   touch "$(APP_DIR)/marker"
-  run_frame notification init
+  run_frame notifications init
   assert_status 0
   assert_contains "$OUT" "banner app already built"
   assert_file_exists "$(APP_DIR)/marker"
@@ -55,11 +55,11 @@ test_first_notification_init_builds_then_reinit_skips() {
 test_changed_input_rebuilds_on_next_notification_init() {
   [[ $OSTYPE == darwin* ]] || { skip "banner-app build needs the macOS toolchain"; return }
   plant_brew_and_source
-  run_frame notification init
+  run_frame notifications init
   touch "$(APP_DIR)/marker"
   print -r -- "fake notifier binary v2" \
     > "$SRC/bin/terminal-notifier.app/Contents/MacOS/terminal-notifier"
-  run_frame notification init
+  run_frame notifications init
   assert_status 0
   assert_not_contains "$OUT" "already built"
   assert_contains "$OUT" "built $(APP_DIR)"
@@ -70,7 +70,7 @@ test_missing_notifier_hints_instead_of_installing() {
   # the suite's default brew stub has nothing installed — notification init
   # must bow out non-zero, hint at the install command, and not have run brew
   # install itself
-  run_frame notification init
+  run_frame notifications init
   assert_status 1
   assert_contains "$OUT" "brew install terminal-notifier"
   assert_not_contains "$OUT" "installing"

@@ -79,7 +79,7 @@ test_blocked_bypasses_brokered_gate_without_consuming_flag() {
 }
 
 test_blocked_respects_session_mute() {
-  # An explicit :FrameNotify off still silences the banner — mute is a deliberate
+  # An explicit :FrameSilence on still silences the banner — mute is a deliberate
   # "shut up this frame", not a "done" heuristic. The status update still lands.
   (( $+commands[python3] )) || { skip "python3 not found"; return }
   setup_shell_frame

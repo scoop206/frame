@@ -1,9 +1,9 @@
-# frame notification — the human-facing banner controls:
+# frame notifications — the human-facing banner controls:
 #
-#   frame notification off | on
+#   frame notifications off | on
 #     → the global banner switch: off silences every frame's banners
 #       until on
-#   frame notification init
+#   frame notifications init
 #     → (re)build the banner app — badge setup/repair (notifier.sh)
 #
 # The banner itself is `frame notify` (notify.sh) — the hook target, kept
@@ -21,14 +21,14 @@ fi
 if (( $# == 1 )) && [[ "$1" == (on|off) ]]; then
   frame_global_set notify "$1"
   if [[ "$1" == off ]]; then
-    echo "$OK_MARK banners off everywhere — frame notification on re-enables"
+    echo "$OK_MARK banners off everywhere — frame notifications on re-enables"
   else
     echo "$OK_MARK banners on everywhere"
-    echo "  No frame badge yet? Build the notifier app: frame notification init"
+    echo "  No frame badge yet? Build the notifier app: frame notifications init"
     echo "  macOS keeps its own switch too: if banners still don't show, check"
     echo "  System Settings → Notifications → Frame (Allow, style Banners)."
   fi
   exit 0
 fi
-echo "$X_MARK usage: frame notification on|off|init" >&2
+echo "$X_MARK usage: frame notifications on|off|init" >&2
 exit 2

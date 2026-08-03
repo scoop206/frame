@@ -69,7 +69,7 @@
 
 `worktree` is a synonym for `wt`; `list` for `ls`.  
 Not shown here: `spawn`,
-`deliver`, `reply`, `view`, `status`, `notify`, `notification`, and every
+`deliver`, `reply`, `view`, `status`, `notify`, `notifications`, `silence`, and every
 `--flag` — see `frame --help` ([full usage](docs/usage.md)).
 
 ## Other Features
@@ -189,7 +189,7 @@ When frame instantiates the nvim instance it injects these user commands
 | command                   | action                                                                                                                 |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `:FrameStatus TEXT…`      | append "- TEXT" to the window title's status suffix (no TEXT clears it)                                                |
-| `:FrameNotify off`        | 'on' or 'off' to unmute/mute banners; no arg shows state                                                               |
+| `:FrameSilence on`        | 'on' or 'off' to silence/unsilence this frame's banners; no arg shows state                                            |
 | `:FrameQuit`              | quit the session only — worktree and branch stay for a later `frame wt TOPIC`                                          |
 | `:FrameDown`              | tear down the whole frame: quit nvim, remove the worktree, delete the branch                                           |
 | `:FrameDown!`             | force teardown — discard uncommitted changes and unmerged commits                                                      |
@@ -291,7 +291,7 @@ brew install terminal-notifier
 Then build the Frame app icon for the banner with:
 
 ```bash
-frame notification init
+frame notifications init
 ```
 
 You should be prompted to allow for Frame to notify:

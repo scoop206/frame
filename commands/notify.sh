@@ -5,7 +5,7 @@
 #   frame notify --blocked
 #     → banner "needs your input", title "… - blocked"
 #
-# The controls live under `frame notification` (notification.sh): on|off is
+# The controls live under `frame notifications` (notification.sh): on|off is
 # the global banner switch, init the banner-app build/repair.
 #
 # Two modes, one Claude Code hook each:
@@ -25,24 +25,26 @@
 # target of Claude Code hooks, so a channel failing must never fail the hook:
 # every step is guarded and the command always exits 0. The banner (never the
 # title status) is skipped when the global switch is off (machine-global config,
-# read below) or the session muted it with :FrameNotify off (asked over the
-# socket below). The bare mode additionally skips the banner for brokered turns
+# read below) or the session silenced it with :FrameSilence on / frame silence
+# (asked over the socket below). The bare mode additionally skips the banner
+# for brokered turns
 # (the client already has the answer) and quick turns (the human prompted within
 # the last 10s and is still looking) — both are "done" heuristics that are wrong
 # for --blocked, where a mid-turn block is exactly when you want interrupting, so
 # --blocked bypasses those two gates.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
-# Hook target only. The bare form is the Stop hook; --blocked is the
-# Notification hook. Any other arg is a usage error — fine hook-wise, since the
-# hooks always call one of these two.
+# Hook target, mainly: the bare form is the Stop hook; --blocked is the
+# Notification hook. Humans run the bare form too, to test the banner pipeline.
+# Any other arg is a usage error — fine hook-wise, since the hooks always call
+# one of these two.
 _mode=stop
 if [[ "${1:-}" == --blocked ]]; then
   _mode=blocked
   shift
 fi
 if (( $# )); then
-  echo "$X_MARK frame notify takes no arguments (controls: frame notification on|off|init)" >&2
+  echo "$X_MARK frame notify takes no arguments (controls: frame notifications on|off|init)" >&2
   exit 2
 fi
 
@@ -151,8 +153,8 @@ if [[ $_mode != blocked ]]; then
   fi
 fi
 
-# The session holds the banner mute switch (:FrameNotify off) — ask it over
-# the socket. No session, or no/odd answer → unmuted: the banner errs toward
+# The session holds the banner silence switch (:FrameSilence on) — ask it over
+# the socket. No session, or no/odd answer → unsilenced: the banner errs toward
 # firing, and sessions predating the switch just don't have g:frame_notify_muted.
 if [[ -S "$SOCKET" ]]; then
   # --headless: without it a piped-stdout nvim client (0.10+) sends the
