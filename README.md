@@ -77,7 +77,7 @@ Not shown here: `spawn`,
 
 - **Vim/Claude integration** - `:FrameClaude` allows for quick conversations and code analysis
 - **Shared Services** - Databases and Object Stores can be stood up once in the frame repo and share their services between all your projects
-- OSs level **Notifications** - a frame has **Completed** it's task, a frame Needs **Attention**, a frame is **Blocked**.
+- OS-level **Notifications** (macOS) - a banner when a frame has **Completed** its task, Needs **Attention**, or is **Blocked** — with the Frame icon and click-to-focus. On Linux the same pings arrive via `notify-send` (install `libnotify`), minus the icon and click-to-focus; see [Platform support](#platform-support).
 - **swarm** - uses the SessionStart hook to inform all frame claudes that they are frames and how to find their siblings. See [Swarm: telling agents they're in a frame](#swarm-telling-agents-theyre-in-a-frame) for the per-level breakdown.
 - **shell** - a thin (non worktree) frame for raw claude work
 - **YOLO mode** to globally enable/disable `--dangerously-skip-permissions`. (Note: once changed, only newly booted frames follow the new setting.)
