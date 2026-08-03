@@ -4,7 +4,7 @@
 #   frame silence --off comms     restore them
 #   frame silence                 the frame you're in
 #
-# The CLI spelling of :FrameSilence (layouts/worktree.lua): both flip
+# The CLI spelling of :FrameSilence (layouts/session.lua): both flip
 # g:frame_notify_muted in the target's live session, which `frame notify`
 # asks over the socket before popping a banner (notify.sh). Session-scoped
 # like the vim command — the silence dies with the frame; the machine-global

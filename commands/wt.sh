@@ -135,7 +135,7 @@ if [[ "${1:-}" == "-d" ]]; then
   git -C "$MAIN_WT" worktree remove "${_rm_flags[@]}" "$WT_DIR"
   git -C "$MAIN_WT" branch -D "$TOPIC"
   # :FrameDown's watcher matches this line to know teardown finished without
-  # reaching the session — keep the wording in sync with layouts/worktree.lua.
+  # reaching the session — keep the wording in sync with layouts/session.lua.
   echo "$OK_MARK removed worktree and branch $TOPIC"
   exit 0
 fi
@@ -262,7 +262,7 @@ fi
 
 if (( $+functions[app_env] )); then app_env; fi
 
-# Layout parameters — read by layouts/worktree.lua.
+# Layout parameters — read by layouts/session.lua.
 export FRAME_NAME="$NAME"
 export FRAME_TOPIC="$TOPIC"
 export FRAME_MAIN_WT="$MAIN_WT"
@@ -294,4 +294,4 @@ _req=(zsh git nvim)
 [[ " $FRAME_BUFFERS " == *" claude "* ]] && _req+=(claude)
 frame_require "$_req[@]"
 
-exec nvim -S "$FRAME_ROOT/layouts/worktree.lua"
+exec nvim -S "$FRAME_ROOT/layouts/session.lua"

@@ -32,7 +32,7 @@
 # A running frame is exactly one with a live nvim socket at
 # $FRAME_RUNDIR/<name>-<topic>.nvim (same sockets status.sh/notify.sh use). For each,
 # we ask the session for its own identity over that socket — FrameInfo, added
-# next to FrameSetStatus in layouts/worktree.lua — rather than parsing the
+# next to FrameSetStatus in layouts/session.lua — rather than parsing the
 # filename, whose <name>-<topic> is ambiguous when the topic has dashes. A
 # socket that doesn't answer FrameInfo is skipped: either dead (stale debris
 # from a crash) or a session predating the helper, which a reboot fixes.

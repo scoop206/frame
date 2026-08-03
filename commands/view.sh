@@ -23,7 +23,7 @@
 # a TOPIC (or NAME/TOPIC) targets another, resolved exactly like `frame req` /
 # `frame deliver` (frame_resolve_target — same-project sibling first, then the
 # unique live frame carrying that topic). Read-only, one RPC round-trip: the
-# session reports its own attributes via FrameDebug (layouts/worktree.lua), so
+# session reports its own attributes via FrameDebug (layouts/session.lua), so
 # view never re-parses the title or guesses. The inbox is peeked, never drained.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 

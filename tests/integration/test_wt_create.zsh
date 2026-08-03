@@ -30,7 +30,7 @@ test_create_boots_into_nvim() {
   assert_branch_exists "$REPO" topic
   assert_file_exists "$FAKE_NVIM_LOG"
   local log=$(<$FAKE_NVIM_LOG)
-  assert_contains "$log" "argv: -S $FRAME_CHECKOUT/layouts/worktree.lua"
+  assert_contains "$log" "argv: -S $FRAME_CHECKOUT/layouts/session.lua"
   assert_contains "$log" "cwd: $SANDBOX/_$TNAME-topic"
   assert_contains "$log" "FRAME_NAME=$TNAME"
   assert_contains "$log" "FRAME_TOPIC=topic"
@@ -187,7 +187,7 @@ test_nested_boot_refused_noninteractively() {
 # that drifted from frame's canonical hook set silently breaks the frame's
 # notifications. wt boot greps it (frame_claude_hooks_missing) and exports
 # FRAME_HOOK_DRIFT — the comma-joined missing hooks, empty when in sync — which
-# layouts/worktree.lua turns into a vim.notify warning that survives the exec
+# layouts/session.lua turns into a vim.notify warning that survives the exec
 # into nvim. The stub's env dump proves what the boot exported.
 
 commit_claude_settings() {  # commit_claude_settings <<'EOF' … EOF

@@ -1,9 +1,11 @@
--- Frame worktree layout — opens named terminal buffers, lands in `claude`.
--- Sourced by `frame wt`:  nvim -S layouts/worktree.lua
+-- Frame session layout — opens named terminal buffers, lands in `claude`.
+-- Sourced by `frame wt` and `frame shell`:  nvim -S layouts/session.lua
 --
--- Secondary-worktree variant of dev.lua: runs its own server and vite on the
+-- For worktree frames it runs the worktree's own server and vite on the
 -- free ports commands/wt.sh exported (PORT / <PREFIX>_VITE_PORT / …, inherited
 -- by these terminal buffers). Docker services stay owned by the primary env.
+-- Shell frames source the same file with FRAME_MAIN_WT empty ("no primary
+-- checkout"), which selects the quit-only :FrameDown.
 --
 -- Parameterized by env vars exported by commands/wt.sh:
 --   FRAME_NAME        project name

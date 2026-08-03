@@ -3,7 +3,7 @@
 # guards, and the drift/scaffold bookkeeping that must stay in step so a
 # freshly-written settings.json still classifies "safe" now that PostToolUse is
 # one of frame's canonical hooks. The buffer logic itself lives in Lua
-# (layouts/worktree.lua FrameReload) and needs a real nvim; the path-parse +
+# (layouts/session.lua FrameReload) and needs a real nvim; the path-parse +
 # socket RPC is covered in tests/integration/test_reload_editor.zsh.
 source "${${(%):-%x}:A:h:h}/helpers/harness.zsh"
 export FRAME_ROOT="$FRAME_CHECKOUT"

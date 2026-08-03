@@ -1,6 +1,6 @@
 # frame reply — the Stop-hook sensor: reads the just-ended turn's last assistant
 # message from the transcript Claude Code pipes in as JSON on stdin, and hands it
-# to the broker (FrameOnStop → FrameBrokerOnTurnEnd in layouts/worktree.lua),
+# to the broker (FrameOnStop → FrameBrokerOnTurnEnd in layouts/session.lua),
 # which routes the in-flight request's answer home and feeds claude the next
 # queued one. Wired into the Stop hook alongside `frame notify` (see
 # frame_write_claude_hooks); like notify it must never disrupt the hook, so it

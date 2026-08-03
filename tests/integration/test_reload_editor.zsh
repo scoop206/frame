@@ -4,7 +4,7 @@
 # v:lua.FrameReload('<abs-path>'). Identity comes from a shell-frame env; a
 # planted unix socket + the nvim stub stand in for the running session, and
 # FAKE_NVIM_EXPR_LOG captures the exact remote-expr so we can assert the path.
-# (The buffer open/dirty/clean logic itself is Lua in layouts/worktree.lua and
+# (The buffer open/dirty/clean logic itself is Lua in layouts/session.lua and
 # needs a real nvim; here we prove the path handed to it is right.)
 source "${${(%):-%x}:A:h:h}/helpers/harness.zsh"
 

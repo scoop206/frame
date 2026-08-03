@@ -184,7 +184,7 @@ You can see vite's rendered web app at `http://localhost:PORT`
 ## Vim commands
 
 When frame instantiates the nvim instance it injects these user commands
-(defined in `layouts/worktree.lua`), available from any buffer in the session:
+(defined in `layouts/session.lua`), available from any buffer in the session:
 
 | command                   | action                                                                                                                 |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
