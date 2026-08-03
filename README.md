@@ -1,6 +1,7 @@
 # frame
 
-[![tests](https://github.com/scoop206/frame/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/scoop206/frame/actions/workflows/test.yml)
+[![macos](https://github.com/scoop206/frame/actions/workflows/test-macos.yml/badge.svg?branch=main)](https://github.com/scoop206/frame/actions/workflows/test-macos.yml)
+[![linux](https://github.com/scoop206/frame/actions/workflows/test-linux.yml/badge.svg?branch=main)](https://github.com/scoop206/frame/actions/workflows/test-linux.yml)
 
 <p align="center">
   <img src="assets/frame_banner.png" alt="frame - an AI harness built on zsh, ghostty, neovim, and claude code" width="760">
