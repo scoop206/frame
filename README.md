@@ -189,7 +189,7 @@ When frame instantiates the nvim instance it injects these user commands
 | command                   | action                                                                                                                 |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `:FrameStatus TEXT…`      | append "- TEXT" to the window title's status suffix (no TEXT clears it)                                                |
-| `:FrameSilence on`        | 'on' or 'off' to silence/unsilence this frame's banners; no arg shows state                                            |
+| `:FrameSilence [off]`     | silence this frame's banners (no arg, or 'on'); pass 'off' to unsilence                                                |
 | `:FrameQuit`              | quit the session only — worktree and branch stay for a later `frame wt TOPIC`                                          |
 | `:FrameDown`              | tear down the whole frame: quit nvim, remove the worktree, delete the branch                                           |
 | `:FrameDown!`             | force teardown — discard uncommitted changes and unmerged commits                                                      |

@@ -595,13 +595,14 @@ end, { nargs = '*', desc = 'Set window-title status suffix (empty clears)' })
 -- `frame notify` asks this session over the socket — get(g:, 'frame_notify_muted', 0)
 -- — so the silence lives with the frame and dies with it. Only the banner+sound
 -- is suppressed; the window-title status still updates.
--- :FrameSilence on | off — silence/unsilence; bare :FrameSilence reports state.
--- Note the polarity: on/off toggle the SILENCE, not the banners.
+-- :FrameSilence [on] | off — silence (the default, matching `frame silence`);
+-- pass off to unsilence. Note the polarity: on/off toggle the SILENCE, not
+-- the banners.
 vim.g.frame_notify_muted = 0
 vim.api.nvim_create_user_command('FrameSilence', function(opts)
-  if opts.args == 'on' then vim.g.frame_notify_muted = 1
+  if opts.args == 'on' or opts.args == '' then vim.g.frame_notify_muted = 1
   elseif opts.args == 'off' then vim.g.frame_notify_muted = 0
-  elseif opts.args ~= '' then
+  else
     vim.notify('usage: :FrameSilence [on|off]', vim.log.levels.ERROR)
     return
   end
@@ -611,7 +612,7 @@ vim.api.nvim_create_user_command('FrameSilence', function(opts)
 end, {
   nargs = '?',
   complete = function() return { 'on', 'off' } end,
-  desc = 'Silence/unsilence frame notify banners (bare: show state)',
+  desc = 'Silence frame notify banners (off to unsilence)',
 })
 
 -- ── :[range]FrameClaude [question] ────────────────────────────────────────────
