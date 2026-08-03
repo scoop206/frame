@@ -114,6 +114,9 @@ Automation:
   before booting a frame that needs the shared services; `frame wt` errors
   with instructions if it isn't running.
 
+The test suite runs on both macOS and Linux in CI; the macOS-only surfaces
+skip on Linux, where their refusal paths are tested instead.
+
 ### Install Frame
 
 ```bash

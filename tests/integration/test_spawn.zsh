@@ -38,24 +38,28 @@ test_unknown_kind_shows_usage() {
 }
 
 test_spawn_wt_needs_a_project() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   run_frame spawn wt calc   # sandbox root is not a git repo
   assert_status 1
   assert_contains "$OUT" "no project at"
 }
 
 test_spawn_wt_rejects_ephemeral() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   run_frame spawn wt calc --ephemeral
   assert_status 2
   assert_contains "$OUT" "no --ephemeral"
 }
 
 test_spawn_shell_rejects_cwd() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   run_frame spawn shell calc --cwd /tmp
   assert_status 2
   assert_contains "$OUT" "--cwd is a wt flag"
 }
 
 test_spawn_wt_boots_project_worker_as_tab() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   # Project NAME comes from the target checkout's .frame config; the bootstrap
   # cd's there, boots `frame wt`, and chains close-tab as NAME/TOPIC. Readiness
   # polls the project-named socket.
@@ -78,6 +82,7 @@ EOF
 }
 
 test_spawn_wt_cwd_targets_another_project() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   # From anywhere, --cwd points spawn at the project; relative paths land
   # absolute in the bootstrap (the surface's shell starts elsewhere).
   _spawn_env
@@ -104,6 +109,7 @@ test_close_tab_accepts_name_topic_form() {
 }
 
 test_no_topic_shell_mints_dated_worker() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   # A bare `frame spawn shell` — no TOPIC — mints a fresh dated scratch topic
   # (like `frame shell`) and dispatches a worker on it instead of erroring. The
   # topic is random, so its socket can't be planted ahead of time: assert the
@@ -118,6 +124,7 @@ test_no_topic_shell_mints_dated_worker() {
 }
 
 test_no_topic_wt_shows_usage() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   # wt still requires a TOPIC — it names a branch, nothing to mint from.
   run_frame spawn wt
   assert_status 2
@@ -125,24 +132,28 @@ test_no_topic_wt_shows_usage() {
 }
 
 test_rejects_slash_in_topic() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   run_frame spawn shell a/b
   assert_status 2
   assert_contains "$OUT" "no slashes"
 }
 
 test_rejects_unknown_argument() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   run_frame spawn shell $TNAME --bogus
   assert_status 2
   assert_contains "$OUT" "unknown argument '--bogus'"
 }
 
 test_rejects_non_numeric_timeout() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   run_frame spawn shell $TNAME --timeout soon
   assert_status 2
   assert_contains "$OUT" "--timeout needs a positive integer"
 }
 
 test_refuses_live_topic_before_opening_a_window() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   # A live frame (socket answering FrameInfo via its .info companion) already
   # owns the topic → refused, and neither launch path may ever have fired.
   export FAKE_OPEN_LOG="$SANDBOX/open.log"
@@ -157,6 +168,7 @@ test_refuses_live_topic_before_opening_a_window() {
 }
 
 test_happy_path_opens_tab_and_reports_up() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   _spawn_env
   _plant_booted_worker
   run_frame spawn shell $TNAME
@@ -178,6 +190,7 @@ test_happy_path_opens_tab_and_reports_up() {
 }
 
 test_ephemeral_rides_into_the_bootstrap() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   # --ephemeral must reach the worker as FRAME_EPHEMERAL=1 in the tab's
   # bootstrap command — the frame is born ephemeral; its reply router reads the
   # env and self-reaps after routing its first reply home.
@@ -190,6 +203,7 @@ test_ephemeral_rides_into_the_bootstrap() {
 }
 
 test_no_dictionary_falls_back_to_open() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   # osascript yielding no ids (Ghostty <1.3, script error) → the legacy
   # separate-instance launch, and no surface recording is written.
   export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
@@ -231,6 +245,7 @@ test_close_tab_requires_topic() {
 }
 
 test_boot_timeout_exits_3() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   export FAKE_OPEN_LOG="$SANDBOX/open.log"
   # no socket ever appears → the poll runs out
   run_frame spawn shell $TNAME --timeout 1
@@ -239,6 +254,7 @@ test_boot_timeout_exits_3() {
 }
 
 test_not_ready_session_times_out() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   export FAKE_OPEN_LOG="$SANDBOX/open.log"
   _mksock "$FRAME_RUNDIR/shell-$TNAME.nvim"   # socket up, but no .ready — mid-boot
   run_frame spawn shell $TNAME --timeout 1
@@ -247,12 +263,14 @@ test_not_ready_session_times_out() {
 }
 
 test_req_outside_a_frame_is_refused() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   run_frame spawn shell $TNAME --req "compute 2+2"
   assert_status 1
   assert_contains "$OUT" "must be run from inside a frame"
 }
 
 test_req_is_sent_once_ready() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   in_head
   export FAKE_OPEN_LOG="$SANDBOX/open.log"
   export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
@@ -267,6 +285,7 @@ test_req_is_sent_once_ready() {
 }
 
 test_worker_name_survives_checkout_config() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   # Regression: run spawn from inside a git checkout whose .frame/config.sh
   # assigns NAME (frame_self_identity sources it for the --req return address).
   # That assignment must not redirect the readiness poll or the req target away
@@ -283,6 +302,17 @@ EOF
   assert_contains "$OUT" "shell/$TNAME is up"
   assert_contains "$OUT" "sent to shell/$TNAME"
   assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameBrokerSubmit('compute 2+2', 'remote:stompy/main')"
+}
+
+test_spawn_refuses_off_macos() {
+  [[ $OSTYPE == darwin* ]] && { skip "refusal path only reachable off macOS"; return }
+  _spawn_env
+  run_frame spawn shell "$TNAME"
+  assert_status 1
+  assert_contains "$OUT" "frame spawn is macOS-only"
+  # close-tab must stay a guarded no-op for Linux workers, not a refusal.
+  run_frame spawn close-tab "$TNAME"
+  assert_status 0
 }
 
 run_tests "$0"
