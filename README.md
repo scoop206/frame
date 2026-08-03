@@ -409,11 +409,12 @@ Everything project-side lives under one `.frame/` directory:
 
 ### Examples
 
-Three worked, copyable integrations live in [`examples/`](examples) — each a
+Four worked, copyable integrations live in [`examples/`](examples) — each a
 complete `.frame/config.sh` plus the `.claude/settings.json` that `frame init`
 writes:
 
 - [`barebones/`](examples/barebones) — the minimum: a `config.sh` with just `NAME`
+- [`astrojs/`](examples/astrojs) — a root-dir npm app (an Astro static site): just the vite buffer, no backend
 - [`standard-web/`](examples/standard-web) — a server + vite app on the shared postgres/minio
 - [`sidecar/`](examples/sidecar) — everything above, plus its own project-unique container
 
