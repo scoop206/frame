@@ -64,8 +64,13 @@
 #
 #     frame services [up|down]          manage the shared postgres/minio stack
 #
-#     frame notification on|off|init    on|off: global switch;
+#     frame notifications on|off|init   on|off: global switch;
 #                                       init: build/repair the banner icon
+#
+#     frame silence [--off] [TOPIC|NAME/TOPIC]
+#                                       silence one frame's banners (--off
+#                                       restores; default: the frame you're
+#                                       in) — the CLI twin of :FrameSilence
 #
 #     frame yolo on|off                 master switch: claude in every frame
 #                                       launches --dangerously-skip-permissions
@@ -97,11 +102,11 @@ case "$cmd" in
   ls|list)
     source "$FRAME_ROOT/commands/ls.sh" "$@"
     ;;
-  init|shell|merge|services|status|notify|notification|focus|yolo|swarm|claude|req|reply|deliver|inbox|spawn|view)
+  init|shell|merge|services|status|notify|notifications|silence|focus|yolo|swarm|claude|req|reply|deliver|inbox|spawn|view)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   notifier)
-    # internal spelling of `frame notification init` — the banner-app build, run
+    # internal spelling of `frame notifications init` — the banner-app build, run
     # by `frame init` as its own process (not in the usage text above)
     source "$FRAME_ROOT/commands/notifier.sh" "$@"
     ;;

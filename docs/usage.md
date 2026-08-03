@@ -71,8 +71,13 @@ Usage:
 
     frame services [up|down]          manage the shared postgres/minio stack
 
-    frame notification on|off|init    on|off: global switch;
+    frame notifications on|off|init   on|off: global switch;
                                       init: build/repair the banner icon
+
+    frame silence [--off] [TOPIC|NAME/TOPIC]
+                                      silence one frame's banners (--off
+                                      restores; default: the frame you're
+                                      in) — the CLI twin of :FrameSilence
 
     frame yolo on|off                 master switch: claude in every frame
                                       launches --dangerously-skip-permissions

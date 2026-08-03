@@ -10,7 +10,7 @@ design to the v2 terracotta-N badge.*
 The badge art was being upgraded — an older `Frame.app` badge was already
 installed and granted notification permission, and we swapped in new art
 (`assets/frame_badge.svg` → `assets/frame_badge.png` → the `.icns` inside
-`~/.local/share/frame/Frame.app`). `frame notification init` rebuilt the bundle
+`~/.local/share/frame/Frame.app`). `frame notifications init` rebuilt the bundle
 cleanly, but macOS banners kept wearing the **old** icon. Rebuilding again,
 and the README's `killall usernoted NotificationCenter` hint, did nothing.
 
@@ -83,7 +83,7 @@ Log out and back in (or reboot), then `frame notify`. This makes macOS re-see
 the app fresh and is the reliable last resort. A logout is almost always enough
 short of a full restart.
 
-## Why this isn't baked into `frame notification init`
+## Why this isn't baked into `frame notifications init`
 
 This only bites when the badge art **changes** on a bundle macOS has already
 cached — i.e. someone iterating on the icon. A first-time install has no old

@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# frame notify's session mute switch (:FrameNotify off): the CLI asks the
+# frame notify's session silence switch (:FrameSilence on): the CLI asks the
 # live session over its socket before popping a banner. A real unix socket
 # at the session path plus FAKE_NVIM_EXPR_RESULT (the stub's answer to the
 # remote-expr query) stand in for the nvim side.
