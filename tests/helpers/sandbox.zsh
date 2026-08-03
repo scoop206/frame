@@ -22,6 +22,11 @@ sandbox_up() {
   export SANDBOX=${SANDBOX:A}
   export HOME="$SANDBOX/home"
   mkdir -p "$HOME"
+  # Redirecting HOME isn't enough for the config cascade: helpers resolve the
+  # machine config as ${XDG_CONFIG_HOME:-$HOME/.config}, and a set
+  # XDG_CONFIG_HOME (GitHub's ubuntu runners export one) would bypass the
+  # sandbox HOME and read the real machine's frame config.
+  unset XDG_CONFIG_HOME
   export GIT_CONFIG_NOSYSTEM=1
   cat > "$HOME/.gitconfig" <<'EOF'
 [user]
