@@ -90,10 +90,29 @@ Not shown here: `spawn`,
 - neovim (no plugins required) — validated with both a minimalist bare Vim setup and LazyVim
 - claude (Claude Code CLI)
 - docker with the compose v2 plugin (if running shared services)
-- macOS + OrbStack (any docker provider works if already running; auto-start is OrbStack-only)
+- macOS + OrbStack (any docker provider works if already running; auto-start is OrbStack-only) — Linux runs the core workflow, see [Platform support](#platform-support)
 - curl, lsof
 
 Frame also assumes **every project's default branch is named `main`**.
+
+#### Platform support
+
+macOS is the primary target, but the core workflow is portable: worktrees, the
+nvim layout, the claude broker (`frame claude` / `frame req` / `frame inbox`),
+merge/teardown, port assignment, and the shared services all work on Linux.
+What doesn't — the window and notification chrome is built on macOS
+Automation:
+
+- **`frame focus` and `frame spawn` are macOS-only.** Window raising and
+  worker-tab spawning go through AppleScript/System Events — Linux Ghostty
+  doesn't carry that dictionary. Both refuse with a clear error; boot workers
+  by hand in another terminal instead.
+- **Banners fall back to `notify-send`** (install `libnotify`) — you get the
+  Completed/Attention/Blocked pings, minus the Frame icon and click-to-focus.
+  `frame notifications init` (the banner-app build) is macOS-only.
+- **Docker auto-start is OrbStack-only.** On Linux, start your docker daemon
+  before booting a frame that needs the shared services; `frame wt` errors
+  with instructions if it isn't running.
 
 ### Install Frame
 

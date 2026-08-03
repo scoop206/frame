@@ -16,6 +16,14 @@
 # exact window.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
+# Everything below rides AppleScript/System Events — macOS-only, even under
+# Linux Ghostty. Refuse up front with the real reason, not a downstream
+# "is Ghostty installed?" that would mislead a Linux Ghostty user.
+if ! frame_is_macos; then
+  echo "$X_MARK frame focus is macOS-only — it raises windows via AppleScript/System Events" >&2
+  exit 1
+fi
+
 if (( $# )); then
   ARG="$*"
   if [[ "$ARG" == */* ]]; then
