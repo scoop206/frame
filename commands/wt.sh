@@ -283,6 +283,9 @@ export FRAME_HOOK_DRIFT="${(j:, :)_hook_drift}"
 # so the registry reads exactly like the config. FRAME_* stays reserved for
 # frame-computed values with no config counterpart.
 export SERVER_CMD="${SERVER_CMD:-}"
+# Where the vite buffer runs `npm run dev`. Defaults to the classic web/
+# subdir; root-dir npm apps (e.g. an Astro site) set VITE_DIR=. in config.sh.
+export VITE_DIR="${VITE_DIR:-web}"
 export PORT_PREFIX
 frame_export_claude_flags
 

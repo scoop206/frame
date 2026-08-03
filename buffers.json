@@ -10,7 +10,7 @@
   { "name": "vite",
     "mode": "durable",
     "command": "npm run dev",
-    "dir": "web",
+    "dir": "${VITE_DIR}",
     "env": ["${PORT_PREFIX}_VITE_PORT", "${PORT_PREFIX}_HMR_PORT"] },
 
   { "name": "ngrok",
