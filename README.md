@@ -409,7 +409,7 @@ Everything project-side lives under one `.frame/` directory:
 
 ### Examples
 
-Four worked, copyable integrations live in [`examples/`](examples) — each a
+Worked, copyable integrations live in [`examples/`](examples) — each a
 complete `.frame/config.sh` plus the `.claude/settings.json` that `frame init`
 writes:
 
