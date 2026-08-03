@@ -430,6 +430,7 @@ The keys a project sets:
 | `NAME`                                          | yes      | project name; window titles, worktree dirs, and `PORT_PREFIX` derive from it (defaults to the checkout's directory name) |
 | `BUFFERS=(…)`                                   | yes      | which buffers each frame opens, e.g. `(claude local)` — see [Buffer Definitions](#buffer-definitions)                    |
 | `SERVER_CMD`                                    | no       | the command that starts your dev server; runs verbatim in the [`server`](buffers.json) buffer type and must bind `$PORT` |
+| `VITE_DIR`                                      | no       | the directory the [`vite`](buffers.json) buffer runs in (default `web`; set `.` for a root-dir npm app, e.g. Astro)      |
 | `API_PORT` `VITE_PORT` `HMR_PORT` `PORT_PREFIX` | no       | port configuration — see [Port assignment](#port-assignment) below                                                       |
 
 Hooks:
@@ -490,8 +491,8 @@ Per entry:
 | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | name    | buffer name (targeted by `BUFFERS`)                                                                                                                        |
 | mode    | `durable` (default) runs the command then drops to a shell on exit; `prefill` types the command at the prompt without running it; `bare` is an empty shell |
-| command | the command the buffer runs                                                                                                                                |
-| dir     | subdirectory to run in                                                                                                                                     |
+| command | the command the buffer runs — `${VAR}`s replaced from the boot environment                                                                                 |
+| dir     | subdirectory to run in — same `${VAR}` replacement (e.g. `vite` runs in `${VITE_DIR}`); resolving empty → the worktree root                                |
 | env     | vars the command reads — a declared contract; frame warns at boot if unset                                                                                 |
 | focus   | land here after boot                                                                                                                                       |
 

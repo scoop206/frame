@@ -842,7 +842,8 @@ end
 -- single registry of every buffer frame supports — project-unique buffers
 -- are defined there too; there is no project-level registry. Per entry:
 -- name; mode (bare | durable | prefill, default durable); command — ${VAR}
--- replaced from the environment at boot; optional dir to run in; env — vars
+-- replaced from the environment at boot; optional dir to run in (same ${VAR}
+-- replacement; resolving empty → run at the worktree root); env — vars
 -- the command reads (a declared contract: unset ones are warned about, never
 -- set here); focus — land here after boot.
 --
@@ -883,8 +884,10 @@ local focus, launched, missing = nil, 0, {}
 for _, b in ipairs(picked) do
   local mode = b.mode or 'durable'
   local cmd = interpolate(b.command or '')
+  local dir = interpolate(b.dir or '')
+  if dir == '' then dir = nil end
   if cmd == '' then mode = 'bare' end
-  if mode == 'durable' then term_durable(b.name, cmd, b.dir)
+  if mode == 'durable' then term_durable(b.name, cmd, dir)
   elseif mode == 'prefill' then term_prefill(b.name, cmd)
   else term(b.name, '') end
   -- Right after term*(), the new terminal is the current buffer — record its
