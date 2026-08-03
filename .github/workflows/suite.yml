@@ -1,0 +1,27 @@
+# The shared test-suite steps, parameterized by runner OS. Not triggered
+# directly: test-macos.yml and test-linux.yml each call this — split so each
+# OS is its own workflow and gets its own README badge (badges are
+# per-workflow; a matrix job can't badge per leg).
+name: suite
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+
+jobs:
+  test:
+    runs-on: ${{ inputs.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install zsh (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
+      - name: Lint
+        run: zsh tests/run.sh --lint
+      - name: Usage doc is current
+        run: make check-usage
+      - name: Test
+        run: zsh tests/run.sh

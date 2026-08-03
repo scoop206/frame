@@ -1,0 +1,12 @@
+name: macos
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    uses: ./.github/workflows/suite.yml
+    with:
+      os: macos-15
