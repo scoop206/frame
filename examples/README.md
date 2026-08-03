@@ -13,7 +13,7 @@ leaves nothing else to add.
 | [`standard-web/`](standard-web) | the default web stack: a server + vite app on the shared postgres/minio     |
 | [`sidecar/`](sidecar)           | additionally running its own project-unique container from its compose file |
 
-The `.claude/settings.json` is identical in all three — frame writes the same
+The `.claude/settings.json` is identical in all four — frame writes the same
 canonical hooks for every project (see the main README's
 [Onboarding a project](../README.md#onboarding-a-project) step for the
 event-by-event breakdown). The `.frame/config.sh` is the part that varies, and
