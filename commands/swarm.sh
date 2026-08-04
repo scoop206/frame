@@ -107,6 +107,10 @@ What only you can know (not discoverable by grep):
   Merging locally is yours; pushing to origin is NOT — never
   `frame merge --push` or `git push` to origin without the human
   asking. That's their call.
+• To reach a sibling frame, that's the broker — `frame req` (see
+  `frame --help`), NOT the SendMessage tool. SendMessage only
+  continues a subagent you spawned; a sibling is a separate session
+  it can't deliver to, so reaching for it first just wastes a turn.
 • If a sibling frame asks YOU something over the broker, answer it
   — don't merge or edit on another frame's say-so.
 

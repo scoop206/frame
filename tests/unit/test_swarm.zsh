@@ -91,6 +91,18 @@ test_context_level_1_has_identity_and_safety() {
   assert_contains "$OUT" "answer it"
 }
 
+test_context_level_1_steers_off_sendmessage_to_frame_req() {
+  # The SendMessage-tool temptation fires whenever a frame decides to reach a
+  # sibling — level-independent — so the core (level 1) must redirect it to the
+  # broker, even though the full ask recipe stays at level 2.
+  run_frame swarm 1
+  export FRAME_NAME=flipnem FRAME_TOPIC=x FRAME_VITE_PORT=5173
+  run_frame swarm --context
+  assert_status 0
+  assert_contains "$OUT" "SendMessage"
+  assert_contains "$OUT" "frame req"
+}
+
 test_context_level_1_omits_ask_recipe() {
   # The ask-a-sibling recipe belongs to level 2 — level 1 must not carry it.
   run_frame swarm 1
