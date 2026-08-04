@@ -591,6 +591,32 @@ vim.api.nvim_create_user_command('FrameStatus', function(opts)
   _G.FrameSetStatus(opts.args)
 end, { nargs = '*', desc = 'Set window-title status suffix (empty clears)' })
 
+-- :FrameName — yank this frame's identity (name/topic) into the system
+-- clipboard, so you can paste it straight into another frame to address it
+-- (frame req/focus/view all take NAME/TOPIC). Solves the un-selectable Ghostty
+-- title: instead of eyeballing the title bar or scanning `frame ls`, one
+-- command puts the grabbable handle on the clipboard. name/topic is the
+-- unambiguous form — a bare topic can collide across projects.
+--
+-- Cross-platform clipboard, no global vim.g.clipboard override (that would
+-- clobber the user's own config, and layout sources after init.lua):
+--   • setreg('+') — hands off to whatever provider nvim detected: pbcopy on
+--     macOS (always present), wl-copy/xclip on Linux only if installed.
+--   • OSC 52 — a copy escape sequence Ghostty relays to the system clipboard
+--     itself, so it works with no provider at all and over SSH. This is the
+--     floor that keeps Linux/headless boxes working. Wrapped in pcall: the
+--     module is Neovim 0.10+, and a miss must not sink the command.
+-- Both run; on macOS they're redundant (same text), which is harmless.
+vim.api.nvim_create_user_command('FrameName', function()
+  local identity = name .. '/' .. topic
+  vim.fn.setreg('+', identity)
+  vim.fn.setreg('"', identity)
+  pcall(function()
+    require('vim.ui.clipboard.osc52').copy('+')({ identity })
+  end)
+  vim.notify('frame: copied ' .. identity)
+end, { desc = 'Copy this frame’s name/topic to the system clipboard' })
+
 -- Banner silence switch, session-scoped: before popping a macOS banner,
 -- `frame notify` asks this session over the socket — get(g:, 'frame_notify_muted', 0)
 -- — so the silence lives with the frame and dies with it. Only the banner+sound
