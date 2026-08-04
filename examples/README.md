@@ -75,6 +75,11 @@ happens to be Rust here, but that's incidental: `SERVER_CMD` is any command that
 starts a server (Go, Node, Python, …). Only the shape matters — claim a tenant
 in `stack_up()`, point the app at it in `app_env()`.
 
+The `devpassword` in `DATABASE_URL` is `ensure_pg_db`'s dev-only default —
+pass a second argument (`ensure_pg_db NAME PASSWORD`) to choose your own. The
+stack's admin credentials are overridable too, machine-wide; see
+[Service credentials](../README.md#service-credentials).
+
 ### sidecar
 
 Everything above, plus a project-unique container (an HTTP sidecar) defined in

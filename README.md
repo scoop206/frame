@@ -518,6 +518,35 @@ project. There is no per-project setup.
 - **Data** lives in named docker volumes (`pgdata`, `miniodata`) and survives
   `frame services down`.
 
+### Service credentials
+
+The stack boots with intentional dev-only defaults — `frame`/`devpassword` on
+postgres, `minioadmin`/`minioadmin` on minio — and both services bind to
+`127.0.0.1` only, so nothing is reachable from the network. To use your own
+credentials without editing the checked-in compose file, export overrides in
+the machine-wide config (`~/.config/frame/config.sh`):
+
+```sh
+export FRAME_PG_USER=frame            # postgres superuser
+export FRAME_PG_PASSWORD=…
+export FRAME_MINIO_USER=…             # minio root
+export FRAME_MINIO_PASSWORD=…         # URL-safe characters only (no : / @)
+```
+
+Compose interpolates these wherever the stack comes up (`frame wt` via
+`stack_up()`, or `frame services up`); unset, the defaults apply.
+
+Two things to know:
+
+- **Postgres applies `FRAME_PG_PASSWORD` only when the `pgdata` volume is
+  first created.** Set overrides before your first boot; changing them later
+  leaves the existing cluster on its old password (reset with
+  `frame services down && docker volume rm frame_pgdata`). Minio picks up new
+  root credentials on the next restart.
+- These are the **admin** credentials. Your app connects as its per-project
+  role from `ensure_pg_db NAME [PASSWORD]` (default `devpassword`) — pass your
+  own password there and put the same one in `app_env()`'s `DATABASE_URL`.
+
 ## License
 
 [MIT](LICENSE)

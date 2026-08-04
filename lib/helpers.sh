@@ -74,12 +74,9 @@ frame_load_config() {
   MAIN_WT=$(frame_main_wt "$PROJECT_ROOT")
 
   # Machine-wide base layer: personal hooks (e.g. merge_epilog) shared by every
-  # project on this box, in XDG-standard ~/.config/frame/config.sh. Sourced
-  # BEFORE the project config so any project can override or unset what it
-  # defines. Opt-in and sourced — unlike $FRAME_GLOBAL_CONFIG (key=value, never
-  # sourced so hot-path reads execute nothing).
-  local _global="${XDG_CONFIG_HOME:-$HOME/.config}/frame/config.sh"
-  [[ -f "$_global" ]] && source "$_global"
+  # project on this box. Sourced BEFORE the project config so any project can
+  # override or unset what it defines.
+  frame_source_machine_config
 
   local _dir _f _cfg=""
   for _dir in "$PROJECT_ROOT" "$MAIN_WT"; do
@@ -95,6 +92,16 @@ frame_load_config() {
   # env-var prefix the project's own code reads (e.g. FLIPNEM_VITE_PORT).
   : "${NAME:=${MAIN_WT:t}}"
   : "${PORT_PREFIX:=${(U)NAME//-/_}}"
+}
+
+frame_source_machine_config() {
+  # The XDG-standard ~/.config/frame/config.sh — personal hooks and service
+  # overrides (FRAME_PG_*/FRAME_MINIO_*) shared by every project on this box.
+  # Opt-in and sourced — unlike $FRAME_GLOBAL_CONFIG (key=value, never sourced
+  # so hot-path reads execute nothing).
+  local _global="${XDG_CONFIG_HOME:-$HOME/.config}/frame/config.sh"
+  [[ -f "$_global" ]] && source "$_global"
+  return 0
 }
 
 frame_self_identity() {
@@ -778,6 +785,10 @@ ensure_docker() {
 
 frame_services_up() {
   # frame_services_up [postgres] [minio] — start (default: both) and wait ready.
+  # Compose interpolates FRAME_PG_*/FRAME_MINIO_* credential overrides from the
+  # environment; source the machine config here too so `frame services up` from
+  # a bare shell (no frame_load_config) still sees them.
+  frame_source_machine_config
   ensure_docker
   if (( $# == 0 )); then set -- postgres minio; fi
   echo "$RUN_MARK starting shared services: $*…"
@@ -799,7 +810,7 @@ frame_services_up() {
 wait_for_pg() {
   echo "$RUN_MARK waiting for postgres…"
   until docker compose -f "$FRAME_SERVICES_COMPOSE" exec -T postgres \
-        pg_isready -U frame -d frame >/dev/null 2>&1; do
+        pg_isready -U "${FRAME_PG_USER:-frame}" -d frame >/dev/null 2>&1; do
     sleep 0.5
   done
   echo "$OK_MARK postgres ready"
@@ -820,7 +831,7 @@ ensure_pg_db() {
   local _db=$1 _pass=${2:-devpassword}
   local -a _psql
   _psql=(docker compose -f "$FRAME_SERVICES_COMPOSE" exec -T postgres
-         psql -U frame -d frame -v ON_ERROR_STOP=1 -qAt)
+         psql -U "${FRAME_PG_USER:-frame}" -d frame -v ON_ERROR_STOP=1 -qAt)
   if [[ "$("${_psql[@]}" -c "SELECT 1 FROM pg_roles WHERE rolname='$_db'")" != 1 ]]; then
     "${_psql[@]}" -c "CREATE ROLE \"$_db\" LOGIN PASSWORD '$_pass'" >/dev/null
     echo "$OK_MARK created role $_db"
