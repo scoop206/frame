@@ -9,14 +9,14 @@ services:
     image: postgres:17
     environment:
       POSTGRES_DB: frame
-      POSTGRES_USER: frame
-      POSTGRES_PASSWORD: devpassword
+      POSTGRES_USER: ${FRAME_PG_USER:-frame}
+      POSTGRES_PASSWORD: ${FRAME_PG_PASSWORD:-devpassword}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U frame -d frame"]
+      test: ["CMD-SHELL", "pg_isready -U ${FRAME_PG_USER:-frame} -d frame"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -25,8 +25,8 @@ services:
     image: minio/minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${FRAME_MINIO_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${FRAME_MINIO_PASSWORD:-minioadmin}
     ports:
       - "127.0.0.1:9000:9000"   # S3 API
       - "127.0.0.1:9001:9001"   # web console
@@ -40,7 +40,8 @@ services:
     image: minio/mc
     profiles: ["tools"]
     environment:
-      MC_HOST_local: http://minioadmin:minioadmin@minio:9000
+      # Credentials must stay URL-safe (no : / @) — this is a URL.
+      MC_HOST_local: http://${FRAME_MINIO_USER:-minioadmin}:${FRAME_MINIO_PASSWORD:-minioadmin}@minio:9000
     entrypoint: ["mc"]
 
 volumes:
