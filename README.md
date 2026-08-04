@@ -212,6 +212,7 @@ When frame instantiates the nvim instance it injects these user commands
 | command                   | action                                                                                                                 |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `:FrameStatus TEXT…`      | append "- TEXT" to the window title's status suffix (no TEXT clears it)                                                |
+| `:FrameName`              | copy this frame's `name/topic` to the system clipboard — the handle to paste into another frame's `frame req`/`focus` |
 | `:FrameSilence [off]`     | silence this frame's banners (no arg, or 'on'); pass 'off' to unsilence                                                |
 | `:FrameQuit`              | quit the session only — worktree and branch stay for a later `frame wt TOPIC`                                          |
 | `:FrameDown`              | tear down the whole frame: quit nvim, remove the worktree, delete the branch                                           |
