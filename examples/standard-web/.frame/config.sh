@@ -27,6 +27,8 @@ stack_up() {
 
 # Point the app at the shared services. Exported before the server launches,
 app_env() {
+  # devpassword is ensure_pg_db's dev-only default — pass your own
+  # (ensure_pg_db standard-web PASSWORD) and update this URL to match.
   export DATABASE_URL=postgres://standard-web:devpassword@localhost:5432/standard-web
   export S3_ENDPOINT=http://localhost:9000
 

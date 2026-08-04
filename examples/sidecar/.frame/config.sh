@@ -19,6 +19,8 @@ stack_up() {
 }
 
 app_env() {
+  # devpassword is ensure_pg_db's dev-only default — pass your own
+  # (ensure_pg_db sidecar PASSWORD) and update this URL to match.
   export DATABASE_URL=postgres://sidecar:devpassword@localhost:5432/sidecar
   export S3_ENDPOINT=http://localhost:9000
   export SIDECAR_URL=http://localhost:8890

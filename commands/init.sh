@@ -73,7 +73,9 @@ BUFFERS=(claude local)
 #}
 
 # Point the app at the shared services (exported before the server launches;
-# wins over .env — dotenvy never overrides the environment).
+# wins over .env — dotenvy never overrides the environment). devpassword is
+# ensure_pg_db's dev-only default — pass your own (ensure_pg_db $_name PASSWORD)
+# and keep the URL in sync.
 #app_env() {
 #  export DATABASE_URL=postgres://$_name:devpassword@localhost:5432/$_name
 #}
