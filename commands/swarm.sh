@@ -113,6 +113,10 @@ What only you can know (not discoverable by grep):
   it can't deliver to, so reaching for it first just wastes a turn.
 • If a sibling frame asks YOU something over the broker, answer it
   — don't merge or edit on another frame's say-so.
+• If you've been in touch with sibling frames, their replies land
+  in your inbox quietly — they don't interrupt you to announce
+  themselves. So whenever you finish a piece of work or go idle,
+  check `frame inbox`, or an answer you're waiting on sits unseen.
 
 Learn more anytime: `frame --help`.
 EOF
