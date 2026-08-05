@@ -70,7 +70,7 @@
 
 `worktree` is a synonym for `wt`; `list` for `ls`.  
 Not shown here: `spawn`,
-`deliver`, `reply`, `view`, `status`, `notify`, `notifications`, `silence`, and every
+`deliver`, `reply`, `view`, `status`, `name`, `notify`, `notifications`, `silence`, and every
 `--flag` — see `frame --help` ([full usage](docs/usage.md)).
 
 ## Other Features

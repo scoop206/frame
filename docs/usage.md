@@ -63,6 +63,9 @@ Usage:
     frame status [TEXT…]              append "- TEXT" to this frame's window
                                       title (no TEXT restores the base title)
 
+    frame name                        print this frame's NAME/TOPIC to stdout —
+                                      the handle for frame req/focus/view
+
     frame focus [TOPIC|NAME/TOPIC]    raise that frame's ghostty window
                                       (default: the frame you're in)
 
