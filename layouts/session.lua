@@ -2,7 +2,7 @@
 -- Sourced by `frame wt` and `frame shell`:  nvim -S layouts/session.lua
 --
 -- For worktree frames it runs the worktree's own server and vite on the
--- free ports commands/wt.sh exported (PORT / <PREFIX>_VITE_PORT / …, inherited
+-- free ports commands/wt.sh exported (PORT / FRAME_VITE_PORT / …, inherited
 -- by these terminal buffers). Docker services stay owned by the primary env.
 -- Shell frames source the same file with FRAME_MAIN_WT empty ("no primary
 -- checkout"), which selects the quit-only :FrameDown.
@@ -13,8 +13,8 @@
 --   FRAME_MAIN_WT     primary checkout (reaper cwd for :FrameDown)
 --   FRAME_VITE_PORT   this worktree's vite port (title + ngrok target)
 --   FRAME_BUFFERS     the buffers to open (authoritative; empty → none)
--- Config vars that buffers.json references (SERVER_CMD, PORT_PREFIX, the
--- scanned ports) are exported by wt.sh under their own names.
+-- Config vars that buffers.json references (SERVER_CMD, the scanned ports)
+-- are exported by wt.sh under their own names.
 -- The buffers themselves come from the buffers.json registry (see below).
 
 vim.o.hidden = true
@@ -156,7 +156,7 @@ end
 -- FrameInfo; sessions booted before this helper lack it, so `frame view` falls
 -- back to the FrameInfo fields for them. Keep the keys in step with view.sh.
 _G.FrameDebug = function()
-  local prefix = vim.env.PORT_PREFIX or ''
+  local prefix = vim.env.FRAME_PORT_PREFIX or ''
   -- env(k): a session env var, or '' when unset/empty (view.sh renders '-').
   local function env(k) local v = vim.env[k]; return (v ~= nil and v ~= '') and v or '' end
   -- inbox peek: count + senders, mapping an empty sender to '-'. Never drains.
@@ -181,7 +181,7 @@ _G.FrameDebug = function()
     'prefix\t' .. prefix,
     'api_port\t' .. env('PORT'),
     'vite_port\t' .. vite_port,
-    'hmr_port\t' .. (prefix ~= '' and env(prefix .. '_HMR_PORT') or ''),
+    'hmr_port\t' .. env('FRAME_HMR_PORT'),
     'server\t' .. env('SERVER_CMD'),
     'buffers\t' .. table.concat(bufs, ','),
     'broker_inflight\t' .. (b.inflight or ''),

@@ -79,13 +79,23 @@ test_non_git_dir_fails() {
 }
 
 test_barebones_example_loads() {
+  # The example sets no NAME — it falls back to the checkout's dirname.
   make_repo
   mkdir -p "$REPO/.frame"
   cp "$FRAME_CHECKOUT/examples/barebones/.frame/config.sh" "$REPO/.frame/config.sh"
   frame_load_config
-  assert_eq "$NAME" "barebones"
-  assert_eq "$PORT_PREFIX" "BAREBONES"
+  assert_eq "$NAME" "${REPO:t}"
   assert_eq "${BUFFERS[*]}" "claude local"
+}
+
+test_port_prefix_squashes_non_alnum() {
+  # A dotted dirname (a domain-named project) must still derive a legal
+  # env-var prefix: every non-alphanumeric becomes '_'.
+  git init -q "$SANDBOX/example.com"
+  cd "$SANDBOX/example.com"
+  frame_load_config
+  assert_eq "$NAME" "example.com"
+  assert_eq "$PORT_PREFIX" "EXAMPLE_COM"
 }
 
 run_tests "$0"

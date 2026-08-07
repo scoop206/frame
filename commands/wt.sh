@@ -248,12 +248,15 @@ done
 
 # Free ports, scanned upward from the project's primary-env defaults (primary
 # on 3000/5173/24678 → first worktree 3001/5174/24679, and so on). Exported
-# with the project's own prefix so its code inherits them.
+# under the rename-proof FRAME_* names app code should read, plus the
+# project-prefixed aliases for code already reading those.
 FRAME_VITE_PORT=""
 if [[ -n "${API_PORT:-}${VITE_PORT:-}" ]]; then
   export PORT=$(find_free_port "${API_PORT:-3000}")
   FRAME_VITE_PORT=$(find_free_port "${VITE_PORT:-5173}")
   _hmr=$(find_free_port "${HMR_PORT:-24678}")
+  export FRAME_API_PORT=$PORT
+  export FRAME_HMR_PORT=$_hmr
   export "${PORT_PREFIX}_API_PORT=$PORT"
   export "${PORT_PREFIX}_VITE_PORT=$FRAME_VITE_PORT"
   export "${PORT_PREFIX}_HMR_PORT=$_hmr"
@@ -286,7 +289,12 @@ export SERVER_CMD="${SERVER_CMD:-}"
 # Where the vite buffer runs `npm run dev`. Defaults to the classic web/
 # subdir; root-dir npm apps (e.g. an Astro site) set VITE_DIR=. in config.sh.
 export VITE_DIR="${VITE_DIR:-web}"
-export PORT_PREFIX
+# NOT `export PORT_PREFIX`: exported, it leaks into every process this frame
+# spawns, and a frame_load_config run in there (frame wt/spawn for another
+# project) would inherit THIS project's prefix instead of deriving its own —
+# same leak spawn.sh guards against with `unset NAME`. The layout's view row
+# reads the frame-computed copy instead.
+export FRAME_PORT_PREFIX="$PORT_PREFIX"
 frame_export_claude_flags
 
 # Refuse before exec if a boot-critical dependency is missing (see frame_require).

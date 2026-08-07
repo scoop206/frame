@@ -88,10 +88,15 @@ frame_load_config() {
     source "$_cfg"
   fi
 
-  # NAME defaults to the primary checkout's directory name; PORT_PREFIX is the
-  # env-var prefix the project's own code reads (e.g. FLIPNEM_VITE_PORT).
+  # NAME defaults to the primary checkout's directory name, so it follows a
+  # repo rename — most projects never set it. PORT_PREFIX namespaces the
+  # prefixed port exports (e.g. FLIPNEM_VITE_PORT, see wt.sh); the derivation
+  # squashes anything not alphanumeric to '_' so a dotted dirname
+  # (example.com) still yields a legal env-var prefix. A project whose
+  # committed code reads prefixed vars should pin PORT_PREFIX in config.sh —
+  # the derived value silently drifts away from the app code on a rename.
   : "${NAME:=${MAIN_WT:t}}"
-  : "${PORT_PREFIX:=${(U)NAME//-/_}}"
+  : "${PORT_PREFIX:=${(U)NAME//[^[:alnum:]]/_}}"
 }
 
 frame_source_machine_config() {

@@ -12,7 +12,10 @@ test_init_fresh_repo() {
   assert_status 0
   assert_contains "$OUT" "scaffolded — edit it to fit"
   assert_file_exists "$REPO/.frame/config.sh"
-  assert_contains "$(<$REPO/.frame/config.sh)" "NAME=$TNAME"
+  # NAME is dynamic (defaults to the checkout's dirname) — the scaffold only
+  # carries it as a commented-out pin, never sets it.
+  assert_contains "$(<$REPO/.frame/config.sh)" "#NAME=$TNAME"
+  assert_not_contains "$(<$REPO/.frame/config.sh)" $'\nNAME='
   assert_dir_exists "$REPO/.frame/local"
   grep -qxF '.frame/local/' "$REPO/.gitignore" || fail ".gitignore missing .frame/local/"
 }
@@ -190,8 +193,8 @@ test_init_in_worktree_uses_primary_name() {
   cd "$SANDBOX/some-random-dirname"
   run_frame init
   assert_status 0
-  # NAME comes from the primary checkout's basename, not the worktree dir
-  assert_contains "$(<$SANDBOX/some-random-dirname/.frame/config.sh)" "NAME=$TNAME"
+  # the commented NAME pin names the primary checkout, not the worktree dir
+  assert_contains "$(<$SANDBOX/some-random-dirname/.frame/config.sh)" "#NAME=$TNAME"
 }
 
 run_tests "$0"
