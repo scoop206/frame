@@ -122,7 +122,9 @@ EOF
   assert_contains "$log" "${prefix}_API_PORT=4001"
   assert_contains "$log" "${prefix}_VITE_PORT=5000"
   assert_contains "$log" "${prefix}_HMR_PORT=6000"
+  assert_contains "$log" "FRAME_API_PORT=4001"
   assert_contains "$log" "FRAME_VITE_PORT=5000"
+  assert_contains "$log" "FRAME_HMR_PORT=6000"
 }
 
 test_wt_links_symlinks_gitignored_assets() {

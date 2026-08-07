@@ -1,11 +1,6 @@
 # Frame project config — committed project facts (like an .env.dev + hooks).
 # Personal overrides go in .frame/local/config.sh (gitignored, wins over this).
-NAME=astrojs
-
-# NAME feeds PORT_PREFIX (upcased, hyphens → underscores). If you name the
-# project after its domain (NAME=example.com), the dot survives into the
-# derived prefix — not a legal env-var name — so override it explicitly:
-#PORT_PREFIX=EXAMPLE_COM
+# NAME isn't set: it defaults to the checkout's directory name.
 
 # Required: which buffers each frame opens (definitions live in frame's
 # buffers.json). A static site has no backend, so no server/ngrok here —
@@ -17,8 +12,8 @@ BUFFERS=(claude local vite)
 VITE_DIR=.
 
 # Base dev-server port (Astro's stock 4321); each frame scans upward from it
-# and exports the pick as ${PORT_PREFIX}_VITE_PORT for astro.config.mjs to
-# read (see examples/README.md for the app-side snippet).
+# and exports the pick as FRAME_VITE_PORT for astro.config.mjs to read (see
+# examples/README.md for the app-side snippet).
 VITE_PORT=4321
 
 # Gitignored assets symlinked into fresh worktrees. The default list covers

@@ -51,7 +51,12 @@ else
   cat > .frame/config.sh <<EOF
 # Frame project config — committed project facts (like an .env.dev + hooks).
 # Personal overrides go in .frame/local/config.sh (gitignored, wins over this).
-NAME=$_name
+
+# NAME defaults to the primary checkout's directory name ($_name today) and
+# follows a rename automatically — window titles, worktree dirs, and frame
+# addresses all derive from it. Set it only to pin a name that outlives the
+# directory.
+#NAME=$_name
 
 # Required: which buffers each frame opens (definitions live in frame's
 # buffers.json). Authoritative even when empty — BUFFERS=() opens none.
@@ -59,7 +64,9 @@ BUFFERS=(claude local)
 
 # Uncomment what applies; everything below is optional.
 #SERVER_CMD='cargo run -p $_name-server'
-#API_PORT=3000  VITE_PORT=5173  HMR_PORT=24678   # base ports; each frame scans upward
+# Base ports; each frame scans upward and exports its picks as PORT /
+# FRAME_API_PORT / FRAME_VITE_PORT / FRAME_HMR_PORT for your code to read.
+#API_PORT=3000  VITE_PORT=5173  HMR_PORT=24678
 #WT_LINKS=(.env web/node_modules)   # gitignored assets symlinked into fresh worktrees
 
 # Bring up everything the dev stack needs — runs on every \`frame wt\` boot, so

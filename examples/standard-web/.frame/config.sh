@@ -1,4 +1,4 @@
-NAME=standard-web
+# NAME isn't set: it defaults to the checkout's directory name.
 
 # Whatever command starts this project's dev server — it runs verbatim in the
 # layout's `server` buffer.  It inherits the exported ports below, so the server 
@@ -8,8 +8,8 @@ SERVER_CMD='cargo run -p standard-web-server'
 # The primary checkout's normal dev ports (api / vite dev server / vite HMR
 # websocket). These are bases: each frame scans upward from them for free
 # ports (primary 3000/5173/24678 → first worktree 3001/5174/24679, …) and
-# exports the result as PORT plus STANDARD_WEB_API_PORT / _VITE_PORT /
-# _HMR_PORT for the server and vite.config to read. Vite's defaults are
+# exports the result as PORT plus FRAME_API_PORT / FRAME_VITE_PORT /
+# FRAME_HMR_PORT for the server and vite.config to read. Vite's defaults are
 # 5173/24678; pick per-project bases (e.g. 3100/5273/24778) if you run several
 # projects' primary envs side by side and want predictable ports.
 API_PORT=3000  VITE_PORT=5173  HMR_PORT=24678

@@ -414,7 +414,7 @@ Worked, copyable integrations live in [`examples/`](examples) — each a
 complete `.frame/config.sh` plus the `.claude/settings.json` that `frame init`
 writes:
 
-- [`barebones/`](examples/barebones) — the minimum: a `config.sh` with just `NAME`
+- [`barebones/`](examples/barebones) — the minimum: a `config.sh` with just `BUFFERS`
 - [`astrojs/`](examples/astrojs) — a root-dir npm app (an Astro static site): just the vite buffer, no backend
 - [`standard-web/`](examples/standard-web) — a server + vite app on the shared postgres/minio
 - [`sidecar/`](examples/sidecar) — everything above, plus its own project-unique container
@@ -429,7 +429,7 @@ The keys a project sets:
 
 | key                                             | required | purpose                                                                                                                  |
 | ----------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `NAME`                                          | yes      | project name; window titles, worktree dirs, and `PORT_PREFIX` derive from it (defaults to the checkout's directory name) |
+| `NAME`                                          | no       | project name; window titles, worktree dirs, and frame addresses derive from it. Defaults to the primary checkout's directory name — so it follows a repo rename. Set it only to pin a name that outlives the directory |
 | `BUFFERS=(…)`                                   | yes      | which buffers each frame opens, e.g. `(claude local)` — see [Buffer Definitions](#buffer-definitions)                    |
 | `SERVER_CMD`                                    | no       | the command that starts your dev server; runs verbatim in the [`server`](buffers.json) buffer type and must bind `$PORT` |
 | `VITE_DIR`                                      | no       | the directory the [`vite`](buffers.json) buffer runs in (default `web`; set `.` for a root-dir npm app, e.g. Astro)      |
@@ -461,12 +461,12 @@ themselves (`3000` / `5173` / `24678`), the next worktree one higher (`3001` /
 You set the bases (all optional — omit them for a project with no web server and
 nothing is scanned or exported):
 
-| key           | default                      | base port for                    |
-| ------------- | ---------------------------- | -------------------------------- |
-| `API_PORT`    | `3000`                       | your server buffer's dev server  |
-| `VITE_PORT`   | `5173`                       | the vite dev server              |
-| `HMR_PORT`    | `24678`                      | vite's HMR websocket             |
-| `PORT_PREFIX` | `NAME`, upper-cased, `-`→`_` | prefixes the exported vars below |
+| key           | default                                      | base port for                              |
+| ------------- | -------------------------------------------- | ------------------------------------------ |
+| `API_PORT`    | `3000`                                       | your server buffer's dev server            |
+| `VITE_PORT`   | `5173`                                       | the vite dev server                        |
+| `HMR_PORT`    | `24678`                                      | vite's HMR websocket                       |
+| `PORT_PREFIX` | `NAME`, upper-cased, non-alphanumerics → `_` | prefixes the legacy per-project vars below |
 
 Frame exports the ports it actually picked; your app and `vite.config.*` read
 them:
@@ -474,14 +474,22 @@ them:
 | var                  | example                  | what it is                                           |
 | -------------------- | ------------------------ | ---------------------------------------------------- |
 | `PORT`               | `3001`                   | the chosen server port — `SERVER_CMD` must bind this |
+| `FRAME_API_PORT`     | `3001`                   | the server port again, under frame's own name        |
+| `FRAME_VITE_PORT`    | `5174`                   | the chosen vite port                                 |
+| `FRAME_HMR_PORT`     | `24679`                  | the chosen HMR websocket port                        |
 | `<PREFIX>_API_PORT`  | `FLIPNEM_API_PORT=3001`  | the server port, under your project prefix           |
-| `<PREFIX>_VITE_PORT` | `FLIPNEM_VITE_PORT=5174` | the chosen vite port                                 |
-| `<PREFIX>_HMR_PORT`  | `FLIPNEM_HMR_PORT=24679` | the chosen HMR websocket port                        |
+| `<PREFIX>_VITE_PORT` | `FLIPNEM_VITE_PORT=5174` | the vite port, under your project prefix             |
+| `<PREFIX>_HMR_PORT`  | `FLIPNEM_HMR_PORT=24679` | the HMR port, under your project prefix              |
 
-`PORT` is the generic handle the `server` buffer binds; the `<PREFIX>_*` vars are
-those same values namespaced, so several projects' frames can coexist in one
-environment without stepping on each other. If your app reads its port under yet
-another name, re-export it in `app_env()` (e.g. `export SERVICE_PORT="$PORT"`).
+`PORT` is the generic handle the `server` buffer binds; the `FRAME_*` vars are
+the names to read from `vite.config.*` and friends — they never change, no
+matter what the project or its directory is called. The `<PREFIX>_*` aliases
+carry the same values for app code already reading project-prefixed names;
+that prefix is baked into committed code, so if you rely on it, pin
+`PORT_PREFIX` in `config.sh` — the derived default follows a directory rename
+and would silently stop matching what your code reads. If your app reads its
+port under yet another name, re-export it in `app_env()` (e.g. `export
+SERVICE_PORT="$PORT"`).
 
 ## Buffer Definitions
 

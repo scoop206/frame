@@ -1,4 +1,4 @@
-NAME=sidecar
+# NAME isn't set: it defaults to the checkout's directory name.
 BUFFERS=(local server vite ngrok claude)
 SERVER_CMD='cargo run -p sidecar-server'
 API_PORT=3200  VITE_PORT=5373  HMR_PORT=24878   # base ports; each frame scans upward
