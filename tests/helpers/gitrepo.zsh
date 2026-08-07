@@ -2,19 +2,23 @@
 # push/fetch/clone never leave the sandbox.
 
 make_repo() {
-  # make_repo [name] — bare origin + working repo with one pushed commit on
-  # main. cds into the repo and sets $REPO. Default name is $TNAME so frame's
-  # NAME defaults line up and $FRAME_RUNDIR/<NAME>-* paths stay unique per test.
-  local name=${1:-$TNAME}
+  # make_repo [name] [branch] — bare origin + working repo with one pushed
+  # commit on BRANCH (default main; pass e.g. master to model repos named that
+  # way — frame derives the primary branch, never assumes main). cds into the
+  # repo and sets $REPO. Default name is $TNAME so frame's NAME defaults line
+  # up and $FRAME_RUNDIR/<NAME>-* paths stay unique per test.
+  local name=${1:-$TNAME} branch=${2:-main}
   git init -q --bare "$SANDBOX/origin.git"
   git init -q "$SANDBOX/$name"
   REPO="$SANDBOX/$name"
   cd "$REPO"
+  # Rename the unborn branch (symbolic-ref works on any git, unlike init -b).
+  git symbolic-ref HEAD "refs/heads/$branch"
   print -r -- "# $name" > README.md
   git add README.md
   git commit -qm "initial commit"
   git remote add origin "$SANDBOX/origin.git"
-  git push -qu origin main 2>/dev/null
+  git push -qu origin "$branch" 2>/dev/null
 }
 
 make_topic() {
