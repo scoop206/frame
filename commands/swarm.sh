@@ -131,8 +131,13 @@ EOF
 You may ask sibling frames read-only questions — who owns what, a
 contract's shape, a second opinion on a diff. Ask and block for the
 answer, with a timeout so a busy or dead sibling can't hang you:
-    t=$(frame req NAME/TOPIC "your question")
+    t=$(frame req NAME/TOPIC "from $(frame name): your question — when done, reply with your status")
     frame inbox --wait --for "$t" --timeout 60
+When you initiate, always do both of those things in the message:
+state your own ID (`frame name` prints it) and ask for a status
+reply when the work is done. The target's claude sees only your
+text — not who sent it — and a turn that ends with no text
+delivers nothing home, so an unprompted sibling may finish silently.
 Find who to ask with `frame ls` (project · name · topic). Keep it
 bounded: at most a couple of sibling asks per turn, never more than
 2 broker hops deep, and ask only for INFORMATION — acting (edits,
