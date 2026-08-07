@@ -71,6 +71,19 @@ test_explicit_topic_overrides_cwd_branch() {
   assert_eq "$(git -C "$REPO" log -1 --format=%s main)" "Merge branch 'feature'"
 }
 
+test_master_primary_branch_is_honored() {
+  # Nothing hardcodes 'main': the primary branch is derived from the primary
+  # checkout, so a repo named 'master' merges and pushes identically.
+  make_repo "$TNAME" master
+  make_topic feature
+  cd "$REPO"
+  run_frame merge feature --push
+  assert_status 0
+  assert_contains "$OUT" "merging 'feature' → 'master'"
+  assert_contains "$OUT" "pushed master to origin"
+  assert_eq "$(git -C "$SANDBOX/origin.git" rev-parse master)" "$(git -C "$REPO" rev-parse master)"
+}
+
 test_merging_main_into_itself_fails() {
   setup_topic
   run_frame merge main

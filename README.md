@@ -49,7 +49,7 @@
 - The frame CLI injects lua and puts a message broker in front of claude.
 - frames join the pool and become discoverable via `frame ls`
 - In addition to claude you will typically have services like Vite and or binary backend service running in their own buffers. Frame manages the port assignments so you can stand up a frame per worktree/Topic.  
-  They are self contained and disposable: once a topic is merged (`frame merge`;`:FrameMerge`), tear the frame down (`frame wt -d`;`:FrameDown`). Merge and teardown are separate guarded steps to ensure a clean delivery back to main before frame disassembly.
+  They are self contained and disposable: once a topic is merged (`frame merge`;`:FrameMerge`) and, when you're ready, pushed (`frame push`;`:FramePush`), tear the frame down (`frame wt -d`;`:FrameDown`). Merge and teardown are separate guarded steps to ensure a clean delivery back to the primary branch before frame disassembly.
 - Ghostty is the intended terminal — window focus and spawn-into-tabs use its scripting — but a frame still runs in other terminals.
 
 | command                      | what it does                                                                           |
@@ -59,7 +59,8 @@
 | `frame wt -d [TOPIC]`        | tear down a frame (default: the current one)                                           |
 | `frame shell TOPIC`          | a frame with no repo — just the claude and local buffers                               |
 | `frame ls`                   | list every live frame across projects                                                  |
-| `frame merge [TOPIC]`        | merge a topic branch into main                                                         |
+| `frame merge [TOPIC]`        | merge a topic branch into the primary branch                                           |
+| `frame push`                 | push the primary branch to origin                                                      |
 | `frame claude TEXT…`         | ask this frame's claude, block for the answer                                          |
 | `frame req NAME/TOPIC TEXT…` | ask another frame's claude (async)                                                     |
 | `frame inbox`                | read replies routed back to you                                                        |
@@ -93,8 +94,6 @@ Not shown here: `spawn`,
 - docker with the compose v2 plugin (if running shared services)
 - macOS + OrbStack (any docker provider works if already running; auto-start is OrbStack-only) — Linux runs the core workflow, see [Platform support](#platform-support)
 - curl, lsof
-
-Frame also assumes **every project's default branch is named `main`**.
 
 #### Platform support
 
@@ -217,8 +216,9 @@ When frame instantiates the nvim instance it injects these user commands
 | `:FrameQuit`              | quit the session only — worktree and branch stay for a later `frame wt TOPIC`                                          |
 | `:FrameDown`              | tear down the whole frame: quit nvim, remove the worktree, delete the branch                                           |
 | `:FrameDown!`             | force teardown — discard uncommitted changes and unmerged commits                                                      |
-| `:FrameMerge`             | merge this frame's branch into main (same safeguards as `frame merge`)                                                 |
-| `:FrameMerge!`            | merge, then push main to origin (mirrors `frame merge --push`)                                                         |
+| `:FrameMerge`             | merge this frame's branch into the primary branch (same safeguards as `frame merge`)                                   |
+| `:FrameMerge!`            | merge, then push the primary branch to origin (mirrors `frame merge --push`)                                           |
+| `:FramePush`              | push the primary branch to origin (same safeguards as `frame push`)                                                    |
 | `:[range]FrameClaude [Q]` | open this frame's claude terminal; with a `[range]` paste the line/selection as context; with a question `Q` submit it |
 
 ### Asking claude from the editor — `:FrameClaude`
@@ -252,23 +252,28 @@ A good rule of thumb is to save often. That should mitigate the chance of a clob
 ## Frame Merge
 
 When a topic is done, `frame merge [TOPIC]` — or `:FrameMerge` from inside the
-frame — merges its branch into main from wherever you are, pushing to origin
-only when you ask (`--push`, or `:FrameMerge!`). What makes it safe is the
-guardrails, in the order they run:
+frame — merges its branch into the primary branch from wherever you are,
+pushing to origin only when you ask (`--push`, or `:FrameMerge!`). The primary
+branch is whatever the primary checkout has checked out — `main` and `master`
+projects both work, nothing is hardcoded. What makes it safe is the guardrails,
+in the order they run:
 
 - **Primary must be clean** — refuses if the primary worktree has uncommitted
-  tracked changes on main.
+  tracked changes on the primary branch.
 - **Uncommitted topic work is flagged** — only the committed branch tip gets
   merged, so a warning calls out anything uncommitted in the topic worktree
   that would be silently left out.
-- **No guessing on divergence** — main is brought level with origin first
-  (fast-forward only); if main and origin have diverged, it stops and leaves
-  the reconciliation to you.
+- **No guessing on divergence** — the primary branch is brought level with
+  origin first (fast-forward only); if it and origin have diverged, it stops
+  and leaves the reconciliation to you.
 - **Conflicts stop cleanly** — on a merge conflict it halts and prints the
   exact `merge --abort` to back out.
 - **Push is opt-in** — nothing touches origin unless you pass `--push`.
 
-Worktree and branch cleanup stays with `frame wt -d` (below).
+Pushing later is its own step: `frame push` — or `:FramePush` from inside the
+frame — publishes the primary branch to origin, with its own rails (refuses
+when the primary branch is behind origin or has diverged; already level is a
+clean no-op). Worktree and branch cleanup stays with `frame wt -d` (below).
 
 ## Frame Removal
 
@@ -292,7 +297,7 @@ worktree — name the topic (`frame ls` helps you find it):
 Teardown refuses when either of these is true:
 
 - the worktree has **uncommitted changes**, or
-- the branch has **commits not yet on main**.
+- the branch has **commits not yet on the primary branch**.
 
 Clear it by merging first (`frame merge`), or force through with
 `frame wt -d -f [TOPIC]` / `:FrameDown!`.

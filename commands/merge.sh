@@ -1,21 +1,23 @@
-# frame merge — merge a topic branch into main from the primary worktree,
-# without leaving whichever worktree you're in (port of merge-to-main.sh).
+# frame merge — merge a topic branch into the primary branch from the primary
+# worktree, without leaving whichever worktree you're in (port of
+# merge-to-main.sh). The primary branch is whatever the primary checkout has
+# checked out — main, master, trunk; nothing here hardcodes a name.
 #
 # The checkouts are git worktrees sharing one object store, so the primary
-# checkout (on `main`) already sees every topic branch. This drives that
-# primary worktree via `git -C`: fast-forward main to origin, merge the topic
+# checkout already sees every topic branch. This drives that primary worktree
+# via `git -C`: fast-forward the primary branch to origin, merge the topic
 # branch, and (only when asked) push.
 #
 #   frame merge                merge the CURRENT worktree's branch
 #   frame merge TOPIC          merge branch TOPIC
-#   frame merge TOPIC --push   …and push main to origin afterward
+#   frame merge TOPIC --push   …and push the primary branch to origin afterward
 #   frame merge --ff           fast-forward instead of a merge commit
 #   frame merge -n             dry run: print the plan, change nothing
 #
 # Safety rails: refuses if the primary worktree has uncommitted tracked
-# changes; aborts if main has diverged from origin; on a merge conflict it
-# stops and tells you how to back out. Worktree/branch cleanup is left to
-# `frame wt -d TOPIC`.
+# changes; aborts if the primary branch has diverged from origin; on a merge
+# conflict it stops and tells you how to back out. Worktree/branch cleanup is
+# left to `frame wt -d TOPIC`; pushing later, to `frame push`.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 frame_load_config
@@ -76,8 +78,8 @@ if [[ -n "$TOPIC_WT" ]] && { ! git -C "$TOPIC_WT" diff --quiet || ! git -C "$TOP
   echo "⚠ $TOPIC_WT has uncommitted changes — they are NOT part of this merge"
 fi
 
-# 3. Bring main level with origin first (fast-forward only). A divergence means
-#    main has local commits origin doesn't; stop rather than guess.
+# 3. Bring the primary branch level with origin first (fast-forward only). A
+#    divergence means it has local commits origin doesn't; stop rather than guess.
 run git -C "$MAIN_WT" fetch origin "$MAIN_BRANCH"
 if ! $DRY && ! git -C "$MAIN_WT" merge-base --is-ancestor "$MAIN_BRANCH" "origin/$MAIN_BRANCH" \
      && ! git -C "$MAIN_WT" merge-base --is-ancestor "origin/$MAIN_BRANCH" "$MAIN_BRANCH"; then
@@ -103,7 +105,7 @@ if $PUSH; then
   run git -C "$MAIN_WT" push origin "$MAIN_BRANCH"
   echo "$OK_MARK pushed $MAIN_BRANCH to origin"
 else
-  echo "→ not pushed. To push:  git -C $MAIN_WT push origin $MAIN_BRANCH"
+  echo "→ not pushed. To push:  frame push"
   echo "  (or re-run with --push)"
 fi
 

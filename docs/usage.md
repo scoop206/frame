@@ -40,8 +40,13 @@ Usage:
                                       the frame you're in)
 
     frame merge [TOPIC] [--push|--ff|-n]
-                                      merge TOPIC into main (default: current
-                                      branch)
+                                      merge TOPIC into the primary branch
+                                      (default: current branch)
+
+    frame push [-n]                   push the primary branch to origin — the
+                                      follow-up to a bare frame merge. The
+                                      primary branch is whatever the primary
+                                      checkout is on (main, master, …)
 
     frame claude [--timeout N] TEXT…  talk to THIS frame's own claude: type
                                       TEXT into it and block until it answers,

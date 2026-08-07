@@ -797,18 +797,20 @@ if main_wt ~= '' then
     vim.defer_fn(watch, 1500)
   end, { bang = true, desc = 'Tear down this frame (worktree + branch)' })
 
-  -- :FrameMerge[!] — merge this frame's branch into main from the primary
-  -- worktree, without leaving this session. A thin passthrough to `frame merge`:
+  -- :FrameMerge[!] — merge this frame's branch into the primary branch (main,
+  -- master — whatever the primary checkout is on) from the primary worktree,
+  -- without leaving this session. A thin passthrough to `frame merge`:
   -- every safety rail (clean primary tree, no origin divergence, conflict abort)
   -- lives there and reports itself, so we just run it and surface the result.
-  -- Bang pushes main afterward (mirrors `frame merge --push`). Unlike :FrameDown
+  -- Bang pushes afterward (mirrors `frame merge --push`). Unlike :FrameDown
   -- the merge runs in $FRAME_MAIN_WT, not our cwd, so no reaper is needed — nvim
   -- outlives it. Pass `topic` explicitly: with cwd=main_wt a bare `frame merge`
-  -- would resolve the topic from main's own branch and refuse.
+  -- would resolve the topic from the primary branch itself and refuse.
   vim.api.nvim_create_user_command('FrameMerge', function(opts)
     local args = { frame_bin, 'merge', topic }
     if opts.bang then table.insert(args, '--push') end
-    vim.notify('frame: merging ' .. topic .. ' → main…', vim.log.levels.INFO)
+    vim.notify('frame: merging ' .. topic .. ' into the primary branch…',
+      vim.log.levels.INFO)
     vim.system(args, { cwd = main_wt, text = true }, function(res)
       vim.schedule(function()
         local out = vim.trim((res.stdout or '') .. (res.stderr or ''))
@@ -816,7 +818,23 @@ if main_wt ~= '' then
                                        or vim.log.levels.WARN)
       end)
     end)
-  end, { bang = true, desc = 'Merge this frame into main (! also pushes)' })
+  end, { bang = true,
+    desc = 'Merge this frame into the primary branch (! also pushes)' })
+
+  -- :FramePush — publish the primary branch to origin without leaving this
+  -- session; the follow-up to a bare :FrameMerge, which merges locally and
+  -- stops. Same thin-passthrough shape as :FrameMerge: every guard (no origin,
+  -- behind origin, divergence) lives in `frame push` and reports itself.
+  vim.api.nvim_create_user_command('FramePush', function()
+    vim.notify('frame: pushing the primary branch to origin…', vim.log.levels.INFO)
+    vim.system({ frame_bin, 'push' }, { cwd = main_wt, text = true }, function(res)
+      vim.schedule(function()
+        local out = vim.trim((res.stdout or '') .. (res.stderr or ''))
+        vim.notify(out, res.code == 0 and vim.log.levels.INFO
+                                       or vim.log.levels.WARN)
+      end)
+    end)
+  end, { desc = 'Push the primary branch to origin' })
 else
   -- Shell frame (frame shell): no worktree or branch to reap, so teardown
   -- collapses to quitting the session — same as :FrameQuit. The scratch dir is
