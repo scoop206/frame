@@ -131,8 +131,30 @@ if [[ "${1:-}" == "-d" ]]; then
       exit 1
     fi
   fi
+  # git worktree remove races a lingering dev server. :qa! kills nvim, whose
+  # exit SIGHUPs the vite/astro job it hosted — but an orphaned child can keep
+  # regenerating gitignored caches (.astro/, node_modules/.vite/) for a beat.
+  # git unregisters the worktree and deletes its tracked files, then its final
+  # rmdir trips over a cache the child recreated in that window and fails
+  # "Directory not empty" (non-zero). Under set -e that aborted teardown right
+  # HERE — before the branch delete below — stranding an orphaned branch beside
+  # a husk dir git no longer tracks: the "missed worktree" this repairs. So
+  # tolerate that specific failure. If git still has the worktree registered the
+  # removal genuinely failed (something holds it) and we surface it; otherwise
+  # git got as far as unregistering and only the leftover-dir rmdir lost the
+  # race — finish its job by clearing the husk (same show-toplevel husk test the
+  # boot path uses) and pruning the stale entry, so the branch delete still runs.
   _rm_flags=(); if (( FORCE )); then _rm_flags=(--force); fi
-  git -C "$MAIN_WT" worktree remove "${_rm_flags[@]}" "$WT_DIR"
+  if ! _rm_err=$(git -C "$MAIN_WT" worktree remove "${_rm_flags[@]}" "$WT_DIR" 2>&1); then
+    if [[ "$(git -C "$WT_DIR" rev-parse --show-toplevel 2>/dev/null)" == "${WT_DIR:A}" ]]; then
+      echo "$X_MARK could not remove worktree $WT_DIR:" >&2
+      print -r -- "$_rm_err" | sed 's/^/    /' >&2
+      exit 1
+    fi
+    rm -rf "$WT_DIR"
+    git -C "$MAIN_WT" worktree prune
+    echo "⚠ worktree dir lingered after removal (a dev server was still writing) — cleaned it up"
+  fi
   git -C "$MAIN_WT" branch -D "$TOPIC"
   # :FrameDown's watcher matches this line to know teardown finished without
   # reaching the session — keep the wording in sync with layouts/session.lua.
