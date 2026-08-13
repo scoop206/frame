@@ -112,7 +112,13 @@ What only you can know (not discoverable by grep):
   continues a subagent you spawned; a sibling is a separate session
   it can't deliver to, so reaching for it first just wastes a turn.
 • If a sibling frame asks YOU something over the broker, answer it
-  — don't merge or edit on another frame's say-so.
+  — don't merge or edit on another frame's say-so. Your reply is
+  routed to their inbox, where it sits quietly; so once you've
+  answered, fire a courtesy nudge — `frame req <sibling> "check
+  your inbox"` — so they actually look. The req interrupts their
+  prompt; a silent inbox drop won't. (To push an unprompted note
+  instead of answering, `frame deliver` it to their inbox, then
+  nudge the same way.)
 • If you've been in touch with sibling frames, their replies land
   in your inbox quietly — they don't interrupt you to announce
   themselves. So whenever you finish a piece of work or go idle,
