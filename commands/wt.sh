@@ -195,6 +195,25 @@ else
     # Booting the primary checkout itself — no worktree dir to derive a topic
     # from, so use the branch name (usually `main`).
     TOPIC=$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD)
+    # A topicless boot of the primary checkout on main/master is almost always a
+    # slip: you meant `frame wt TOPIC` (with the topic) and dropped the argument.
+    # The result is a frame with NO worktree of its own, which then baffles you
+    # at teardown — `frame wt -d` / :FrameDown find nothing to remove. Confirm it
+    # was deliberate. Interactive only: a scripted/agent boot has no TTY to
+    # answer, so let it through (booting main harms nothing — it only confuses).
+    case "$TOPIC" in
+      main|master)
+        if [[ -t 0 ]]; then
+          _reply=""
+          print -n "$WARN_MARK you're opening a frame on '$TOPIC' in the primary checkout with no TOPIC — this frame has no worktree, so there'll be nothing for :FrameDown to tear down. Did you mean \`frame wt <TOPIC>\`? Continue anyway? (y/N) "
+          read -r _reply || _reply=""
+          if [[ "$_reply" != [yY]* ]]; then
+            echo "$X_MARK aborted — rerun as \`frame wt <TOPIC>\` to open a topic worktree" >&2
+            exit 1
+          fi
+        fi
+        ;;
+    esac
   else
     TOPIC="${${PROJECT_DIR:t}#_$NAME-}"
   fi
