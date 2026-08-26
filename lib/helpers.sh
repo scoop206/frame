@@ -92,11 +92,14 @@ frame_load_config() {
   # repo rename — most projects never set it. PORT_PREFIX namespaces the
   # prefixed port exports (e.g. FLIPNEM_VITE_PORT, see wt.sh); the derivation
   # squashes anything not alphanumeric to '_' so a dotted dirname
-  # (example.com) still yields a legal env-var prefix. A project whose
-  # committed code reads prefixed vars should pin PORT_PREFIX in config.sh —
-  # the derived value silently drifts away from the app code on a rename.
+  # (example.com) still yields a legal env-var prefix, and prepends '_' when
+  # the name leads with a digit (4mspecialties.com → _4MSPECIALTIES_COM) since
+  # a shell identifier can't start with one. A project whose committed code
+  # reads prefixed vars should pin PORT_PREFIX in config.sh — the derived
+  # value silently drifts away from the app code on a rename.
   : "${NAME:=${MAIN_WT:t}}"
   : "${PORT_PREFIX:=${(U)NAME//[^[:alnum:]]/_}}"
+  if [[ "$PORT_PREFIX" == [0-9]* ]]; then PORT_PREFIX="_$PORT_PREFIX"; fi
 }
 
 frame_source_machine_config() {
