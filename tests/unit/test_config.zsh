@@ -98,4 +98,15 @@ test_port_prefix_squashes_non_alnum() {
   assert_eq "$PORT_PREFIX" "EXAMPLE_COM"
 }
 
+test_port_prefix_leading_digit_gets_underscore() {
+  # A dirname that leads with a digit (4mspecialties.com) would derive a
+  # prefix starting with '0-9' — illegal for a shell identifier, so `export
+  # 4MSPECIALTIES_COM_API_PORT=...` blows up. Prepend '_' to keep it legal.
+  git init -q "$SANDBOX/4mspecialties.com"
+  cd "$SANDBOX/4mspecialties.com"
+  frame_load_config
+  assert_eq "$NAME" "4mspecialties.com"
+  assert_eq "$PORT_PREFIX" "_4MSPECIALTIES_COM"
+}
+
 run_tests "$0"
