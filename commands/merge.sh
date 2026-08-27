@@ -16,8 +16,9 @@
 #
 # Safety rails: refuses if the primary worktree has uncommitted tracked
 # changes; aborts if the primary branch has diverged from origin; on a merge
-# conflict it stops and tells you how to back out. Worktree/branch cleanup is
-# left to `frame wt -d TOPIC`; pushing later, to `frame push`.
+# conflict it stops and tells you how to back out. A local-only repo (no origin
+# remote) skips the origin sync entirely and merges anyway. Worktree/branch
+# cleanup is left to `frame wt -d TOPIC`; pushing later, to `frame push`.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 frame_load_config
@@ -80,13 +81,20 @@ fi
 
 # 3. Bring the primary branch level with origin first (fast-forward only). A
 #    divergence means it has local commits origin doesn't; stop rather than guess.
-run git -C "$MAIN_WT" fetch origin "$MAIN_BRANCH"
-if ! $DRY && ! git -C "$MAIN_WT" merge-base --is-ancestor "$MAIN_BRANCH" "origin/$MAIN_BRANCH" \
-     && ! git -C "$MAIN_WT" merge-base --is-ancestor "origin/$MAIN_BRANCH" "$MAIN_BRANCH"; then
-  echo "$X_MARK $MAIN_BRANCH has diverged from origin/$MAIN_BRANCH — reconcile manually first" >&2
-  exit 1
+#    Local-only projects (no origin — e.g. the mock_sites) have nothing to sync
+#    against, so skip the whole step rather than hard-fail on `fetch origin`.
+#    Same guard push.sh uses.
+if git -C "$MAIN_WT" remote get-url origin >/dev/null 2>&1; then
+  run git -C "$MAIN_WT" fetch origin "$MAIN_BRANCH"
+  if ! $DRY && ! git -C "$MAIN_WT" merge-base --is-ancestor "$MAIN_BRANCH" "origin/$MAIN_BRANCH" \
+       && ! git -C "$MAIN_WT" merge-base --is-ancestor "origin/$MAIN_BRANCH" "$MAIN_BRANCH"; then
+    echo "$X_MARK $MAIN_BRANCH has diverged from origin/$MAIN_BRANCH — reconcile manually first" >&2
+    exit 1
+  fi
+  run git -C "$MAIN_WT" merge --ff-only "origin/$MAIN_BRANCH"
+else
+  echo "→ no 'origin' remote — skipping origin sync (local-only project)"
 fi
-run git -C "$MAIN_WT" merge --ff-only "origin/$MAIN_BRANCH"
 
 # 4. Merge the topic branch.
 if $FF; then
@@ -101,6 +109,10 @@ fi
 echo "$OK_MARK merged '$TOPIC' into $MAIN_BRANCH"
 
 # 5. Push only on request.
+if $PUSH && ! git -C "$MAIN_WT" remote get-url origin >/dev/null 2>&1; then
+  echo "$X_MARK --push given but there's no 'origin' remote in $MAIN_WT — merged locally only" >&2
+  exit 1
+fi
 if $PUSH; then
   run git -C "$MAIN_WT" push origin "$MAIN_BRANCH"
   echo "$OK_MARK pushed $MAIN_BRANCH to origin"

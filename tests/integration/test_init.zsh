@@ -179,6 +179,95 @@ test_init_flags_wiring_predating_notification_hook() {
   assert_contains "$OUT" "frame notify --blocked"
 }
 
+test_init_rejects_unknown_type() {
+  make_repo
+  run_frame init --type nope
+  assert_status 2
+  assert_contains "$OUT" "unknown --type 'nope'"
+}
+
+test_init_type_needs_a_value() {
+  make_repo
+  run_frame init --type
+  assert_status 2
+  assert_contains "$OUT" "--type needs a value"
+}
+
+test_init_astrojs_scaffolds_project() {
+  make_repo
+  run_frame init --type astrojs
+  assert_status 0
+  # committed scaffold files land at the repo root
+  assert_file_exists "$REPO/package.json"
+  assert_file_exists "$REPO/astro.config.mjs"
+  assert_file_exists "$REPO/tsconfig.json"
+  assert_file_exists "$REPO/src/pages/index.astro"
+  # astro-shaped config.sh: vite buffer, root VITE_DIR, node_modules link, stack_up
+  local cfg="$(<$REPO/.frame/config.sh)"
+  assert_contains "$cfg" "BUFFERS=(claude local vite)"
+  assert_contains "$cfg" "VITE_DIR=."
+  assert_contains "$cfg" "WT_LINKS=(node_modules)"
+  assert_contains "$cfg" "stack_up()"
+  assert_contains "$cfg" 'npm install'
+  # astro.config reads the frame-allocated port
+  assert_contains "$(<$REPO/astro.config.mjs)" "FRAME_VITE_PORT"
+  # gitignore covers deps/build AND the anchored-images caution
+  local gi="$(<$REPO/.gitignore)"
+  # bare node_modules (no trailing slash) so the per-worktree SYMLINK is ignored
+  # too, not just a real directory
+  assert_contains "$gi" $'\nnode_modules\n'
+  assert_not_contains "$gi" "node_modules/"
+  assert_contains "$gi" ".astro/"
+  assert_contains "$gi" ".frame/local/"
+  assert_contains "$gi" "NEVER a bare"
+}
+
+test_init_astrojs_commits_the_scaffold() {
+  make_repo
+  run_frame init --type astrojs
+  assert_status 0
+  assert_contains "$OUT" "committed the astrojs scaffold"
+  # the scaffold is actually in the last commit, so `frame wt` inherits it
+  assert_eq "$(git -C "$REPO" log -1 --format=%s)" "frame init: scaffold Astro project"
+  git -C "$REPO" cat-file -e HEAD:package.json 2>/dev/null \
+    || fail "package.json not in the scaffold commit"
+  git -C "$REPO" cat-file -e HEAD:src/pages/index.astro 2>/dev/null \
+    || fail "src/pages/index.astro not in the scaffold commit"
+  # node_modules must never be committed — it's symlinked per-worktree via WT_LINKS
+  if git -C "$REPO" cat-file -e HEAD:node_modules 2>/dev/null; then
+    fail "node_modules was committed"
+  fi
+  # working tree is clean after the auto-commit (nothing left staged/dirty)
+  assert_eq "$(git -C "$REPO" status --porcelain)" "" "scaffold left uncommitted changes"
+}
+
+test_init_astrojs_is_idempotent() {
+  make_repo
+  run_frame init --type astrojs
+  local sum_before=$(cksum "$REPO/package.json")
+  local head_before=$(git -C "$REPO" rev-parse HEAD)
+  run_frame init --type astrojs
+  assert_status 0
+  assert_contains "$OUT" "already exists — left alone"
+  assert_contains "$OUT" "nothing new to commit"
+  assert_eq "$(cksum "$REPO/package.json")" "$sum_before" "package.json rewritten"
+  # no new commit on a re-run
+  assert_eq "$(git -C "$REPO" rev-parse HEAD)" "$head_before" "re-run made a new commit"
+  # gitignore artifact block not duplicated
+  assert_eq "$(grep -c '# frame:astrojs' "$REPO/.gitignore")" "1" "astrojs gitignore block duplicated"
+}
+
+test_init_generic_makes_no_commit() {
+  # the default (generic) type must not auto-commit or scaffold an astro project
+  make_repo
+  local head_before=$(git -C "$REPO" rev-parse HEAD)
+  run_frame init
+  assert_status 0
+  assert_file_absent "$REPO/package.json"
+  assert_eq "$(git -C "$REPO" rev-parse HEAD)" "$head_before" "generic init made a commit"
+  assert_not_contains "$OUT" "committed the astrojs scaffold"
+}
+
 test_init_outside_git_fails() {
   mkdir -p "$SANDBOX/plain"
   cd "$SANDBOX/plain"
