@@ -160,4 +160,35 @@ test_two_topics_exit_2() {
   assert_contains "$OUT" "more than one branch"
 }
 
+setup_topic_no_origin() {
+  # Same as setup_topic but with the origin remote removed — models a local-only
+  # project (e.g. a mock_site) that was never pushed anywhere.
+  make_repo
+  git -C "$REPO" remote remove origin
+  make_topic feature
+  cd "$REPO"
+}
+
+test_merge_local_only_repo_skips_origin_sync() {
+  # A repo with no origin must still merge: the origin fetch/ff is skipped, not
+  # a hard failure on `git fetch origin`.
+  setup_topic_no_origin
+  run_frame merge feature
+  assert_status 0
+  assert_contains "$OUT" "no 'origin' remote — skipping origin sync"
+  assert_contains "$OUT" "merged 'feature' into main"
+  assert_eq "$(git -C "$REPO" log -1 --format=%s main)" "Merge branch 'feature'"
+}
+
+test_merge_local_only_push_fails_clearly() {
+  # --push against a repo with no origin fails with a clear message (the merge
+  # still happened locally) rather than a raw git error.
+  setup_topic_no_origin
+  run_frame merge feature --push
+  assert_status 1
+  assert_contains "$OUT" "no 'origin' remote"
+  # the local merge still landed before the push guard tripped
+  assert_eq "$(git -C "$REPO" log -1 --format=%s main)" "Merge branch 'feature'"
+}
+
 run_tests "$0"
