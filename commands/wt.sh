@@ -200,21 +200,32 @@ fi
 # the `frame ls` topic (same project), not a name/topic handle.
 #
 # A session must have ONE owner: two claudes appending the same transcript can
-# corrupt it. So refuse if the source frame is still live (its nvim socket
-# exists) — the user quits the source's session first (no teardown needed; that
-# unlinks the socket but keeps the .session file this reads). Then resolve the
-# id: prefer the one the source recorded at its last SessionStart
-# ($FRAME_RUNDIR/<name>-<topic>.session, written by `frame swarm --context`) —
-# authoritative, and correct even when the source was ITSELF resumed (its
-# transcript keeps the origin frame's project key, so a path-scan finds nothing
-# under its own worktree). Fall back to scanning the worktree's transcripts for
-# frames that predate the recorder.
+# corrupt it. So refuse if the source frame's CLAUDE is still running — probed
+# over RPC (FrameClaudeAlive), which distinguishes a live claude from a frame
+# that's up but whose claude was quit (the buffer drops to a shell). Only the
+# claude matters; you can leave the source frame open. If the source predates
+# this probe (RPC errors) we can't tell, so warn and proceed rather than block a
+# frame that may well be idle. Then resolve the id: prefer the one the source
+# recorded at its last SessionStart ($FRAME_RUNDIR/<name>-<topic>.session,
+# written by `frame swarm --context`) — authoritative, and correct even when the
+# source was ITSELF resumed (its transcript keeps the origin frame's project
+# key, so a path-scan finds nothing under its own worktree). Fall back to
+# scanning the worktree's transcripts for frames that predate the recorder.
 if [[ -n "$FROM_TOPIC" ]]; then
-  if [[ -S "$FRAME_RUNDIR/$NAME-$FROM_TOPIC.nvim" ]]; then
-    echo "$X_MARK frame $FROM_TOPIC is still live — refusing to resume its session in" >&2
-    echo "  two places (that can corrupt the transcript). Quit its session first" >&2
-    echo "  (no need to tear it down — its recorded id survives), then rerun." >&2
-    exit 1
+  _src_sock="$FRAME_RUNDIR/$NAME-$FROM_TOPIC.nvim"
+  if [[ -S "$_src_sock" ]]; then
+    _claude_alive=$(frame_rpc_expr "$_src_sock" 'v:lua.FrameClaudeAlive()') || _claude_alive=""
+    if [[ "$_claude_alive" == 1 ]]; then
+      echo "$X_MARK claude is still running in frame $FROM_TOPIC — refusing to resume its" >&2
+      echo "  session in two places (that can corrupt the transcript). Exit its claude" >&2
+      echo "  (Ctrl-C, then /exit or Ctrl-D), then rerun. The frame can stay open." >&2
+      exit 1
+    elif [[ -z "$_claude_alive" ]]; then
+      echo "$WARN_MARK couldn't check whether frame $FROM_TOPIC's claude is running (it" >&2
+      echo "  predates this check — reboot it for precise detection). If its claude is" >&2
+      echo "  up, exit it first to avoid corrupting the shared transcript." >&2
+    fi
+    # _claude_alive == 0 → claude confirmed stopped; proceed.
   fi
   _sess_file="$FRAME_RUNDIR/$NAME-$FROM_TOPIC.session"
   if [[ -r "$_sess_file" ]]; then

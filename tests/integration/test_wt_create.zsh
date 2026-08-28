@@ -256,19 +256,48 @@ test_from_resolves_recorded_session_and_injects() {
   assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-from-file"
 }
 
-test_from_live_source_is_refused() {
-  # One owner per session: a still-live source (its nvim socket present) is
-  # refused before any side effect — the user quits it first.
+# A real AF_UNIX socket file stands in for src's live nvim (the -S gate); the
+# stub nvim answers the FrameClaudeAlive RPC from FAKE_NVIM_EXPR_RESULT.
+_plant_src_socket() { python3 -c 'import socket,sys
+s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$FRAME_RUNDIR/$TNAME-src.nvim"; }
+
+test_from_live_claude_is_refused() {
+  # One owner per session: a source whose CLAUDE is running is refused, before
+  # any side effect. The frame being up is not enough — the claude must be live.
   setup_project
-  print -r -- "sid-live" > "$FRAME_RUNDIR/$TNAME-src.session"
-  # a real AF_UNIX socket stands in for src's live nvim (see plant_live_topic)
-  python3 -c 'import socket,sys
-s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$FRAME_RUNDIR/$TNAME-src.nvim"
+  _plant_src_socket
+  export FAKE_NVIM_EXPR_RESULT=1        # FrameClaudeAlive() → claude running
   run_frame wt topic --from src
   assert_status 1
-  assert_contains "$OUT" "still live"
+  assert_contains "$OUT" "still running"
   assert_dir_absent "$SANDBOX/_$TNAME-topic"
   assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_from_exited_claude_proceeds_with_frame_up() {
+  # The case that motivated the precise probe: the source frame is still up, but
+  # its claude was quit. Resuming must be allowed (no live writer).
+  setup_project
+  print -r -- "sid-quit" > "$FRAME_RUNDIR/$TNAME-src.session"
+  _plant_src_socket
+  export FAKE_NVIM_EXPR_RESULT=0        # FrameClaudeAlive() → claude quit
+  run_frame wt topic --from src
+  assert_status 0
+  assert_contains "$OUT" "resuming session sid-quit from frame src"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-quit"
+}
+
+test_from_unverifiable_source_warns_and_proceeds() {
+  # A source predating the probe (RPC errors) can't be checked — warn, don't
+  # block a frame that may be idle. The stub tripwires on an un-stubbed expr, so
+  # leaving FAKE_NVIM_EXPR_RESULT unset makes the RPC fail like an old layout.
+  setup_project
+  print -r -- "sid-old" > "$FRAME_RUNDIR/$TNAME-src.session"
+  _plant_src_socket
+  run_frame wt topic --from src
+  assert_status 0
+  assert_contains "$OUT" "couldn't check"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-old"
 }
 
 test_resume_and_from_are_mutually_exclusive() {
