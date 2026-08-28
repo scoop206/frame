@@ -213,6 +213,33 @@ _G.FrameReady = function()
   return 0
 end
 
+-- _G.FrameClaudeAlive() — 1 while a claude PROCESS is actually running in the
+-- claude buffer, 0 once it has exited. When claude quits, term_durable's
+-- `exec zsh` keeps the terminal alive as a fallback shell, so the channel and
+-- buffer persist and can't distinguish "claude running" from "claude quit,
+-- shell idle". `frame wt --from TOPIC` probes this to refuse resuming a session
+-- that still has a live writer, while allowing it once claude is quit — even
+-- with the source frame still up. The buffer's job is that shell; claude runs
+-- as its direct child, on the first run and every ↑-rerun alike (a marker file
+-- set at first launch would miss reruns — this reads the live process tree
+-- instead), so we look for a child whose command line names claude. Mid-turn
+-- counts as alive: the process is there whether or not its prompt is rendered,
+-- which is exactly when resuming would be most destructive.
+_G.FrameClaudeAlive = function()
+  local chan = FrameState.chan['claude']
+  if not chan then return 0 end
+  local ok, pid = pcall(vim.fn.jobpid, chan)
+  if not ok or type(pid) ~= 'number' then return 0 end
+  for _, kid in ipairs(vim.fn.systemlist({ 'pgrep', '-P', tostring(pid) })) do
+    if kid:match('^%d+$') then
+      -- list form: no shell, so the pid can't be anything but a number here.
+      local args = vim.fn.system({ 'ps', '-o', 'args=', '-p', kid })
+      if args:find('claude', 1, true) then return 1 end
+    end
+  end
+  return 0
+end
+
 -- frame_submit(chan, text) — type TEXT into a claude terminal channel and
 -- submit it. Two writes with the Enter deferred ~200ms: claude's TUI
 -- paste-detection folds a CR arriving in the same rapid chunk into a newline
