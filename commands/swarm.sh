@@ -67,6 +67,7 @@ frame_swarm_context() {
   # exported by wt.sh/shell.sh at boot — present iff we're inside a real frame,
   # which is the scoping we want for free.
   local _level=$1
+  local _source="${2:-}"
   [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]] || return 0
 
   local _verify
@@ -83,6 +84,19 @@ frame_swarm_context() {
   print -r -- "You are the claude inside frame $FRAME_NAME/$FRAME_TOPIC — a git-"
   print -r -- "worktree-isolated agent workspace under the frame harness."
   [[ -n "${FRAME_VITE_PORT:-}" ]] && print -r -- "Your dev server is at http://localhost:$FRAME_VITE_PORT."
+  # A resumed session may have been transplanted here from another frame
+  # (frame wt --from/--resume). Its replayed history still carries that frame's
+  # banner and cwd, which now describe the WRONG worktree — so the freshest word
+  # (this line) tells the agent which self-location to trust.
+  if [[ "$_source" == resume ]]; then
+    print -r --
+    print -r -- "⟳ This session was RESUMED. If the banner, cwd, or branch"
+    print -r -- "  earlier in this transcript name a DIFFERENT frame, that is a"
+    print -r -- "  prior frame this context was carried from — it is stale. You"
+    print -r -- "  are $FRAME_NAME/$FRAME_TOPIC now; trust this worktree and its"
+    print -r -- "  branch, not the transcript's earlier self-location. Confirm"
+    print -r -- "  with \`pwd\` and \`git branch --show-current\` before acting."
+  fi
 
   # Core (every level ≥1): who you are + the safety rules. @VERIFY@ is the one
   # port-dependent line, substituted in after.
@@ -179,11 +193,32 @@ _swarm_set() {
 
 case "${1:-}" in
   --context)
-    # The hook target. Silent no-op below level 1 (or when the key predates this
-    # feature → empty → 0); best-effort like every frame hook — never fail.
+    # frame's SessionStart hook. The hook pipes JSON on stdin carrying this
+    # session's id and its "source" (startup|resume|clear|compact). Read it once
+    # (only when stdin is a pipe — a human running this by hand has a tty).
+    _hook_source="" _hook_sid=""
+    if [[ ! -t 0 ]]; then
+      _hook_json=$(cat 2>/dev/null) || _hook_json=""
+      # if-form (not `[[…]] && …`): a non-matching field must not return nonzero
+      # here — under set -e that would abort the hook before we record/inject.
+      if [[ "$_hook_json" =~ '"source"[[:space:]]*:[[:space:]]*"([a-z]+)"' ]]; then _hook_source="${match[1]}"; fi
+      if [[ "$_hook_json" =~ '"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9-]+)"' ]]; then _hook_sid="${match[1]}"; fi
+    fi
+    # Record this frame's CURRENT session id so `frame wt --from TOPIC` can
+    # resolve a sibling's live session by name. This is the authoritative source
+    # (see commands/wt.sh): it survives resume chains, where the transcript keeps
+    # its origin frame's project key and a path-scan would come up empty. Runs at
+    # EVERY level — recording the id is independent of context injection.
+    if [[ -n "$_hook_sid" && -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
+      print -r -- "$_hook_sid" > "$FRAME_RUNDIR/$FRAME_NAME-$FRAME_TOPIC.session" 2>/dev/null || true
+    fi
+    # Silent no-op below level 1 (or when the key predates this feature → empty
+    # → 0); best-effort like every frame hook — never fail. On a resume the
+    # replayed history still carries the origin frame's banner, so hand the
+    # source to the context block to add a "trust THIS frame" line.
     lvl=$(_swarm_level)
     (( lvl >= 1 )) || exit 0
-    frame_swarm_context "$lvl"
+    frame_swarm_context "$lvl" "$_hook_source"
     exit 0
     ;;
   "")

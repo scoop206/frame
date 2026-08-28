@@ -234,4 +234,75 @@ EOF
   assert_contains "$(<$FAKE_NVIM_LOG)" $'FRAME_HOOK_DRIFT=\n'
 }
 
+# ── --resume / --from: carry a warm session into the new frame ────────────────
+# The claude buffer boots as `claude ${FRAME_CLAUDE_FLAGS}`; these flags inject
+# `--resume <id>` into that env, which the stub records in FAKE_NVIM_LOG.
+
+test_resume_injects_flag_into_claude_env() {
+  setup_project
+  run_frame wt topic --resume sid-abc-123
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-abc-123"
+}
+
+test_from_resolves_recorded_session_and_injects() {
+  setup_project
+  # The source frame recorded its live session id (frame swarm --context does
+  # this at SessionStart); --from reads it by frame name. Not live (no socket).
+  print -r -- "sid-from-file" > "$FRAME_RUNDIR/$TNAME-src.session"
+  run_frame wt topic --from src
+  assert_status 0
+  assert_contains "$OUT" "resuming session sid-from-file from frame src"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-from-file"
+}
+
+test_from_live_source_is_refused() {
+  # One owner per session: a still-live source (its nvim socket present) is
+  # refused before any side effect — the user quits it first.
+  setup_project
+  print -r -- "sid-live" > "$FRAME_RUNDIR/$TNAME-src.session"
+  # a real AF_UNIX socket stands in for src's live nvim (see plant_live_topic)
+  python3 -c 'import socket,sys
+s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$FRAME_RUNDIR/$TNAME-src.nvim"
+  run_frame wt topic --from src
+  assert_status 1
+  assert_contains "$OUT" "still live"
+  assert_dir_absent "$SANDBOX/_$TNAME-topic"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_resume_and_from_are_mutually_exclusive() {
+  setup_project
+  run_frame wt topic --resume sid-1 --from src
+  assert_status 2
+  assert_contains "$OUT" "mutually exclusive"
+  assert_dir_absent "$SANDBOX/_$TNAME-topic"   # rejected before any side effect
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_resume_rejects_non_uuid_charset() {
+  setup_project
+  run_frame wt topic --resume 'bad id!'
+  assert_status 2
+  assert_contains "$OUT" "not a valid session id"
+  assert_dir_absent "$SANDBOX/_$TNAME-topic"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_from_unknown_frame_errors_before_side_effects() {
+  setup_project
+  run_frame wt topic --from ghost
+  assert_status 1
+  assert_contains "$OUT" "no claude session found"
+  assert_dir_absent "$SANDBOX/_$TNAME-topic"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_resume_missing_value_errors() {
+  setup_project
+  run_frame wt topic --resume
+  assert_status 2
+  assert_contains "$OUT" "--resume needs a session id"
+}
+
 run_tests "$0"

@@ -3,6 +3,9 @@
 #   frame wt TOPIC     create (or reuse) branch TOPIC and worktree
 #                      ../_<NAME>-TOPIC beside the primary checkout, boot it
 #   frame wt           boot the worktree you're already in
+#   frame wt TOPIC --from SRC        boot TOPIC's claude resuming SRC frame's
+#                      warm session (its newest transcript); --resume ID takes a
+#                      raw session id instead. Carries context across frames.
 #   frame wt -d [-f] [TOPIC]
 #                      tear down: quit the nvim session, remove worktree,
 #                      delete branch. TOPIC defaults to the frame you're
@@ -156,19 +159,81 @@ if [[ "${1:-}" == "-d" ]]; then
     echo "⚠ worktree dir lingered after removal (a dev server was still writing) — cleaned it up"
   fi
   git -C "$MAIN_WT" branch -D "$TOPIC"
+  # Reap the recorded session id (frame swarm --context writes it) alongside the
+  # worktree — a torn-down frame is no longer a valid `frame wt --from` source.
+  rm -f "$FRAME_RUNDIR/$NAME-$TOPIC.session"
   # :FrameDown's watcher matches this line to know teardown finished without
   # reaching the session — keep the wording in sync with layouts/session.lua.
   echo "$OK_MARK removed worktree and branch $TOPIC"
   exit 0
 fi
 
-if [[ "${1:-}" == -* ]]; then
-  if [[ "$1" == "-m" || "$1" == "--merge" ]]; then
-    echo "$X_MARK frame wt -m was removed — use: frame merge [TOPIC]" >&2
-  else
-    echo "$X_MARK unknown flag: $1" >&2
+# Boot path (create-and-boot, or reboot the frame you're in). Parse optional
+# flags and the positional TOPIC. --resume/--from carry a warm claude session
+# INTO the new frame: --resume takes a raw session id, --from names a sibling
+# frame whose newest session is resolved to its id (see below). Both end up as
+# `claude --resume <id>` via FRAME_CLAUDE_FLAGS. The rest of the script is
+# positional, so we normalize back to `$@` after parsing.
+RESUME_ID="" FROM_TOPIC=""
+_positional=()
+while (( $# )); do
+  case "$1" in
+    --resume)   shift; RESUME_ID="${1:-}"
+                [[ -n "$RESUME_ID" ]] || { echo "$X_MARK --resume needs a session id" >&2; exit 2; } ;;
+    --resume=*) RESUME_ID="${1#--resume=}" ;;
+    --from)     shift; FROM_TOPIC="${1:-}"
+                [[ -n "$FROM_TOPIC" ]] || { echo "$X_MARK --from needs a source frame/topic" >&2; exit 2; } ;;
+    --from=*)   FROM_TOPIC="${1#--from=}" ;;
+    -m|--merge) echo "$X_MARK frame wt -m was removed — use: frame merge [TOPIC]" >&2; exit 2 ;;
+    -*)         echo "$X_MARK unknown flag: $1" >&2; exit 2 ;;
+    *)          _positional+=("$1") ;;
+  esac
+  shift
+done
+set -- "${_positional[@]}"
+
+if [[ -n "$RESUME_ID" && -n "$FROM_TOPIC" ]]; then
+  echo "$X_MARK --resume and --from are mutually exclusive" >&2; exit 2
+fi
+
+# --from TOPIC: resume that sibling frame's session into this new frame. TOPIC is
+# the `frame ls` topic (same project), not a name/topic handle.
+#
+# A session must have ONE owner: two claudes appending the same transcript can
+# corrupt it. So refuse if the source frame is still live (its nvim socket
+# exists) — the user quits the source's session first (no teardown needed; that
+# unlinks the socket but keeps the .session file this reads). Then resolve the
+# id: prefer the one the source recorded at its last SessionStart
+# ($FRAME_RUNDIR/<name>-<topic>.session, written by `frame swarm --context`) —
+# authoritative, and correct even when the source was ITSELF resumed (its
+# transcript keeps the origin frame's project key, so a path-scan finds nothing
+# under its own worktree). Fall back to scanning the worktree's transcripts for
+# frames that predate the recorder.
+if [[ -n "$FROM_TOPIC" ]]; then
+  if [[ -S "$FRAME_RUNDIR/$NAME-$FROM_TOPIC.nvim" ]]; then
+    echo "$X_MARK frame $FROM_TOPIC is still live — refusing to resume its session in" >&2
+    echo "  two places (that can corrupt the transcript). Quit its session first" >&2
+    echo "  (no need to tear it down — its recorded id survives), then rerun." >&2
+    exit 1
   fi
-  exit 2
+  _sess_file="$FRAME_RUNDIR/$NAME-$FROM_TOPIC.session"
+  if [[ -r "$_sess_file" ]]; then
+    RESUME_ID=$(<"$_sess_file")
+  else
+    RESUME_ID=$(frame_session_id_for_dir "${MAIN_WT:h}/_$NAME-$FROM_TOPIC") || RESUME_ID=""
+  fi
+  if [[ -z "$RESUME_ID" ]]; then
+    echo "$X_MARK --from $FROM_TOPIC: no claude session found for that frame" >&2
+    echo "  (no $_sess_file, and no transcript under ~/.claude/projects for its worktree)" >&2
+    exit 1
+  fi
+  echo "$OK_MARK resuming session $RESUME_ID from frame $FROM_TOPIC"
+fi
+
+# A raw --resume id flows straight onto claude's command line, so keep it to the
+# UUID charset (defends the buffers.json `claude ${FRAME_CLAUDE_FLAGS}` split).
+if [[ -n "$RESUME_ID" && ! "$RESUME_ID" =~ '^[A-Za-z0-9-]+$' ]]; then
+  echo "$X_MARK not a valid session id: $RESUME_ID" >&2; exit 2
 fi
 
 # Ask before any side effect — a nested boot aborted here creates no worktree.
@@ -337,6 +402,14 @@ export VITE_DIR="${VITE_DIR:-web}"
 # reads the frame-computed copy instead.
 export FRAME_PORT_PREFIX="$PORT_PREFIX"
 frame_export_claude_flags
+# Carry a warm session in: boot this frame's claude as `claude --resume <id>`
+# (from --resume/--from above). Appended after frame_export_claude_flags so it
+# composes with the yolo flag. FRAME_CLAUDE_FLAGS is word-split unquoted by the
+# claude buffer, and RESUME_ID is validated to the UUID charset, so a plain
+# space-join is safe.
+if [[ -n "$RESUME_ID" ]]; then
+  export FRAME_CLAUDE_FLAGS="${FRAME_CLAUDE_FLAGS:+$FRAME_CLAUDE_FLAGS }--resume $RESUME_ID"
+fi
 
 # Refuse before exec if a boot-critical dependency is missing (see frame_require).
 # git/nvim always; claude only when this project's frames actually open a claude

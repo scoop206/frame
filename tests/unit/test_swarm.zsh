@@ -157,4 +157,48 @@ CFG
   assert_contains "$OUT" "run FOREGROUND"   # core still present, ahead of the append
 }
 
+# ── --context: SessionStart machinery (session-id record + resume re-orient) ──
+
+# Pipe a SessionStart hook payload into the hook target and capture its output.
+run_context_hook() {  # run_context_hook JSON
+  OUT=$(print -r -- "$1" | "$FRAME_BIN" swarm --context 2>&1) && STATUS=0 || STATUS=$?
+}
+
+test_context_records_session_id_even_when_off() {
+  # Recording is independent of the swarm dial — `frame wt --from` must resolve a
+  # sibling's live session whether or not context injection is enabled. Default
+  # level is 0 (off), so this also proves it runs before the level gate.
+  export FRAME_NAME=flipnem FRAME_TOPIC=inspect
+  run_context_hook '{"session_id":"sid-abc-123","source":"startup","hook_event_name":"SessionStart"}'
+  assert_status 0
+  assert_file_exists "$FRAME_RUNDIR/flipnem-inspect.session"
+  assert_eq "$(<$FRAME_RUNDIR/flipnem-inspect.session)" "sid-abc-123"
+}
+
+test_context_no_session_id_writes_nothing() {
+  export FRAME_NAME=flipnem FRAME_TOPIC=inspect
+  run_context_hook '{"source":"startup"}'
+  assert_status 0
+  assert_file_absent "$FRAME_RUNDIR/flipnem-inspect.session"
+}
+
+test_context_resume_source_adds_reorientation() {
+  run_frame swarm 1
+  export FRAME_NAME=flipnem FRAME_TOPIC=inspect FRAME_VITE_PORT=5173
+  run_context_hook '{"session_id":"sid-1","source":"resume","hook_event_name":"SessionStart"}'
+  assert_status 0
+  assert_contains "$OUT" "RESUMED"
+  assert_contains "$OUT" "trust this worktree"
+  assert_contains "$OUT" "flipnem/inspect"          # names THIS frame, not the origin
+  assert_contains "$OUT" "run FOREGROUND"           # core banner still present
+}
+
+test_context_startup_source_omits_reorientation() {
+  run_frame swarm 1
+  export FRAME_NAME=flipnem FRAME_TOPIC=inspect FRAME_VITE_PORT=5173
+  run_context_hook '{"session_id":"sid-1","source":"startup"}'
+  assert_status 0
+  assert_not_contains "$OUT" "RESUMED"
+}
+
 run_tests "$0"
