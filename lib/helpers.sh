@@ -215,6 +215,30 @@ frame_export_claude_flags() {
   fi
 }
 
+frame_session_id_for_dir() {
+  # frame_session_id_for_dir DIR — echo the newest claude session id for the
+  # worktree DIR, or return 1 if none. This is how `frame wt --from TOPIC`
+  # finds a sibling frame's warm session to resume (see commands/wt.sh).
+  #
+  # Claude Code stores transcripts at
+  #   ~/.claude/projects/<sanitized-cwd>/<session-id>.jsonl
+  # where <sanitized-cwd> is the frame's absolute cwd with every
+  # non-alphanumeric character replaced by '-' (verified against a live
+  # session: /Users/x/git_repos/_frame-topic → -Users-x-git-repos--frame-topic).
+  # So the id is derivable from the worktree path alone — no cooperation from
+  # the source claude, which may still be running or already gone. "Newest"
+  # (by mtime) is the frame's active/most-recent session.
+  emulate -L zsh
+  local _dir="${1:A}"
+  local _proj="${_dir//[^A-Za-z0-9]/-}"
+  local _pdir="$HOME/.claude/projects/$_proj"
+  [[ -d "$_pdir" ]] || return 1
+  # (N) nullglob, (.) regular files, (om) newest-first by mtime, [1] the first.
+  local _newest=( "$_pdir"/*.jsonl(N.om[1]) )
+  (( $#_newest )) || return 1
+  print -r -- "${_newest[1]:t:r}"
+}
+
 # ── dependency preflight ──────────────────────────────────────────────────────
 # Frame shells out to its dependencies with no upfront check, so a missing one
 # fails deep inside with a raw "command not found": no nvim fails the `exec`

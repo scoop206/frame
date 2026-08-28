@@ -34,7 +34,8 @@
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 USAGE="usage: frame spawn shell [TOPIC] [--req TEXT] [--timeout SECONDS] [--ephemeral]
-       frame spawn wt TOPIC [--cwd PATH] [--req TEXT] [--timeout SECONDS]"
+       frame spawn wt TOPIC [--cwd PATH] [--req TEXT] [--timeout SECONDS]
+                            [--from TOPIC | --resume SESSION_ID]"
 
 KIND="${1:-}"
 case "$KIND" in
@@ -117,7 +118,7 @@ else
   exit 2
 fi
 
-REQ="" TIMEOUT=30 EPHEMERAL="" CWD=""
+REQ="" TIMEOUT=30 EPHEMERAL="" CWD="" RESUME="" FROM=""
 while (( $# )); do
   case "$1" in
     --ephemeral)
@@ -128,6 +129,18 @@ while (( $# )); do
         exit 2
       fi
       CWD=$2; shift 2 ;;
+    --resume)
+      if [[ -z "${2:-}" ]]; then
+        echo "$X_MARK frame spawn: --resume needs a session id" >&2
+        exit 2
+      fi
+      RESUME=$2; shift 2 ;;
+    --from)
+      if [[ -z "${2:-}" ]]; then
+        echo "$X_MARK frame spawn: --from needs a source frame/topic" >&2
+        exit 2
+      fi
+      FROM=$2; shift 2 ;;
     --req)
       if [[ -z "${2:-}" ]]; then
         echo "$X_MARK frame spawn: --req needs the request text" >&2
@@ -150,6 +163,14 @@ done
 
 if [[ "$KIND" == shell && -n "$CWD" ]]; then
   echo "$X_MARK frame spawn shell: --cwd is a wt flag (shell frames live in ~/frames)" >&2
+  exit 2
+fi
+if [[ "$KIND" == shell && ( -n "$RESUME" || -n "$FROM" ) ]]; then
+  echo "$X_MARK frame spawn shell: --resume/--from are wt flags (a branch topic to resume into)" >&2
+  exit 2
+fi
+if [[ -n "$RESUME" && -n "$FROM" ]]; then
+  echo "$X_MARK frame spawn: --resume and --from are mutually exclusive" >&2
   exit 2
 fi
 if [[ "$KIND" == wt && -n "$EPHEMERAL" ]]; then
@@ -209,6 +230,10 @@ if [[ "$KIND" == shell ]]; then
   BOOT+=" && ${(q)FRAME_ROOT}/bin/frame spawn close-tab ${(q)TOPIC}"
 else
   BOOT="cd ${(q)PROJ} && FRAME_SPAWNED=1 ${(q)FRAME_ROOT}/bin/frame wt ${(q)TOPIC}"
+  # Carry a warm session into the worker: `frame wt` resolves --from to an id
+  # and validates --resume (see commands/wt.sh); spawn just forwards the flag.
+  [[ -n "$RESUME" ]] && BOOT+=" --resume ${(q)RESUME}"
+  [[ -n "$FROM" ]] && BOOT+=" --from ${(q)FROM}"
   BOOT+=" && ${(q)FRAME_ROOT}/bin/frame spawn close-tab ${(q)W_NAME}/${(q)TOPIC}"
 fi
 if ! IDS=$(frame_open_window "$BOOT"); then
