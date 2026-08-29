@@ -91,9 +91,6 @@ BUFFERS=(claude local vite)
 # Astro's dev server lives at the repo ROOT, not a web/ subdir — point the vite
 # buffer there.
 VITE_DIR=.
-# Base port; each frame scans upward from here and exports FRAME_VITE_PORT.
-# astro.config.mjs reads FRAME_VITE_PORT, so every worktree binds its own port.
-VITE_PORT=4321
 
 # node_modules lives once in the primary checkout and is symlinked into each
 # fresh worktree — it's gitignored, so git can't carry it the way it carries the

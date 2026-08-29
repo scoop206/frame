@@ -11,11 +11,6 @@ BUFFERS=(claude local vite)
 # apps conventionally live at the repo root, so point it there.
 VITE_DIR=.
 
-# Base dev-server port (Astro's stock 4321); each frame scans upward from it
-# and exports the pick as FRAME_VITE_PORT for astro.config.mjs to read (see
-# examples/README.md for the app-side snippet).
-VITE_PORT=4321
-
 # Gitignored assets symlinked into fresh worktrees. The default list covers
 # .env and web/node_modules; a root-dir npm app wants node_modules itself.
 WT_LINKS=(node_modules)

@@ -37,38 +37,25 @@ rename for free. This is exactly how an infra/docs repo plugs in.
 
 A static-site generator (Astro here, but any root-dir npm app fits): one dev
 server, no backend, no shared services — so no `stack_up()`/`app_env()`, no
-`server`/`ngrok` buffers. Three keys do the work:
+`server`/`ngrok` buffers. Two keys do the work:
 
 - `VITE_DIR=.` — the `vite` buffer runs `npm run dev` in `$VITE_DIR`, which
   defaults to the classic `web/` subdir; Astro apps live at the repo root.
-- `VITE_PORT=4321` — Astro's stock port as the base; each frame scans upward
-  from it and exports the pick as `FRAME_VITE_PORT`.
 - `WT_LINKS=(node_modules)` — the default worktree symlinks cover
   `web/node_modules`; a root-dir app wants `node_modules` itself.
 
-The app-side counterpart lives in `astro.config.mjs` — read the exported port,
-and give each dev server its own dep cache since every worktree symlinks the
-same `node_modules`:
+No port key: Vite picks the port itself, walking up from 4321 to the first open
+one, so sibling worktrees never collide without anyone prescribing a port. The
+app-side counterpart in `astro.config.mjs` just binds to the network and leaves
+the port to Vite:
 
 ```js
-const port = Number(process.env.FRAME_VITE_PORT ?? 4321);
-
 export default defineConfig({
-  server: { port },
-  vite: {
-    // Worktrees share the primary checkout's node_modules (WT_LINKS symlink),
-    // so give each dev server a port-keyed dep cache to avoid collisions.
-    cacheDir: `node_modules/.vite-${port}`,
-  },
+  server: { host: true },
 });
 ```
 
-The `FRAME_*` port vars are the ones to read from app code: they never change,
-no matter what the project or its directory is called. The project-prefixed
-aliases (`<PREFIX>_VITE_PORT`, …) still exist for code already reading them —
-if you rely on those, pin `PORT_PREFIX` in the config, since the derived
-default tracks the directory name (see the main README's
-[port assignment](../README.md#port-assignment)).
+Read the actual port off the vite buffer's `Local http://localhost:PORT/` line.
 
 ### standard-web
 
