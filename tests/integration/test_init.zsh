@@ -222,23 +222,30 @@ test_init_astrojs_scaffolds_project() {
   assert_contains "$gi" "NEVER a bare"
 }
 
-test_init_astrojs_commits_the_scaffold() {
+test_init_astrojs_does_not_commit_the_scaffold() {
+  # init must NEVER stage or commit on the user's behalf: the scaffold lands as
+  # uncommitted changes, HEAD is unchanged, and a reminder tells the user to
+  # review + commit it themselves.
   make_repo
+  local head_before=$(git -C "$REPO" rev-parse HEAD)
   run_frame init --type astrojs
   assert_status 0
-  assert_contains "$OUT" "committed the astrojs scaffold"
-  # the scaffold is actually in the last commit, so `frame wt` inherits it
-  assert_eq "$(git -C "$REPO" log -1 --format=%s)" "frame init: scaffold Astro project"
-  git -C "$REPO" cat-file -e HEAD:package.json 2>/dev/null \
-    || fail "package.json not in the scaffold commit"
-  git -C "$REPO" cat-file -e HEAD:src/pages/index.astro 2>/dev/null \
-    || fail "src/pages/index.astro not in the scaffold commit"
-  # node_modules must never be committed — it's symlinked per-worktree via WT_LINKS
-  if git -C "$REPO" cat-file -e HEAD:node_modules 2>/dev/null; then
-    fail "node_modules was committed"
+  # no commit was made
+  assert_eq "$(git -C "$REPO" rev-parse HEAD)" "$head_before" "init made a commit"
+  # the scaffold exists as uncommitted (untracked) changes, not in a commit
+  assert_file_exists "$REPO/package.json"
+  assert_file_exists "$REPO/src/pages/index.astro"
+  if git -C "$REPO" cat-file -e HEAD:package.json 2>/dev/null; then
+    fail "package.json was committed"
   fi
-  # working tree is clean after the auto-commit (nothing left staged/dirty)
-  assert_eq "$(git -C "$REPO" status --porcelain)" "" "scaffold left uncommitted changes"
+  assert_contains "$(git -C "$REPO" status --porcelain)" "package.json"
+  # nothing was staged on the user's behalf
+  if ! git -C "$REPO" diff --cached --quiet; then
+    fail "init staged changes on the user's behalf"
+  fi
+  # the reminder points the user at committing it themselves
+  assert_contains "$OUT" "the astrojs scaffold is NOT committed"
+  assert_contains "$OUT" "git add -A && git commit"
 }
 
 test_init_astrojs_is_idempotent() {
@@ -249,7 +256,6 @@ test_init_astrojs_is_idempotent() {
   run_frame init --type astrojs
   assert_status 0
   assert_contains "$OUT" "already exists — left alone"
-  assert_contains "$OUT" "nothing new to commit"
   assert_eq "$(cksum "$REPO/package.json")" "$sum_before" "package.json rewritten"
   # no new commit on a re-run
   assert_eq "$(git -C "$REPO" rev-parse HEAD)" "$head_before" "re-run made a new commit"

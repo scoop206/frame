@@ -5,14 +5,15 @@
 #                           clear the title status when the next prompt lands
 #
 # --type TYPE picks the config.sh flavour (default: generic — the template
-# above). --type astrojs additionally scaffolds a committed, worktree-ready
-# Astro project: package.json / astro.config.mjs / tsconfig.json / src/pages,
-# an astro-shaped config.sh (vite buffer, VITE_DIR=., WT_LINKS=(node_modules),
-# and a stack_up that installs deps once in the primary), the matching
-# .gitignore lines, then commits the lot so the very first `frame wt` inherits a
-# working project via git. Deps aren't installed at init — stack_up does that
-# lazily on first boot (see .frame/config.sh). Templates live in
-# templates/astrojs/.
+# above). --type astrojs additionally scaffolds a worktree-ready Astro project:
+# package.json / astro.config.mjs / tsconfig.json / src/pages, an astro-shaped
+# config.sh (vite buffer, VITE_DIR=., WT_LINKS=(node_modules), and a stack_up
+# that installs deps once in the primary), and the matching .gitignore lines.
+# init NEVER stages or commits on your behalf — because `frame wt` only inherits
+# COMMITTED files, it prints a reminder to review + commit the scaffold yourself
+# so the very first `frame wt` inherits a working project via git. Deps aren't
+# installed at init — stack_up does that lazily on first boot (see
+# .frame/config.sh). Templates live in templates/astrojs/.
 #
 # Idempotent: existing files are left alone, the gitignore entry is added once.
 # A one-row-per-file table summarizes what was modified vs left as-is. When a
@@ -206,10 +207,11 @@ else
 fi
 
 # ── astrojs scaffold ──────────────────────────────────────────────────────────
-# Copy the committed Astro scaffold (idempotent — existing files are left alone)
-# and ensure the build/deps ignore lines, then commit the lot below so the very
-# first `frame wt` inherits a working, installable project through git. Deps are
-# NOT installed here — the config.sh stack_up does that lazily on first boot.
+# Copy the Astro scaffold (idempotent — existing files are left alone) and ensure
+# the build/deps ignore lines. init does NOT stage or commit — it prints a
+# reminder below so the user reviews + commits the scaffold themselves, since
+# `frame wt` only inherits committed files. Deps are NOT installed here — the
+# config.sh stack_up does that lazily on first boot.
 if [[ "$TYPE" == astrojs ]]; then
   _tpl="$FRAME_ROOT/templates/astrojs"
   # dest paths relative to the project root; each is copied verbatim if absent.
@@ -256,19 +258,15 @@ for _r in $_rows; do
   printf '  %-*s  %-8s  %s\n' $_w "$_f" "${_rest%%|*}" "${_rest#*|}"
 done
 
-# Commit the astrojs scaffold. The whole point of --type astrojs is that the
-# scaffold is git-tracked so `frame wt` hands it to every worktree; leaving it
-# uncommitted reproduces the exact first-boot failure this type exists to fix.
-# `git add -A` stages the scaffold (node_modules et al. stay out via .gitignore);
-# commit only when something's actually staged so re-runs are no-ops.
-if [[ "$TYPE" == astrojs ]]; then
-  git add -A
-  if git diff --cached --quiet; then
-    print -- "\n  → astrojs scaffold already committed — nothing new to commit"
-  else
-    git commit -q -m "frame init: scaffold Astro project"
-    print -- "\n  $OK_MARK committed the astrojs scaffold — \`frame wt <topic>\` inherits it via git"
-  fi
+# Remind the user to commit the astrojs scaffold themselves. `frame wt` only
+# hands a worktree the COMMITTED files, so an uncommitted scaffold reproduces the
+# first-boot failure this type exists to fix — but init must never stage or
+# commit on the user's behalf (it surprised people), so we nudge rather than act.
+# Only nudge when the tree is actually dirty; a fully-committed re-run stays quiet.
+if [[ "$TYPE" == astrojs ]] && [[ -n "$(git status --porcelain)" ]]; then
+  print -- "\n  $WARN_MARK the astrojs scaffold is NOT committed — \`frame wt <topic>\` only"
+  print -- "    inherits committed files, so review the scaffold and commit it yourself:"
+  print -- "        git add -A && git commit -m 'frame init: scaffold Astro project'"
 fi
 
 if [[ -n $_hooks_hint ]]; then
