@@ -34,6 +34,7 @@ test_create_boots_into_nvim() {
   assert_contains "$log" "cwd: $SANDBOX/_$TNAME-topic"
   assert_contains "$log" "FRAME_NAME=$TNAME"
   assert_contains "$log" "FRAME_TOPIC=topic"
+  assert_contains "$log" "FRAME_WT=$SANDBOX/_$TNAME-topic"
 }
 
 test_missing_buffers_refuses_to_boot() {

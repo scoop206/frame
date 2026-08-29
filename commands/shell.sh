@@ -155,6 +155,7 @@ frame_record_gtab "$NAME" "$TOPIC"
 export FRAME_NAME="$NAME"
 export FRAME_TOPIC="$TOPIC"
 export FRAME_MAIN_WT=""
+export FRAME_WT=""
 export FRAME_VITE_PORT=""
 export FRAME_BUFFERS="claude local"
 frame_export_claude_flags

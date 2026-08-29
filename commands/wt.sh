@@ -386,6 +386,12 @@ if (( $+functions[app_env] )); then app_env; fi
 export FRAME_NAME="$NAME"
 export FRAME_TOPIC="$TOPIC"
 export FRAME_MAIN_WT="$MAIN_WT"
+# This frame's own worktree — the branch checkout your work lives in. Pairs with
+# FRAME_MAIN_WT (the primary checkout). Exported as a stable anchor so you can
+# always cd back here after wandering off; $PWD only equals it at boot. For a
+# topicless boot of the primary checkout, PROJECT_DIR == MAIN_WT, so the two
+# vars coincide — correct, since there's no separate worktree in that case.
+export FRAME_WT="$PROJECT_DIR"
 export FRAME_VITE_PORT
 export FRAME_BUFFERS="${BUFFERS[*]}"
 # Sniff the committed claude hooks this frame is about to boot on. A worktree
