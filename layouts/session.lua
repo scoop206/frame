@@ -11,6 +11,7 @@
 --   FRAME_NAME        project name
 --   FRAME_TOPIC       worktree topic (branch name)
 --   FRAME_MAIN_WT     primary checkout (reaper cwd for :FrameDown)
+--   FRAME_WT          this frame's own worktree (stable cwd anchor; empty for shell frames)
 --   FRAME_VITE_PORT   this worktree's vite port (title + ngrok target)
 --   FRAME_BUFFERS     the buffers to open (authoritative; empty → none)
 -- Config vars that buffers.json references (SERVER_CMD, the scanned ports)
@@ -174,6 +175,7 @@ _G.FrameDebug = function()
     'topic\t' .. topic,
     'cwd\t' .. vim.fn.getcwd(),
     'main_wt\t' .. env('FRAME_MAIN_WT'),
+    'wt\t' .. env('FRAME_WT'),
     'status\t' .. FrameState.status,
     'ready\t' .. _G.FrameReady(),
     'notify\t' .. (vim.g.frame_notify_muted == 1 and 'muted' or 'on'),
