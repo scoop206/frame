@@ -209,8 +209,13 @@ test_init_astrojs_scaffolds_project() {
   assert_contains "$cfg" "WT_LINKS=(node_modules)"
   assert_contains "$cfg" "stack_up()"
   assert_contains "$cfg" 'npm install'
-  # astro.config reads the frame-allocated port
-  assert_contains "$(<$REPO/astro.config.mjs)" "FRAME_VITE_PORT"
+  # no port machinery: config.sh doesn't prescribe a port and astro.config lets
+  # Vite pick one (host:true binds the network, but no port is set)
+  assert_not_contains "$cfg" "VITE_PORT"
+  local astrocfg="$(<$REPO/astro.config.mjs)"
+  assert_contains "$astrocfg" "host: true"
+  assert_not_contains "$astrocfg" "FRAME_VITE_PORT"
+  assert_not_contains "$astrocfg" "process.env"
   # gitignore covers deps/build AND the anchored-images caution
   local gi="$(<$REPO/.gitignore)"
   # bare node_modules (no trailing slash) so the per-worktree SYMLINK is ignored

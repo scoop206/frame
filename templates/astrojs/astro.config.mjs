@@ -1,13 +1,12 @@
 import { defineConfig } from 'astro/config';
 
-// Bind Astro's dev server (which IS vite) to the port frame allocated for this
-// frame's vite buffer. frame exports FRAME_VITE_PORT — a per-frame, upward-
-// scanned port so sibling worktrees never collide. VITE_PORT is the config base
-// and 4321 is Astro's own default for a plain `npm run dev` outside frame.
+// Let Vite pick the port: it walks up from 4321 to the first open one, so
+// sibling frames never collide without anyone prescribing a port. host:true
+// binds to the network. Read the actual port off the vite buffer's
+// `Local http://localhost:PORT/` line.
 export default defineConfig({
   devToolbar: { enabled: false },
   server: {
-    port: Number(process.env.FRAME_VITE_PORT ?? process.env.VITE_PORT ?? 4321),
     host: true,
   },
 });
