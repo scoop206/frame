@@ -49,7 +49,7 @@
 - The frame CLI injects lua and puts a message broker in front of claude.
 - frames join the pool and become discoverable via `frame ls`
 - In addition to claude you will typically have services like Vite and or binary backend service running in their own buffers. Frame manages the port assignments so you can stand up a frame per worktree/Topic.  
-  They are self contained and disposable: once a topic is merged (`frame merge`;`:FrameMerge`) and, when you're ready, pushed (`frame push`;`:FramePush`), tear the frame down (`frame wt -d`;`:FrameDown`). Merge and teardown are separate guarded steps to ensure a clean delivery back to the primary branch before frame disassembly.
+  They are self contained and disposable: once a topic is merged (`frame merge`;`:FrameMerge`) and, when you're ready, pushed (`frame push`;`:FramePush`), tear the frame down (`frame wt -d`;`:FrameDown`). Merge and teardown are separate guarded steps to ensure a clean delivery back to the primary branch before frame disassembly. The default behavior is to let claudes expire with their frame but if context extension is desired they can be passed from frame to frame with `frame wt $TOPIC --from=SRC_FRAME`.
 - Ghostty is the intended terminal — window focus and spawn-into-tabs use its scripting — but a frame still runs in other terminals.
 
 | command                      | what it does                                                                           |
@@ -211,7 +211,7 @@ When frame instantiates the nvim instance it injects these user commands
 | command                   | action                                                                                                                 |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `:FrameStatus TEXT…`      | append "- TEXT" to the window title's status suffix (no TEXT clears it)                                                |
-| `:FrameName`              | copy this frame's `name/topic` to the system clipboard — the handle to paste into another frame's `frame req`/`focus` |
+| `:FrameName`              | copy this frame's `name/topic` to the system clipboard — the handle to paste into another frame's `frame req`/`focus`  |
 | `:FrameSilence [off]`     | silence this frame's banners (no arg, or 'on'); pass 'off' to unsilence                                                |
 | `:FrameQuit`              | quit the session only — worktree and branch stay for a later `frame wt TOPIC`                                          |
 | `:FrameDown`              | tear down the whole frame: quit nvim, remove the worktree, delete the branch                                           |
@@ -432,13 +432,13 @@ for the field-by-field walkthrough.
 
 The keys a project sets:
 
-| key                                             | required | purpose                                                                                                                  |
-| ----------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| key                                             | required | purpose                                                                                                                                                                                                                |
+| ----------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NAME`                                          | no       | project name; window titles, worktree dirs, and frame addresses derive from it. Defaults to the primary checkout's directory name — so it follows a repo rename. Set it only to pin a name that outlives the directory |
-| `BUFFERS=(…)`                                   | yes      | which buffers each frame opens, e.g. `(claude local)` — see [Buffer Definitions](#buffer-definitions)                    |
-| `SERVER_CMD`                                    | no       | the command that starts your dev server; runs verbatim in the [`server`](buffers.json) buffer type and must bind `$PORT` |
-| `VITE_DIR`                                      | no       | the directory the [`vite`](buffers.json) buffer runs in (default `web`; set `.` for a root-dir npm app, e.g. Astro)      |
-| `API_PORT` `VITE_PORT` `HMR_PORT` `PORT_PREFIX` | no       | port configuration — see [Port assignment](#port-assignment) below                                                       |
+| `BUFFERS=(…)`                                   | yes      | which buffers each frame opens, e.g. `(claude local)` — see [Buffer Definitions](#buffer-definitions)                                                                                                                  |
+| `SERVER_CMD`                                    | no       | the command that starts your dev server; runs verbatim in the [`server`](buffers.json) buffer type and must bind `$PORT`                                                                                               |
+| `VITE_DIR`                                      | no       | the directory the [`vite`](buffers.json) buffer runs in (default `web`; set `.` for a root-dir npm app, e.g. Astro)                                                                                                    |
+| `API_PORT` `VITE_PORT` `HMR_PORT` `PORT_PREFIX` | no       | port configuration — see [Port assignment](#port-assignment) below                                                                                                                                                     |
 
 Hooks:
 
