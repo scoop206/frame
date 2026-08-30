@@ -48,8 +48,9 @@
 - Each frame has one Claude buffer.
 - The frame CLI injects lua and puts a message broker in front of claude.
 - frames join the pool and become discoverable via `frame ls`
-- In addition to claude you will typically have services like Vite and or binary backend service running in their own buffers. Frame manages the port assignments so you can stand up a frame per worktree/Topic.  
-  They are self contained and disposable: once a topic is merged (`frame merge`;`:FrameMerge`) and, when you're ready, pushed (`frame push`;`:FramePush`), tear the frame down (`frame wt -d`;`:FrameDown`). Merge and teardown are separate guarded steps to ensure a clean delivery back to the primary branch before frame disassembly. The default behavior is to let claudes expire with their frame but if context extension is desired they can be passed from frame to frame with `frame wt $TOPIC --from=SRC_FRAME`.
+- In addition to claude you will typically have services like Vite and or binary backend service running in their own buffers. Frame manages the port assignments so you can stand up a frame per worktree/Topic.
+- frames are self contained and disposable: once a topic is merged (`frame merge`;`:FrameMerge`) and, when you're ready, pushed (`frame push`;`:FramePush`), tear the frame down (`frame wt -d`;`:FrameDown`). Merge and teardown are separate guarded steps to ensure a clean delivery back to the primary branch before frame disassembly.
+- The default behavior is for the claude session to expire with the frame but complete context can be passed from frame to frame with `frame wt $TOPIC --from=SRC_FRAME`.
 - Ghostty is the intended terminal — window focus and spawn-into-tabs use its scripting — but a frame still runs in other terminals.
 
 | command                      | what it does                                                                           |
