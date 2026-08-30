@@ -6,6 +6,8 @@
 #   frame wt TOPIC --from SRC        boot TOPIC's claude resuming SRC frame's
 #                      warm session (its newest transcript); --resume ID takes a
 #                      raw session id instead. Carries context across frames.
+#                      SRC is a bare topic (this project) or a NAME/TOPIC handle
+#                      (any project — the form :FrameName / `frame name` copy).
 #   frame wt -d [-f] [TOPIC]
 #                      tear down: quit the nvim session, remove worktree,
 #                      delete branch. TOPIC defaults to the frame you're
@@ -196,8 +198,13 @@ if [[ -n "$RESUME_ID" && -n "$FROM_TOPIC" ]]; then
   echo "$X_MARK --resume and --from are mutually exclusive" >&2; exit 2
 fi
 
-# --from TOPIC: resume that sibling frame's session into this new frame. TOPIC is
-# the `frame ls` topic (same project), not a name/topic handle.
+# --from SRC: resume that sibling frame's session into this new frame. SRC is
+# either a bare TOPIC — resolved against THIS project, the historical
+# same-project form — or the NAME/TOPIC handle that :FrameName / `frame name`
+# hand you, naming a sibling in ANY project. That handle is the unambiguous form
+# every other sibling-addressing command (req/focus/view/deliver) already takes;
+# --from accepts it too so a copied :FrameName pastes straight in. A bare topic
+# keeps the current project's NAME; a slash splits off the source project's name.
 #
 # A session must have ONE owner: two claudes appending the same transcript can
 # corrupt it. So refuse if the source frame's CLAUDE is still running — probed
@@ -212,7 +219,16 @@ fi
 # key, so a path-scan finds nothing under its own worktree). Fall back to
 # scanning the worktree's transcripts for frames that predate the recorder.
 if [[ -n "$FROM_TOPIC" ]]; then
-  _src_sock="$FRAME_RUNDIR/$NAME-$FROM_TOPIC.nvim"
+  # Split the handle: NAME/TOPIC picks a source project explicitly; a bare topic
+  # defaults to this project's NAME. TOPIC keeps any further slashes (branch-like
+  # topics), matching frame_resolve_target's %%/* // #*/ split. Messages echo
+  # $FROM_TOPIC verbatim — what the user typed, bare or handle.
+  if [[ "$FROM_TOPIC" == */* ]]; then
+    _from_name="${FROM_TOPIC%%/*}" _from_topic="${FROM_TOPIC#*/}"
+  else
+    _from_name="$NAME" _from_topic="$FROM_TOPIC"
+  fi
+  _src_sock="$FRAME_RUNDIR/$_from_name-$_from_topic.nvim"
   if [[ -S "$_src_sock" ]]; then
     _claude_alive=$(frame_rpc_expr "$_src_sock" 'v:lua.FrameClaudeAlive()') || _claude_alive=""
     if [[ "$_claude_alive" == 1 ]]; then
@@ -227,11 +243,11 @@ if [[ -n "$FROM_TOPIC" ]]; then
     fi
     # _claude_alive == 0 → claude confirmed stopped; proceed.
   fi
-  _sess_file="$FRAME_RUNDIR/$NAME-$FROM_TOPIC.session"
+  _sess_file="$FRAME_RUNDIR/$_from_name-$_from_topic.session"
   if [[ -r "$_sess_file" ]]; then
     RESUME_ID=$(<"$_sess_file")
   else
-    RESUME_ID=$(frame_session_id_for_dir "${MAIN_WT:h}/_$NAME-$FROM_TOPIC") || RESUME_ID=""
+    RESUME_ID=$(frame_session_id_for_dir "${MAIN_WT:h}/_$_from_name-$_from_topic") || RESUME_ID=""
   fi
   if [[ -z "$RESUME_ID" ]]; then
     echo "$X_MARK --from $FROM_TOPIC: no claude session found for that frame" >&2

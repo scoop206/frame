@@ -257,6 +257,19 @@ test_from_resolves_recorded_session_and_injects() {
   assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-from-file"
 }
 
+test_from_accepts_name_topic_handle_across_projects() {
+  # The :FrameName / `frame name` handle is NAME/TOPIC — a sibling in ANOTHER
+  # project. --from must resolve it against the SOURCE project's name, not the
+  # current project's, so a copied handle pastes straight in. Bug: it used to
+  # prepend the current $NAME, mangling `other/src` into `<thisproj>-other/src`.
+  setup_project
+  print -r -- "sid-cross-proj" > "$FRAME_RUNDIR/otherproj-src.session"
+  run_frame wt topic --from otherproj/src
+  assert_status 0
+  assert_contains "$OUT" "resuming session sid-cross-proj from frame otherproj/src"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-cross-proj"
+}
+
 # A real AF_UNIX socket file stands in for src's live nvim (the -S gate); the
 # stub nvim answers the FrameClaudeAlive RPC from FAKE_NVIM_EXPR_RESULT.
 _plant_src_socket() { python3 -c 'import socket,sys
