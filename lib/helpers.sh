@@ -239,6 +239,31 @@ frame_session_id_for_dir() {
   print -r -- "${_newest[1]:t:r}"
 }
 
+frame_bridge_transcript() {
+  # frame_bridge_transcript SESSION_ID DEST_DIR — make SESSION_ID's claude
+  # transcript resumable from DEST_DIR. `claude --resume <id>` only looks in the
+  # project dir for its OWN cwd (~/.claude/projects/<sanitized-cwd>/), so a
+  # session recorded under one worktree can't be resumed from another — it fails
+  # "No conversation found" even though the transcript is right there under a
+  # different project key. `frame wt --from` (and a cross-project --resume) hit
+  # exactly this: they resume a sibling's session into a NEW worktree. Copy the
+  # transcript into DEST_DIR's project dir so the resume finds it there. The
+  # sanitize rule matches frame_session_id_for_dir (every non-alnum char → '-',
+  # verified against live sessions). Best-effort: return 1 if the source
+  # transcript can't be located, so the caller can warn rather than boot into a
+  # dead --resume; a no-op success when it already lives in DEST_DIR's project
+  # (a same-path reboot), which also makes re-runs idempotent.
+  emulate -L zsh
+  local _id=$1 _dest="${2:A}"
+  local _projects="$HOME/.claude/projects"
+  local _src=( "$_projects"/*/"$_id".jsonl(N.om[1]) )
+  (( $#_src )) || return 1
+  local _dest_slug="${_dest//[^A-Za-z0-9]/-}"
+  [[ "${_src[1]:h:t}" == "$_dest_slug" ]] && return 0    # already resumable here
+  mkdir -p "$_projects/$_dest_slug" \
+    && cp -f "${_src[1]}" "$_projects/$_dest_slug/$_id.jsonl"
+}
+
 # ── dependency preflight ──────────────────────────────────────────────────────
 # Frame shells out to its dependencies with no upfront check, so a missing one
 # fails deep inside with a raw "command not found": no nvim fails the `exec`
