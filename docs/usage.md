@@ -20,15 +20,13 @@ Usage:
                                       worktree-ready Astro project
 
     frame wt TOPIC                    create/reuse branch + worktree, boot it
-    frame wt TOPIC --from SRC         …and resume SRC frame's warm claude
+    frame wt TOPIC --from SRC_FRAME   …and resume SRC_FRAME's warm claude
                                       session in it (carry context across
-                                      topics). If SRC's claude is live, it's
-                                      asked to wrap up and retire itself, then
-                                      resumed here once it's down. SRC is a
-                                      bare topic (this project) or a NAME/TOPIC
-                                      handle (any project — the :FrameName /
-                                      `frame name` form); --resume ID takes a
-                                      raw id
+                                      topics). If SRC_FRAME's claude is live,
+                                      it's asked to wrap up and retire itself.
+                                      SRC_FRAME: a topic, or NAME/TOPIC for
+                                      another project (the :FrameName form)
+    frame wt TOPIC --resume ID        …resume a raw session id instead
     frame wt                          boot the worktree you're already in
     frame wt -d [-f] [TOPIC]          tear down a frame (default: current)
 
@@ -43,7 +41,7 @@ Usage:
                                       boot a shell frame into a tab group
 
     frame spawn wt TOPIC [--cwd PATH] [--req TEXT] [--timeout N]
-                         [--from SRC | --resume ID]
+                         [--from SRC_FRAME | --resume ID]
                                       boot a worktree frame into a tab group;
                                       --from/--resume carry a warm claude
                                       session in (see frame wt)
