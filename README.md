@@ -53,22 +53,22 @@
 - The default behavior is for the claude session to expire with the frame but complete context can be passed from frame to frame with `frame wt $TOPIC --from=SRC_FRAME`.
 - Ghostty is the intended terminal — window focus and spawn-into-tabs use its scripting — but a frame still runs in other terminals.
 
-| command                      | what it does                                                                           |
-| ---------------------------- | -------------------------------------------------------------------------------------- |
-| `frame wt TOPIC`             | create/reuse a branch and worktree, boot it                                            |
-| `frame wt`                   | boot the worktree you're already in                                                    |
-| `frame wt -d [TOPIC]`        | tear down a frame (default: the current one)                                           |
-| `frame shell TOPIC`          | a frame with no repo — just the claude and local buffers                               |
-| `frame ls`                   | list every live frame across projects                                                  |
-| `frame merge [TOPIC]`        | merge a topic branch into the primary branch                                           |
-| `frame push`                 | push the primary branch to origin                                                      |
-| `frame claude TEXT…`         | ask this frame's claude, block for the answer                                          |
-| `frame req NAME/TOPIC TEXT…` | ask another frame's claude (async)                                                     |
-| `frame inbox`                | read replies routed back to you                                                        |
-| `frame services up`          | bring up the shared services stack                                                     |
-| `frame focus [TOPIC]`        | raise a frame's window                                                                 |
-| `frame yolo on\|off`         | toggle `--dangerously-skip-permissions` everywhere                                     |
-| `frame swarm [off\|1\|2]`    | how much frame context each frame's claude gets — 0 off · 1 aware · 2 ask (starts off) |
+| command                               | what it does                                                                                                                      |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `frame wt TOPIC [--from SRC_FRAME]`   | create/reuse a branch and worktree, boot it. --from instructs SRC_FRAME claude to teardown and then context is transferred forward |
+| `frame wt`                            | boot the worktree you're already in                                                                                               |
+| `frame wt -d [TOPIC]`                 | tear down a frame (default: the current one)                                                                                      |
+| `frame shell TOPIC`                   | a frame with no repo — just the claude and local buffers                                                                          |
+| `frame ls`                            | list every live frame across projects                                                                                             |
+| `frame merge [TOPIC]`                 | merge a topic branch into the primary branch                                                                                      |
+| `frame push`                          | push the primary branch to origin                                                                                                 |
+| `frame claude TEXT…`                  | ask this frame's claude, block for the answer                                                                                     |
+| `frame req NAME/TOPIC TEXT…`          | ask another frame's claude (async)                                                                                                |
+| `frame inbox`                         | read replies routed back to you                                                                                                   |
+| `frame services up`                   | bring up the shared services stack                                                                                                |
+| `frame focus [TOPIC]`                 | raise a frame's window                                                                                                            |
+| `frame yolo on\|off`                  | toggle `--dangerously-skip-permissions` everywhere                                                                                |
+| `frame swarm [off\|1\|2]`             | how much frame context each frame's claude gets — 0 off · 1 aware · 2 ask (starts off)                                            |
 
 `worktree` is a synonym for `wt`; `list` for `ls`.  
 Not shown here: `spawn`,
