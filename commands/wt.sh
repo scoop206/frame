@@ -482,6 +482,15 @@ frame_export_claude_flags
 # space-join is safe.
 if [[ -n "$RESUME_ID" ]]; then
   export FRAME_CLAUDE_FLAGS="${FRAME_CLAUDE_FLAGS:+$FRAME_CLAUDE_FLAGS }--resume $RESUME_ID"
+  # `claude --resume` only finds sessions under THIS cwd's project dir, so a
+  # session recorded in another worktree (the --from case, or a cross-project
+  # --resume) must be bridged into this frame's project dir first — else claude
+  # boots "No conversation found". PROJECT_DIR is this frame's claude cwd.
+  if ! frame_bridge_transcript "$RESUME_ID" "$PROJECT_DIR"; then
+    echo "$WARN_MARK no transcript for session $RESUME_ID under ~/.claude/projects —" >&2
+    echo "  claude may boot with 'No conversation found'. The source may never have" >&2
+    echo "  started a session, or its transcript was pruned." >&2
+  fi
 fi
 
 # Refuse before exec if a boot-critical dependency is missing (see frame_require).

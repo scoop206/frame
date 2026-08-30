@@ -297,6 +297,40 @@ test_from_live_source_hands_off_then_resumes() {
   assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-move"
 }
 
+test_from_bridges_transcript_into_new_frames_project_dir() {
+  # `claude --resume` only finds sessions under the cwd's project dir, so --from
+  # must copy the source transcript into the NEW frame's project dir — else
+  # claude boots "No conversation found". Plant a transcript under the source
+  # worktree's project key and assert it lands under the destination's.
+  setup_project
+  print -r -- "sid-bridge" > "$FRAME_RUNDIR/$TNAME-src.session"
+  _plant_src_socket
+  export FAKE_NVIM_EXPR_RESULT=0        # source claude stopped → straight resume
+  local src_pdir="$HOME/.claude/projects/${${SANDBOX}/_$TNAME-src//[^A-Za-z0-9]/-}"
+  local dst_pdir="$HOME/.claude/projects/${${SANDBOX}/_$TNAME-topic//[^A-Za-z0-9]/-}"
+  mkdir -p "$src_pdir"
+  print -r -- '{"type":"summary","summary":"warm"}' > "$src_pdir/sid-bridge.jsonl"
+  run_frame wt topic --from src
+  assert_status 0
+  assert_contains "$OUT" "resuming session sid-bridge"
+  assert_file_exists "$dst_pdir/sid-bridge.jsonl"          # transcript bridged over
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-bridge"
+}
+
+test_from_missing_transcript_warns_but_boots() {
+  # If no transcript exists for the resolved id (source never started a session,
+  # or it was pruned), warn — don't abort — so a stray .session pointer doesn't
+  # block the boot. claude will surface its own "No conversation found".
+  setup_project
+  print -r -- "sid-ghost" > "$FRAME_RUNDIR/$TNAME-src.session"
+  _plant_src_socket
+  export FAKE_NVIM_EXPR_RESULT=0
+  run_frame wt topic --from src
+  assert_status 0
+  assert_contains "$OUT" "no transcript for session sid-ghost"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-ghost"
+}
+
 test_from_live_source_that_never_retires_times_out() {
   # If the source never goes down (claude stuck mid-task, or a branch it can't
   # retire), the handoff bails cleanly after the timeout — before creating the
