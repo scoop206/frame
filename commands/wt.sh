@@ -8,6 +8,10 @@
 #                      raw session id instead. Carries context across frames.
 #                      SRC is a bare topic (this project) or a NAME/TOPIC handle
 #                      (any project — the form :FrameName / `frame name` copy).
+#                      A LIVE source is handed off gracefully: its claude is
+#                      asked to wrap up and retire its own frame (frame wt -d),
+#                      and resumed here once it's down (FRAME_HANDOFF_TIMEOUT,
+#                      default 300s, bounds the wait).
 #   frame wt -d [-f] [TOPIC]
 #                      tear down: quit the nvim session, remove worktree,
 #                      delete branch. TOPIC defaults to the frame you're
@@ -207,17 +211,24 @@ fi
 # keeps the current project's NAME; a slash splits off the source project's name.
 #
 # A session must have ONE owner: two claudes appending the same transcript can
-# corrupt it. So refuse if the source frame's CLAUDE is still running — probed
-# over RPC (FrameClaudeAlive), which distinguishes a live claude from a frame
-# that's up but whose claude was quit (the buffer drops to a shell). Only the
-# claude matters; you can leave the source frame open. If the source predates
-# this probe (RPC errors) we can't tell, so warn and proceed rather than block a
-# frame that may well be idle. Then resolve the id: prefer the one the source
-# recorded at its last SessionStart ($FRAME_RUNDIR/<name>-<topic>.session,
-# written by `frame swarm --context`) — authoritative, and correct even when the
-# source was ITSELF resumed (its transcript keeps the origin frame's project
-# key, so a path-scan finds nothing under its own worktree). Fall back to
-# scanning the worktree's transcripts for frames that predate the recorder.
+# corrupt it. So the source's claude must be gone before we resume its session
+# here. Rather than refuse a live source (the old behavior — which forced you to
+# tidy up, hunt down the right process, and quit it by hand), we hand off
+# gracefully: ask the source's claude to wrap up and retire ITS OWN frame, then
+# wait for it to go down before taking over. The source can't quit its own CLI
+# keystroke-style, but it CAN run `frame wt -d` — that tears its frame down
+# (killing its claude) in its own project context, respecting the dirty/unmerged
+# guards, which doubles as the "commit first" nudge. Its going down is the
+# unspoofable A-OK; we never force-kill.
+#
+# Resolve the id BEFORE any of this: prefer the one the source recorded at its
+# last SessionStart ($FRAME_RUNDIR/<name>-<topic>.session, written by `frame
+# swarm --context`) — authoritative, and correct even when the source was ITSELF
+# resumed (its transcript keeps the origin frame's project key, so a path-scan
+# finds nothing under its own worktree). Fall back to scanning the worktree's
+# transcripts for frames that predate the recorder. Reading it up front means a
+# source that retires itself (reaping its own .session) has already handed us the
+# id, and we never retire a source only to find it had no session to carry.
 if [[ -n "$FROM_TOPIC" ]]; then
   # Split the handle: NAME/TOPIC picks a source project explicitly; a bare topic
   # defaults to this project's NAME. TOPIC keeps any further slashes (branch-like
@@ -229,20 +240,6 @@ if [[ -n "$FROM_TOPIC" ]]; then
     _from_name="$NAME" _from_topic="$FROM_TOPIC"
   fi
   _src_sock="$FRAME_RUNDIR/$_from_name-$_from_topic.nvim"
-  if [[ -S "$_src_sock" ]]; then
-    _claude_alive=$(frame_rpc_expr "$_src_sock" 'v:lua.FrameClaudeAlive()') || _claude_alive=""
-    if [[ "$_claude_alive" == 1 ]]; then
-      echo "$X_MARK claude is still running in frame $FROM_TOPIC — refusing to resume its" >&2
-      echo "  session in two places (that can corrupt the transcript). Exit its claude" >&2
-      echo "  (Ctrl-C, then /exit or Ctrl-D), then rerun. The frame can stay open." >&2
-      exit 1
-    elif [[ -z "$_claude_alive" ]]; then
-      echo "$WARN_MARK couldn't check whether frame $FROM_TOPIC's claude is running (it" >&2
-      echo "  predates this check — reboot it for precise detection). If its claude is" >&2
-      echo "  up, exit it first to avoid corrupting the shared transcript." >&2
-    fi
-    # _claude_alive == 0 → claude confirmed stopped; proceed.
-  fi
   _sess_file="$FRAME_RUNDIR/$_from_name-$_from_topic.session"
   if [[ -r "$_sess_file" ]]; then
     RESUME_ID=$(<"$_sess_file")
@@ -253,6 +250,49 @@ if [[ -n "$FROM_TOPIC" ]]; then
     echo "$X_MARK --from $FROM_TOPIC: no claude session found for that frame" >&2
     echo "  (no $_sess_file, and no transcript under ~/.claude/projects for its worktree)" >&2
     exit 1
+  fi
+
+  # Graceful handoff, only when the source's claude is actually live. If it's
+  # already stopped (0) there's nothing to hand off; if we can't tell (RPC error
+  # — a source predating this probe) we warn and proceed rather than block.
+  if [[ -S "$_src_sock" ]]; then
+    _alive=$(frame_rpc_expr "$_src_sock" 'v:lua.FrameClaudeAlive()') || _alive=""
+    if [[ "$_alive" == 1 ]]; then
+      # The new frame's topic is still just the positional here ($1); TOPIC is
+      # assigned further down. Name the destination for the nudge.
+      _dest="$NAME/${1:-?}"
+      _msg="🚚 frame handoff — your claude session is being moved into a new frame ($_dest). Please wrap up now: commit or stash any loose work on this branch and finish your current thought, then retire THIS frame yourself by running  frame wt -d  (it refuses on a dirty or unmerged branch — commit or merge first, or  frame wt -d -f  to discard). The moment this frame goes down, your session resumes in the new one. No reply needed."
+      _esc=${_msg//\'/\'\'}                       # vimscript single-quote escape
+      if ! frame_rpc_expr "$_src_sock" "v:lua.FrameBrokerSubmit('$_esc', 'inbox')" >/dev/null; then
+        echo "$X_MARK couldn't hand off to frame $FROM_TOPIC — its session didn't take the" >&2
+        echo "  message. Is it wedged? Tidy up and retire it yourself (frame wt -d from" >&2
+        echo "  inside it, or :FrameDown), then rerun." >&2
+        exit 1
+      fi
+      _timeout=${FRAME_HANDOFF_TIMEOUT:-300} _poll=${FRAME_HANDOFF_POLL:-3} _waited=0
+      echo "$RUN_MARK asked $FROM_TOPIC to wrap up and retire itself — waiting for it to go"
+      echo "  down (up to ${_timeout}s; it resumes here once it's down, Ctrl-C to abort)…"
+      while (( _waited < _timeout )); do
+        [[ -S "$_src_sock" ]] || break            # frame torn down → source gone
+        _alive=$(frame_rpc_expr "$_src_sock" 'v:lua.FrameClaudeAlive()') || _alive=""
+        [[ "$_alive" == 0 ]] && break             # claude exited (frame may linger)
+        sleep "$_poll"; _waited=$(( _waited + _poll ))
+      done
+      if [[ -S "$_src_sock" && "${_alive:-1}" != 0 ]]; then
+        echo "$X_MARK $FROM_TOPIC didn't go down within ${_timeout}s — its claude may be" >&2
+        echo "  mid-task, or waiting on a dirty/unmerged branch it can't retire. Check it" >&2
+        echo "  (frame view $FROM_TOPIC), let it finish or commit, then rerun. Nothing was" >&2
+        echo "  created here." >&2
+        exit 1
+      fi
+      echo "$OK_MARK $FROM_TOPIC is down — taking over its session."
+    elif [[ -z "$_alive" ]]; then
+      echo "$WARN_MARK couldn't check whether frame $FROM_TOPIC's claude is running (it" >&2
+      echo "  predates this check — reboot it for precise detection). If its claude is" >&2
+      echo "  up, retire it first (frame wt -d from inside it) to avoid corrupting the" >&2
+      echo "  shared transcript." >&2
+    fi
+    # _alive == 0 → claude already stopped; nothing to hand off.
   fi
   echo "$OK_MARK resuming session $RESUME_ID from frame $FROM_TOPIC"
 fi

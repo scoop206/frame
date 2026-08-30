@@ -22,10 +22,13 @@ Usage:
     frame wt TOPIC                    create/reuse branch + worktree, boot it
     frame wt TOPIC --from SRC         …and resume SRC frame's warm claude
                                       session in it (carry context across
-                                      topics). SRC is a bare topic (this
-                                      project) or a NAME/TOPIC handle (any
-                                      project — the :FrameName / `frame name`
-                                      form); --resume ID takes a raw id
+                                      topics). If SRC's claude is live, it's
+                                      asked to wrap up and retire itself, then
+                                      resumed here once it's down. SRC is a
+                                      bare topic (this project) or a NAME/TOPIC
+                                      handle (any project — the :FrameName /
+                                      `frame name` form); --resume ID takes a
+                                      raw id
     frame wt                          boot the worktree you're already in
     frame wt -d [-f] [TOPIC]          tear down a frame (default: current)
 

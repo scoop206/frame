@@ -275,15 +275,41 @@ test_from_accepts_name_topic_handle_across_projects() {
 _plant_src_socket() { python3 -c 'import socket,sys
 s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$FRAME_RUNDIR/$TNAME-src.nvim"; }
 
-test_from_live_claude_is_refused() {
-  # One owner per session: a source whose CLAUDE is running is refused, before
-  # any side effect. The frame being up is not enough — the claude must be live.
+test_from_live_source_hands_off_then_resumes() {
+  # Graceful handoff: a LIVE source isn't refused — its claude is asked to wrap
+  # up and retire its own frame, and once it's down we resume its session here.
+  # FAKE_CLAUDE_ALIVE_POLLS=1 → alive on the gate probe, gone on the first wait
+  # poll (the source retired itself). The handoff nudge is injected over the
+  # broker and captured in the expr log.
   setup_project
+  print -r -- "sid-move" > "$FRAME_RUNDIR/$TNAME-src.session"
   _plant_src_socket
-  export FAKE_NVIM_EXPR_RESULT=1        # FrameClaudeAlive() → claude running
+  export FAKE_CLAUDE_ALIVE_POLLS=1
+  export FAKE_NVIM_POLL_COUNT_FILE="$SANDBOX/pollcount"
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/expr.log"
+  export FRAME_HANDOFF_POLL=1
+  run_frame wt topic --from src
+  assert_status 0
+  assert_contains "$(<$SANDBOX/expr.log)" "FrameBrokerSubmit"   # nudge was delivered
+  assert_contains "$(<$SANDBOX/expr.log)" "frame wt -d"         # …telling it how to retire
+  assert_contains "$OUT" "is down — taking over"
+  assert_contains "$OUT" "resuming session sid-move from frame src"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-move"
+}
+
+test_from_live_source_that_never_retires_times_out() {
+  # If the source never goes down (claude stuck mid-task, or a branch it can't
+  # retire), the handoff bails cleanly after the timeout — before creating the
+  # new worktree. FAKE_NVIM_EXPR_RESULT=1 → alive forever; a 1s budget keeps it
+  # snappy.
+  setup_project
+  print -r -- "sid-stuck" > "$FRAME_RUNDIR/$TNAME-src.session"
+  _plant_src_socket
+  export FAKE_NVIM_EXPR_RESULT=1        # FrameClaudeAlive() → alive on every poll
+  export FRAME_HANDOFF_TIMEOUT=1 FRAME_HANDOFF_POLL=1
   run_frame wt topic --from src
   assert_status 1
-  assert_contains "$OUT" "still running"
+  assert_contains "$OUT" "didn't go down within"
   assert_dir_absent "$SANDBOX/_$TNAME-topic"
   assert_file_absent "$FAKE_NVIM_LOG"
 }

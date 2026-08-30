@@ -77,6 +77,25 @@ if [[ "${1:-}" == "--server" ]]; then
     # FAKE_BROKERED (default 0 = a human turn) stands in for the flag; a dedicated
     # case so it doesn't collide with the mute switch's FAKE_NVIM_EXPR_RESULT.
     *FrameTakeBrokeredFlag*) print -rn -- "${FAKE_BROKERED:-0}"; exit 0 ;;
+    # `frame wt --from` probes this to gate the graceful handoff, then polls it
+    # while the live source tidies up and retires itself. FAKE_CLAUDE_ALIVE_POLLS=N
+    # reports alive (1) for the first N queries, then gone (0) — simulating the
+    # source going down after the handoff nudge (count kept in the shared
+    # FAKE_NVIM_POLL_COUNT_FILE). Without it, honor FAKE_NVIM_EXPR_RESULT like the
+    # historical single-probe tests, or error like an old layout when it's unset.
+    *FrameClaudeAlive*)
+      [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
+      if [[ -n "${FAKE_CLAUDE_ALIVE_POLLS:-}" ]]; then
+        _n=0
+        [[ -f "${FAKE_NVIM_POLL_COUNT_FILE:?set with FAKE_CLAUDE_ALIVE_POLLS}" ]] \
+          && _n=$(<"$FAKE_NVIM_POLL_COUNT_FILE")
+        _n=$((_n + 1))
+        print -rn -- "$_n" > "$FAKE_NVIM_POLL_COUNT_FILE"
+        (( _n <= FAKE_CLAUDE_ALIVE_POLLS )) && { print -rn -- 1; exit 0; }
+        print -rn -- 0; exit 0
+      fi
+      [[ -n "${FAKE_NVIM_EXPR_RESULT+x}" ]] && { print -rn -- "$FAKE_NVIM_EXPR_RESULT"; exit 0; }
+      exit 1 ;;
   esac
   # Optional expr trace: append every remote-expr issued, so a test can assert
   # what was actually sent (e.g. --count → FrameInboxDrainAtLeast, --for → the
