@@ -167,6 +167,47 @@ EOF
   assert_branch_absent "$REPO" topic
 }
 
+test_live_session_stops_buffers_before_quitting_nvim() {
+  # With a live session, teardown Ctrl-C's the frame's terminal buffers
+  # (FrameStopBuffers) so their dev-server trees shut down gracefully, BEFORE
+  # the :qa! that kills nvim orphans a grandchild (workerd) with its port held.
+  # A real socket + the nvim stub stand in for the session: the stub answers the
+  # buffer-stop RPC with a count and, on the :qa!, unlinks the socket like a real
+  # nvim exit. The expr trace proves the stop went out AND preceded the quit.
+  (( $+commands[python3] )) || { skip "python3 not found"; return }
+  setup_frame
+  python3 -c 'import socket, sys; socket.socket(socket.AF_UNIX).bind(sys.argv[1])' \
+    "$FRAME_RUNDIR/$TNAME-topic.nvim"
+  export FAKE_NVIM_EXPR_RESULT=2          # FrameStopBuffers reports 2 buffers hit
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs.log"
+  run_frame wt -d topic
+  unset FAKE_NVIM_EXPR_RESULT FAKE_NVIM_EXPR_LOG
+  assert_status 0
+  assert_contains "$OUT" "sent Ctrl-C to 2 terminal buffer(s)"
+  local log="$(<$SANDBOX/exprs.log)"
+  assert_contains "$log" 'FrameStopBuffers()'
+  # Ordering is the load-bearing property: stopping must come BEFORE the quit,
+  # or the tree is already SIGHUP-orphaned by the time we interrupt it.
+  local sb=$(grep -n FrameStopBuffers "$SANDBOX/exprs.log" | head -1 | cut -d: -f1)
+  local qa=$(grep -n 'qa!'            "$SANDBOX/exprs.log" | head -1 | cut -d: -f1)
+  assert_eq "${sb:-x}<${qa:-x}=$([[ -n $sb && -n $qa && $sb -lt $qa ]] && echo ok)" \
+            "${sb:-x}<${qa:-x}=ok" "FrameStopBuffers must be sent before :qa! (sb=$sb qa=$qa)"
+  assert_dir_absent "$WT"
+  assert_branch_absent "$REPO" topic
+}
+
+test_socketless_teardown_skips_buffer_stop() {
+  # No live socket (the common case in these tests): the buffer-stop is a clean
+  # no-op — teardown never claims to Ctrl-C anything — and removal still happens.
+  setup_frame
+  run_frame wt -d topic
+  assert_status 0
+  assert_contains "$OUT" "no nvim socket"
+  assert_not_contains "$OUT" "sent Ctrl-C"
+  assert_dir_absent "$WT"
+  assert_branch_absent "$REPO" topic
+}
+
 test_merge_then_teardown_happy_path() {
   setup_frame
   commit_file "$WT" work.txt "feature work"
