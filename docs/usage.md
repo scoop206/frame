@@ -13,11 +13,13 @@ running Claude with supporting service buffers and a terminal (local).
 
 Usage:
 
-    frame init [--force] [--type T]   scaffold integration into a project;
+    frame init [--force] [--type T…]  scaffold integration into a project;
                                       --force re-syncs an out-of-date
                                       .claude/settings.json (frame hooks only);
-                                      --type astrojs also scaffolds + commits a
-                                      worktree-ready Astro project
+                                      --type stacks (repeatable): base astrojs
+                                      scaffolds a worktree-ready Astro project,
+                                      layer cloudflare wires .dev.vars into
+                                      WT_LINKS + .gitignore
 
     frame wt TOPIC                    create/reuse branch + worktree, boot it
     frame wt TOPIC --from SRC_FRAME   …and resume SRC_FRAME's warm claude

@@ -277,6 +277,61 @@ test_init_generic_makes_no_commit() {
   assert_file_absent "$REPO/package.json"
   assert_eq "$(git -C "$REPO" rev-parse HEAD)" "$head_before" "generic init made a commit"
   assert_not_contains "$OUT" "committed the astrojs scaffold"
+  # generic leaves WT_LINKS commented so wt.sh's default (.env web/node_modules)
+  # applies; no cloudflare wiring leaks into a plain init
+  local cfg="$(<$REPO/.frame/config.sh)"
+  assert_contains "$cfg" "#WT_LINKS=(.env web/node_modules)"
+  assert_not_contains "$cfg" ".dev.vars"
+  assert_not_contains "$(<$REPO/.gitignore)" ".dev.vars"
+}
+
+test_init_cloudflare_layers_onto_generic_base() {
+  # a bare `--type cloudflare` layers onto the default generic base: the
+  # commented WT_LINKS default is promoted to an active line carrying .dev.vars,
+  # and .dev.vars is gitignored. No astro scaffold, no commit.
+  make_repo
+  local head_before=$(git -C "$REPO" rev-parse HEAD)
+  run_frame init --type cloudflare
+  assert_status 0
+  assert_file_absent "$REPO/package.json"
+  assert_eq "$(git -C "$REPO" rev-parse HEAD)" "$head_before" "cloudflare init made a commit"
+  local cfg="$(<$REPO/.frame/config.sh)"
+  assert_contains "$cfg" "WT_LINKS=(.env .dev.vars)"
+  assert_not_contains "$cfg" "#WT_LINKS="
+  local gi="$(<$REPO/.gitignore)"
+  assert_contains "$gi" $'\n.dev.vars\n'
+  assert_contains "$gi" "# frame:cloudflare"
+}
+
+test_init_astrojs_cloudflare_stack() {
+  # `--type astrojs --type cloudflare` stacks the layer onto the astro base:
+  # .dev.vars joins node_modules in WT_LINKS, and gets gitignored, while the full
+  # astro scaffold still lands.
+  make_repo
+  run_frame init --type astrojs --type cloudflare
+  assert_status 0
+  assert_file_exists "$REPO/package.json"
+  local cfg="$(<$REPO/.frame/config.sh)"
+  assert_contains "$cfg" "WT_LINKS=(node_modules .dev.vars)"
+  assert_contains "$cfg" "BUFFERS=(claude local vite)"
+  local gi="$(<$REPO/.gitignore)"
+  assert_contains "$gi" $'\n.dev.vars\n'
+  assert_contains "$gi" "# frame:cloudflare"
+}
+
+test_init_cloudflare_gitignore_is_idempotent() {
+  make_repo
+  run_frame init --type cloudflare
+  run_frame init --type cloudflare
+  assert_status 0
+  assert_eq "$(grep -c '# frame:cloudflare' "$REPO/.gitignore")" "1" "cloudflare gitignore block duplicated"
+}
+
+test_init_rejects_conflicting_base_types() {
+  make_repo
+  run_frame init --type generic --type astrojs
+  assert_status 2
+  assert_contains "$OUT" "conflicting base types"
 }
 
 test_init_outside_git_fails() {

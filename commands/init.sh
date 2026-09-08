@@ -4,11 +4,15 @@
 #   .claude/settings.json   claude-code hooks: `frame notify` when a turn ends,
 #                           clear the title status when the next prompt lands
 #
-# --type TYPE picks the config.sh flavour (default: generic — the template
-# above). --type astrojs additionally scaffolds a worktree-ready Astro project:
-# package.json / astro.config.mjs / tsconfig.json / src/pages, an astro-shaped
-# config.sh (vite buffer, VITE_DIR=., WT_LINKS=(node_modules), and a stack_up
-# that installs deps once in the primary), and the matching .gitignore lines.
+# --type TYPE picks the scaffold flavour, and stacks: one BASE (generic default,
+# or astrojs) plus any LAYERS (cloudflare), e.g. `--type astrojs --type
+# cloudflare`. --type astrojs additionally scaffolds a worktree-ready Astro
+# project: package.json / astro.config.mjs / tsconfig.json / src/pages, an
+# astro-shaped config.sh (vite buffer, VITE_DIR=., WT_LINKS=(node_modules), and a
+# stack_up that installs deps once in the primary), and the matching .gitignore
+# lines. --type cloudflare layers Cloudflare's .dev.vars (its .env-equivalent
+# local secrets) onto whatever base is chosen: adds it to WT_LINKS so every
+# worktree symlinks it from the primary, and gitignores it.
 # init NEVER stages or commits on your behalf — because `frame wt` only inherits
 # COMMITTED files, it prints a reminder to review + commit the scaffold yourself
 # so the very first `frame wt` inherits a working project via git. Deps aren't
@@ -44,27 +48,59 @@ cd "$PROJECT_ROOT"
 # --type TYPE selects the scaffold flavour (default generic). Accepts both
 # `--type astrojs` and `--type=astrojs`.
 FORCE=0
-TYPE=generic
+typeset -a _types
 while (( $# )); do
   case "$1" in
     -f|--force) FORCE=1 ;;
     --type)
       shift
-      TYPE="${1:-}"
-      [[ -n "$TYPE" ]] || { echo "$X_MARK frame init: --type needs a value" >&2; exit 2; } ;;
-    --type=*) TYPE="${1#--type=}" ;;
+      [[ -n "${1:-}" ]] || { echo "$X_MARK frame init: --type needs a value" >&2; exit 2; }
+      _types+=("$1") ;;
+    --type=*) _types+=("${1#--type=}") ;;
     -*) echo "$X_MARK frame init: unknown flag: $1" >&2; exit 2 ;;
     *)  echo "$X_MARK frame init: unexpected argument: $1" >&2; exit 2 ;;
   esac
   shift
 done
 
-case "$TYPE" in
-  generic|astrojs) ;;
-  *) echo "$X_MARK frame init: unknown --type '$TYPE' (known: generic, astrojs)" >&2; exit 2 ;;
-esac
+# Types stack. Each project has exactly one BASE flavour (generic | astrojs) plus
+# any composable LAYERS (cloudflare). `--type astrojs --type cloudflare` is an
+# Astro project whose worktrees also carry Cloudflare's .dev.vars; a bare `--type
+# cloudflare` layers onto the default generic base. Two DIFFERENT bases is a
+# conflict — a project can't be both generic and astrojs.
+BASE=generic
+_base_set=0
+CLOUDFLARE=0
+for _t in "${_types[@]}"; do
+  case "$_t" in
+    generic|astrojs)
+      if (( _base_set )) && [[ "$BASE" != "$_t" ]]; then
+        echo "$X_MARK frame init: conflicting base types '$BASE' and '$_t' (a project has one base)" >&2
+        exit 2
+      fi
+      BASE="$_t"; _base_set=1 ;;
+    cloudflare) CLOUDFLARE=1 ;;
+    *) echo "$X_MARK frame init: unknown --type '$_t' (known: generic, astrojs, cloudflare)" >&2; exit 2 ;;
+  esac
+done
 
 mkdir -p .frame/local
+
+# WT_LINKS seed for the generated config.sh (see wt.sh — gitignored assets
+# symlinked from the primary checkout into each fresh worktree). The cloudflare
+# layer adds .dev.vars, Cloudflare's local-secrets file — the .env of a
+# Workers/Pages project — so worktrees symlink it exactly like .env.
+_astro_wt_links="node_modules"
+_cf_link_comment=""
+if (( CLOUDFLARE )); then
+  _astro_wt_links+=" .dev.vars"
+  _cf_link_comment=$'\n# .dev.vars is the Cloudflare local-secrets file (the .env of a Workers/Pages\n# project); symlink it per-worktree the same way.'
+  # generic base: promote the commented default to an active line that carries
+  # .dev.vars (web/node_modules dropped — a Workers project is not a web/ app).
+  _generic_wt_links='WT_LINKS=(.env .dev.vars)   # symlinked into fresh worktrees; .dev.vars = Cloudflare local secrets'
+else
+  _generic_wt_links='#WT_LINKS=(.env web/node_modules)   # gitignored assets symlinked into fresh worktrees'
+fi
 
 # Each block records one "FILE|MODIFIED|NOTE" row; the table prints at the end so
 # a yes/no column shows at a glance what init touched vs what it left alone.
@@ -73,7 +109,7 @@ _hooks_hint=
 
 if [[ -f .frame/config.sh ]]; then
   _rows+=( ".frame/config.sh|no|already exists — left alone" )
-elif [[ "$TYPE" == astrojs ]]; then
+elif [[ "$BASE" == astrojs ]]; then
   _name="${$(frame_main_wt "$PROJECT_ROOT"):t}"
   cat > .frame/config.sh <<EOF
 # Frame project config — Astro variant, scaffolded by \`frame init --type astrojs\`.
@@ -94,8 +130,8 @@ VITE_DIR=.
 
 # node_modules lives once in the primary checkout and is symlinked into each
 # fresh worktree — it's gitignored, so git can't carry it the way it carries the
-# committed scaffold.
-WT_LINKS=(node_modules)
+# committed scaffold.${_cf_link_comment}
+WT_LINKS=($_astro_wt_links)
 
 # Guarantee the primary checkout's deps exist before a worktree symlinks them.
 # Runs on every \`frame wt\` boot (before WT_LINKS symlinking) and must stay
@@ -127,7 +163,7 @@ BUFFERS=(claude local)
 # Base ports; each frame scans upward and exports its picks as PORT /
 # FRAME_API_PORT / FRAME_VITE_PORT / FRAME_HMR_PORT for your code to read.
 #API_PORT=3000  VITE_PORT=5173  HMR_PORT=24678
-#WT_LINKS=(.env web/node_modules)   # gitignored assets symlinked into fresh worktrees
+${_generic_wt_links}
 
 # Bring up everything the dev stack needs — runs on every \`frame wt\` boot, so
 # keep it idempotent. Shared postgres/minio come from frame; only
@@ -209,7 +245,7 @@ fi
 # reminder below so the user reviews + commits the scaffold themselves, since
 # `frame wt` only inherits committed files. Deps are NOT installed here — the
 # config.sh stack_up does that lazily on first boot.
-if [[ "$TYPE" == astrojs ]]; then
+if [[ "$BASE" == astrojs ]]; then
   _tpl="$FRAME_ROOT/templates/astrojs"
   # dest paths relative to the project root; each is copied verbatim if absent.
   for _rel in package.json astro.config.mjs tsconfig.json src/pages/index.astro; do
@@ -242,6 +278,20 @@ if [[ "$TYPE" == astrojs ]]; then
   fi
 fi
 
+# ── cloudflare layer ──────────────────────────────────────────────────────────
+# .dev.vars holds local secrets (Cloudflare's .env) — never commit it. WT_LINKS
+# already symlinks it into fresh worktrees (see config.sh above); here we just
+# make sure git ignores it. .dev.vars.* covers wrangler's per-environment
+# variants (.dev.vars.staging, …). A marker line keeps this block append-once.
+if (( CLOUDFLARE )); then
+  if [[ -f .gitignore ]] && grep -qF '# frame:cloudflare' .gitignore; then
+    _rows+=( ".gitignore|no|already covers cloudflare (.dev.vars)" )
+  else
+    printf '\n# frame:cloudflare — local secrets (like .env), never committed\n.dev.vars\n.dev.vars.*\n' >> .gitignore
+    _rows+=( ".gitignore|yes|added cloudflare (.dev.vars)" )
+  fi
+fi
+
 # Print the summary table: widen the FILE column to its longest entry so the
 # MODIFIED / NOTE columns line up.
 _w=4  # len("FILE")
@@ -260,7 +310,7 @@ done
 # first-boot failure this type exists to fix — but init must never stage or
 # commit on the user's behalf (it surprised people), so we nudge rather than act.
 # Only nudge when the tree is actually dirty; a fully-committed re-run stays quiet.
-if [[ "$TYPE" == astrojs ]] && [[ -n "$(git status --porcelain)" ]]; then
+if [[ "$BASE" == astrojs ]] && [[ -n "$(git status --porcelain)" ]]; then
   print -- "\n  $WARN_MARK the astrojs scaffold is NOT committed — \`frame wt <topic>\` only"
   print -- "    inherits committed files, so review the scaffold and commit it yourself:"
   print -- "        git add -A && git commit -m 'frame init: scaffold Astro project'"
