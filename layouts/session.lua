@@ -242,6 +242,47 @@ _G.FrameClaudeAlive = function()
   return 0
 end
 
+-- _G.FrameStopBuffers() — halt whatever is running in EVERY terminal buffer
+-- except claude, gracefully, the way a human Ctrl-C's them, BEFORE teardown
+-- quits nvim. The motivating leak is a dev server run as an nvim terminal job
+-- (vite = `npm run dev` → wrangler/astro → workerd for a Cloudflare adapter):
+-- :qa! SIGHUPs only the top of that job, so npm/wrangler exit at once and the
+-- workerd GRANDCHILD is orphaned before anything tells it to stop — reparented
+-- to launchd, still holding its port (the stale :8791 wrangler that broke
+-- flipnem). Writing ETX (Ctrl-C) to the buffer's PTY instead makes the tty line
+-- discipline raise SIGINT on the job's whole foreground process group, so
+-- wrangler drains workerd on the interrupt it already handles. term_durable
+-- wraps its command with `trap ':' INT`, so a server buffer's wrapper shrugs off
+-- the SIGINT and falls through to `exec zsh` — the buffer just becomes an idle
+-- shell, which :qa! then closes; a bare/ad-hoc terminal simply has its
+-- foreground job interrupted and its shell survives. Returns how many buffers it
+-- signalled so teardown knows whether to wait for them to drain.
+--
+-- We sweep ALL terminal buffers, not a name allowlist: a dev server is often run
+-- by hand in the `local` buffer, and people spin up extra terminals that could
+-- be running anything — every one of those leaks the same way. claude is the one
+-- exclusion: it's the live agent (often the very session that ran teardown), so
+-- a stray Ctrl-C would interrupt it for nothing — :qa! closes it cleanly a beat
+-- later. We match claude by buffer handle, and by job channel as a backstop.
+_G.FrameStopBuffers = function()
+  local claude_buf, claude_chan = FrameState.buf['claude'], FrameState.chan['claude']
+  local n = 0
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(buf)
+        and buf ~= claude_buf
+        and vim.bo[buf].buftype == 'terminal' then
+      -- terminal_job_id is the buffer's PTY channel; missing/0 on a buffer whose
+      -- job already exited. pcall: a dead channel makes chansend error — an
+      -- already-stopped job is success here, so it just isn't counted.
+      local ok, chan = pcall(function() return vim.b[buf].terminal_job_id end)
+      if ok and type(chan) == 'number' and chan > 0 and chan ~= claude_chan then
+        if pcall(vim.fn.chansend, chan, '\3') then n = n + 1 end  -- '\3' = Ctrl-C
+      end
+    end
+  end
+  return n
+end
+
 -- frame_submit(chan, text) — type TEXT into a claude terminal channel and
 -- submit it. Two writes with the Enter deferred ~200ms: claude's TUI
 -- paste-detection folds a CR arriving in the same rapid chunk into a newline

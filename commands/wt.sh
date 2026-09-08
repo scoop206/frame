@@ -92,6 +92,27 @@ if [[ "${1:-}" == "-d" ]]; then
     exit 0
   fi
 
+  # Gracefully halt whatever's running in the frame's terminal buffers (all but
+  # claude) BEFORE quitting nvim. :qa! SIGHUPs each terminal job's top and
+  # orphans its grandchildren — the workerd under `npm run dev → wrangler` keeps
+  # running, reparented to launchd with its port still held (the stale :8791
+  # wrangler that squatted a port and broke flipnem). FrameStopBuffers
+  # (session.lua) Ctrl-C's every non-claude buffer over the socket while the
+  # trees are still intact, so the tty raises SIGINT on each whole job group and
+  # e.g. wrangler drains workerd on the interrupt it expects. Sweeping all
+  # buffers (not just server/vite) catches a dev server run by hand in `local`
+  # and any ad-hoc terminal. Best-effort: a dead/wedged socket just fails the
+  # probe (frame_rpc_expr times out) and we fall through to :qa! as before; a
+  # frame booted before this returns no such function and the same fallthrough
+  # applies.
+  if [[ -S "$SOCKET" ]]; then
+    _stopped=$(frame_rpc_expr "$SOCKET" 'luaeval("FrameStopBuffers()")' 5 2>/dev/null) || _stopped=""
+    if [[ "$_stopped" == <1-> ]]; then
+      echo "$RUN_MARK sent Ctrl-C to $_stopped terminal buffer(s) — letting them drain…"
+      sleep 1.5   # give wrangler/vite the beat they need to release their ports
+    fi
+  fi
+
   # Track whether we POSITIVELY saw the session go down. Only a clean :qa!
   # handshake followed by the socket unlinking proves it; a missing or
   # unresponsive socket does not (see the backstop below).

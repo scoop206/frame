@@ -20,6 +20,13 @@ if [[ "${1:-}" == "--server" ]]; then
   # without one is "dead" — the query fails, exactly as a real unanswered
   # socket would, and ls skips it.
   case "$_expr" in
+    # Teardown's pre-quit :qa! (frame wt -d, via --remote-send). A real nvim
+    # unlinks its listen socket as it exits — model that so teardown's
+    # socket-unlink poll completes instead of timing out. No exit: fall through
+    # to the shared logging below so a FAKE_NVIM_LOG argv trace (frame shell -d)
+    # and a FAKE_NVIM_EXPR_LOG expr trace (ordering vs the buffer-stop RPC) still
+    # capture the call exactly as before.
+    *qa!*) rm -f "$_sock" ;;
     *FrameInfo*)
       # A <sock>.hang companion stands in for an alive-but-unresponsive nvim:
       # the socket exists but the session never answers the RPC. Sleep well
