@@ -448,7 +448,11 @@ Hooks:
   `frame_services_up` / `ensure_pg_db` / `ensure_minio_bucket`; only
   project-unique containers belong in the project's own compose file — pin
   those with `--project-directory "$MAIN_WT"` so every frame shares one
-  instance instead of spawning a per-worktree compose project.
+  instance instead of spawning a per-worktree compose project. For an npm
+  project, `frame_clone_node_modules` gives each worktree its own
+  copy-on-write `node_modules` (an APFS clonefile where supported, a plain copy
+  otherwise; either way per-frame dep-optimizer caches stop fighting) and
+  self-heals the primary's deps on a fresh clone.
 - `app_env()` — export the vars pointing the app at what Frame set up: the
   shared services (`DATABASE_URL`, S3 endpoint, …) and, if your app reads its
   port under a name other than the `PORT` frame tracks (see `buffers.json`),

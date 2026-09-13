@@ -202,13 +202,15 @@ test_init_astrojs_scaffolds_project() {
   assert_file_exists "$REPO/astro.config.mjs"
   assert_file_exists "$REPO/tsconfig.json"
   assert_file_exists "$REPO/src/pages/index.astro"
-  # astro-shaped config.sh: vite buffer, root VITE_DIR, node_modules link, stack_up
+  # astro-shaped config.sh: vite buffer, root VITE_DIR, COW node_modules stack_up
   local cfg="$(<$REPO/.frame/config.sh)"
   assert_contains "$cfg" "BUFFERS=(claude local vite)"
   assert_contains "$cfg" "VITE_DIR=."
-  assert_contains "$cfg" "WT_LINKS=(node_modules)"
+  # node_modules is NOT symlinked (COW per-worktree); only .env is linked
+  assert_contains "$cfg" "WT_LINKS=(.env)"
+  assert_not_contains "$cfg" "WT_LINKS=(node_modules)"
   assert_contains "$cfg" "stack_up()"
-  assert_contains "$cfg" 'npm install'
+  assert_contains "$cfg" 'frame_clone_node_modules'
   # no port machinery: config.sh doesn't prescribe a port and astro.config lets
   # Vite pick one (host:true binds the network, but no port is set)
   assert_not_contains "$cfg" "VITE_PORT"
@@ -218,8 +220,8 @@ test_init_astrojs_scaffolds_project() {
   assert_not_contains "$astrocfg" "process.env"
   # gitignore covers deps/build AND the anchored-images caution
   local gi="$(<$REPO/.gitignore)"
-  # bare node_modules (no trailing slash) so the per-worktree SYMLINK is ignored
-  # too, not just a real directory
+  # bare node_modules (no trailing slash) so both the per-worktree COW directory
+  # and a legacy symlink are ignored, not just a real directory
   assert_contains "$gi" $'\nnode_modules\n'
   assert_not_contains "$gi" "node_modules/"
   assert_contains "$gi" ".astro/"
@@ -305,14 +307,14 @@ test_init_cloudflare_layers_onto_generic_base() {
 
 test_init_astrojs_cloudflare_stack() {
   # `--type astrojs --type cloudflare` stacks the layer onto the astro base:
-  # .dev.vars joins node_modules in WT_LINKS, and gets gitignored, while the full
-  # astro scaffold still lands.
+  # .dev.vars joins .env in WT_LINKS (node_modules is COW, not symlinked), and
+  # gets gitignored, while the full astro scaffold still lands.
   make_repo
   run_frame init --type astrojs --type cloudflare
   assert_status 0
   assert_file_exists "$REPO/package.json"
   local cfg="$(<$REPO/.frame/config.sh)"
-  assert_contains "$cfg" "WT_LINKS=(node_modules .dev.vars)"
+  assert_contains "$cfg" "WT_LINKS=(.env .dev.vars)"
   assert_contains "$cfg" "BUFFERS=(claude local vite)"
   local gi="$(<$REPO/.gitignore)"
   assert_contains "$gi" $'\n.dev.vars\n'

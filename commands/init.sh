@@ -87,10 +87,13 @@ done
 mkdir -p .frame/local
 
 # WT_LINKS seed for the generated config.sh (see wt.sh — gitignored assets
-# symlinked from the primary checkout into each fresh worktree). The cloudflare
-# layer adds .dev.vars, Cloudflare's local-secrets file — the .env of a
-# Workers/Pages project — so worktrees symlink it exactly like .env.
-_astro_wt_links="node_modules"
+# symlinked from the primary checkout into each fresh worktree). node_modules is
+# NOT symlinked for astro: stack_up gives each worktree its own copy-on-write
+# node_modules so the per-frame .vite/.astro dep caches stop fighting (see
+# frame_clone_node_modules). The cloudflare layer adds .dev.vars, Cloudflare's
+# local-secrets file — the .env of a Workers/Pages project — so worktrees
+# symlink it exactly like .env.
+_astro_wt_links=".env"
 _cf_link_comment=""
 if (( CLOUDFLARE )); then
   _astro_wt_links+=" .dev.vars"
@@ -128,17 +131,19 @@ BUFFERS=(claude local vite)
 # buffer there.
 VITE_DIR=.
 
-# node_modules lives once in the primary checkout and is symlinked into each
-# fresh worktree — it's gitignored, so git can't carry it the way it carries the
-# committed scaffold.${_cf_link_comment}
+# Only shared config files are symlinked from the primary; node_modules is NOT —
+# each worktree gets its OWN copy-on-write clone (see stack_up) so every frame
+# has its own .vite/.astro dep-optimizer cache and the dev servers stop fighting
+# over one shared cache.${_cf_link_comment}
 WT_LINKS=($_astro_wt_links)
 
-# Guarantee the primary checkout's deps exist before a worktree symlinks them.
-# Runs on every \`frame wt\` boot (before WT_LINKS symlinking) and must stay
-# idempotent — the install is skipped once node_modules is present. This is what
-# makes a fresh clone / fresh checkout self-heal without a manual npm install.
+# Runs on every \`frame wt\` boot, in the worktree, with \$MAIN_WT set (before
+# WT_LINKS symlinking). Must stay idempotent. frame_clone_node_modules (a frame
+# helper, see lib/helpers.sh) heals the primary's deps — so a fresh clone/checkout
+# self-heals without a manual npm install — then gives this worktree its own
+# copy-on-write node_modules and reconciles it only when deps drift.
 stack_up() {
-  [ -d "\$MAIN_WT/node_modules" ] || ( cd "\$MAIN_WT" && npm install )
+  frame_clone_node_modules
 }
 EOF
   _rows+=( ".frame/config.sh|yes|scaffolded (astrojs) — edit it to fit the project" )
@@ -267,9 +272,10 @@ if [[ "$BASE" == astrojs ]]; then
   else
     {
       printf '\n# frame:astrojs — build + dependency artifacts (gitignored)\n'
-      # node_modules is bare (no trailing slash) on purpose: in a worktree it's a
-      # SYMLINK (WT_LINKS), not a dir, and `node_modules/` would only match a real
-      # directory — leaving the symlink tracked. Bare matches both.
+      # node_modules is bare (no trailing slash) on purpose: a bare pattern
+      # matches both a real directory (the COW clone each worktree gets from
+      # stack_up) and a legacy WT_LINKS symlink, whereas `node_modules/` would
+      # only match a directory — leaving an old symlink tracked.
       printf 'node_modules\ndist/\n.astro/\n*.log\n'
       printf '# Anchor root asset ignores: `/images/`, NEVER a bare `images` —\n'
       printf '# a bare pattern also matches public/images/ and drops web assets.\n'

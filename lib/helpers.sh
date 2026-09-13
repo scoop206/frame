@@ -907,6 +907,53 @@ ensure_minio_bucket() {
   echo "$OK_MARK bucket $_b"
 }
 
+# ── node_modules cloning ──────────────────────────────────────────────────────
+
+frame_clone_node_modules() {
+  # frame_clone_node_modules — give THIS worktree its own node_modules cheaply.
+  # Call it from a project's stack_up hook (npm-based projects). Runs in the
+  # worktree with $MAIN_WT set; idempotent.
+  #
+  #   1. Guarantee the primary checkout has deps (the source of truth) —
+  #      self-heals a fresh clone/checkout without a manual npm install.
+  #   2. Seed a fresh worktree's node_modules from the primary. The fast path is
+  #      an APFS clonefile (`cp -c`: copy-on-write, ~0 disk, ~instant); on a
+  #      filesystem without clonefile support it falls back to a plain recursive
+  #      copy (correct, just not free). Then reconcile with `npm install` ONLY
+  #      when this worktree's deps differ from what's installed (fingerprint of
+  #      package.json + lockfile + node version vs a stamp). A per-worktree
+  #      node_modules keeps each frame's .vite/.astro dep-optimizer cache its
+  #      own, so parallel dev servers stop fighting.
+  [ -d "$MAIN_WT/node_modules" ] || ( cd "$MAIN_WT" && npm install )
+  [ "${PWD:A}" = "${MAIN_WT:A}" ] && return 0   # primary owns the real node_modules
+
+  local stamp=node_modules/.deps-stamp
+  local files=(package.json); [ -f package-lock.json ] && files+=(package-lock.json)
+  local want="$(cat "${files[@]}" | shasum -a 256 | cut -d' ' -f1)-node$(node -v)"
+
+  # Fresh worktree: clone the primary's node_modules (copy-on-write).
+  if [ ! -e node_modules ]; then
+    cp -Rc "$MAIN_WT/node_modules" node_modules 2>/dev/null \
+      || cp -R "$MAIN_WT/node_modules" node_modules
+    # The clone mirrors the primary's installed tree; if this worktree's deps
+    # match the primary's, it's already correct — stamp it so the first boot
+    # skips a redundant install.
+    if cmp -s package.json "$MAIN_WT/package.json" 2>/dev/null \
+       && { [ ! -f package-lock.json ] || cmp -s package-lock.json "$MAIN_WT/package-lock.json"; }; then
+      printf '%s' "$want" > "$stamp"
+    fi
+  fi
+
+  # Reconcile only on a fingerprint miss, and only into a REAL node_modules (a
+  # legacy symlinked worktree is left untouched — never install into the shared
+  # primary tree). A no-op check here is ~50ms.
+  if [ -d node_modules ] && [ ! -L node_modules ] \
+     && [ "$(cat "$stamp" 2>/dev/null)" != "$want" ]; then
+    npm install --no-audit --no-fund
+    printf '%s' "$(cat "${files[@]}" | shasum -a 256 | cut -d' ' -f1)-node$(node -v)" > "$stamp"
+  fi
+}
+
 # ── misc ──────────────────────────────────────────────────────────────────────
 
 find_free_port() {
