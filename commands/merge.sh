@@ -11,6 +11,7 @@
 #   frame merge                merge the CURRENT worktree's branch
 #   frame merge TOPIC          merge branch TOPIC
 #   frame merge TOPIC --push   …and push the primary branch to origin afterward
+#   frame merge --no-push      don't push, even when push_on_merge is on
 #   frame merge --ff           fast-forward instead of a merge commit
 #   frame merge -n             dry run: print the plan, change nothing
 #
@@ -19,18 +20,26 @@
 # conflict it stops and tells you how to back out. A local-only repo (no origin
 # remote) skips the origin sync entirely and merges anyway. Worktree/branch
 # cleanup is left to `frame wt -d TOPIC`; pushing later, to `frame push`.
+#
+# Two `frame kv` settings, read for the frame being merged (NAME/TOPIC):
+# push_on_merge=true makes a bare merge push as if --push were given (the
+# human's standing "yes, publish"; --no-push overrides it once), and
+# deploy_on_merge=true prints a reminder to deploy — frame has no deploy step of
+# its own, so it tells the agent at the one moment it matters.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 frame_load_config
 MAIN_BRANCH=$(git -C "$MAIN_WT" rev-parse --abbrev-ref HEAD)
 
 PUSH=false
+NO_PUSH=false
 FF=false
 DRY=false
 TOPIC=""
 for arg in "$@"; do
   case "$arg" in
     --push)        PUSH=true ;;
+    --no-push)     NO_PUSH=true ;;
     --ff)          FF=true ;;
     -n|--dry-run)  DRY=true ;;
     -*)            echo "$X_MARK unknown flag: $arg" >&2; exit 2 ;;
@@ -45,6 +54,25 @@ done
 # Default the topic to the branch of the worktree we were invoked from.
 if [[ -z "$TOPIC" ]]; then
   TOPIC=$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD)
+fi
+
+if $PUSH && $NO_PUSH; then
+  echo "$X_MARK --push and --no-push together — pick one" >&2
+  exit 2
+fi
+
+# The frame layer is keyed by the topic being merged, which from :FrameMerge
+# (cwd = primary checkout) isn't the branch we're standing on.
+frame_kv_scope "$NAME" "$TOPIC" "$MAIN_WT"
+if ! $PUSH && ! $NO_PUSH && frame_kv_is_true push_on_merge; then
+  frame_kv_lookup push_on_merge
+  if git -C "$MAIN_WT" remote get-url origin >/dev/null 2>&1; then
+    PUSH=true
+    echo "→ push_on_merge=true ($KV_LAYER) — will push after merging (--no-push to skip)"
+  else
+    # A standing setting (likely --user) shouldn't fail every local-only project.
+    echo "→ push_on_merge=true ($KV_LAYER), but there's no 'origin' remote — merging locally only"
+  fi
 fi
 
 if [[ "$TOPIC" == "$MAIN_BRANCH" ]]; then
@@ -119,6 +147,11 @@ if $PUSH; then
 else
   echo "→ not pushed. To push:  frame push"
   echo "  (or re-run with --push)"
+fi
+
+if ! $DRY && frame_kv_is_true deploy_on_merge; then
+  frame_kv_lookup deploy_on_merge
+  echo "→ deploy_on_merge=true ($KV_LAYER) — deploy '$MAIN_BRANCH' now, using this project's deploy step"
 fi
 
 # Optional project hook, run after a successful merge: merge_epilog TOPIC PUSHED

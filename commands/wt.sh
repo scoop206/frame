@@ -189,6 +189,10 @@ if [[ "${1:-}" == "-d" ]]; then
   # Reap the recorded session id (frame swarm --context writes it) alongside the
   # worktree — a torn-down frame is no longer a valid `frame wt --from` source.
   rm -f "$FRAME_RUNDIR/$NAME-$TOPIC.session"
+  # …and its frame-layer kv settings: a reused topic name starts from the
+  # project/user defaults, not whatever the last frame by that name was told.
+  frame_kv_scope "$NAME" "$TOPIC" ""
+  rm -f "$FRAME_KV_FILE[frame]"
   # :FrameDown's watcher matches this line to know teardown finished without
   # reaching the session — keep the wording in sync with layouts/session.lua.
   echo "$OK_MARK removed worktree and branch $TOPIC"

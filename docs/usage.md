@@ -53,9 +53,10 @@ Usage:
     frame view [TOPIC|NAME/TOPIC]     dump one frame's full state (default:
                                       the frame you're in)
 
-    frame merge [TOPIC] [--push|--ff|-n]
+    frame merge [TOPIC] [--push|--no-push|--ff|-n]
                                       merge TOPIC into the primary branch
-                                      (default: current branch)
+                                      (default: current branch); pushes
+                                      when push_on_merge is on (see frame kv)
 
     frame push [-n]                   push the primary branch to origin — the
                                       follow-up to a bare frame merge. The
@@ -104,6 +105,18 @@ Usage:
     frame yolo on|off                 master switch: claude in every frame
                                       launches --dangerously-skip-permissions
                                       (default off; bare form shows the state)
+
+    frame kv                          settings telling each frame's claude how
+                                      far to go on its own: autocommit,
+                                      merge_on_commit, push_on_merge,
+                                      deploy_on_merge (all default false).
+                                      Bare form lists values + source layer
+    frame kv get KEY                  print KEY's effective value
+    frame kv set [--project|--user] KEY VALUE
+                                      set KEY for this frame (default), every
+                                      frame of the project, or every project
+    frame kv unset [--project|--user] KEY
+                                      drop KEY from that layer
 
     frame swarm [off|1|2]             how much each frame's claude is told
                                       at session start about being a frame:

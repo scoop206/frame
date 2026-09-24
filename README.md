@@ -33,6 +33,7 @@
   - [Inbox filtering](#inbox-filtering)
 - [Swarm: telling agents they're in a frame](#swarm-telling-agents-theyre-in-a-frame)
   - [Extending the swarm instructions](#extending-the-swarm-instructions)
+- [Agent autonomy settings: frame kv](#agent-autonomy-settings-frame-kv)
 - [How a project plugs in](#how-a-project-plugs-in)
   - [Examples](#examples)
   - [config.sh](#configsh)
@@ -69,6 +70,7 @@
 | `frame focus [TOPIC]`                 | raise a frame's window                                                                                                            |
 | `frame yolo on\|off`                  | toggle `--dangerously-skip-permissions` everywhere                                                                                |
 | `frame swarm [off\|1\|2]`             | how much frame context each frame's claude gets — 0 off · 1 aware · 2 ask (starts off)                                            |
+| `frame kv [get\|set\|unset …]`        | how far each frame's claude goes on its own — autocommit, merge/push/deploy on merge (per frame, project, or user)                 |
 
 `worktree` is a synonym for `wt`; `list` for `ls`.  
 Not shown here: `spawn`,
@@ -220,6 +222,10 @@ When frame instantiates the nvim instance it injects these user commands
 | `:FrameMerge`             | merge this frame's branch into the primary branch (same safeguards as `frame merge`)                                   |
 | `:FrameMerge!`            | merge, then push the primary branch to origin (mirrors `frame merge --push`)                                           |
 | `:FramePush`              | push the primary branch to origin (same safeguards as `frame push`)                                                    |
+| `:FrameKv`                | list the `frame kv` settings: value + the layer it came from                                                           |
+| `:FrameKvGet KEY`         | print one setting                                                                                                      |
+| `:FrameKvSet [--project\|--user] KEY VALUE` | set a setting (default: this frame only); tab-completes keys and values                              |
+| `:FrameKvUnset [--project\|--user] KEY`     | drop a setting from that layer so the next one down shows through                                    |
 | `:[range]FrameClaude [Q]` | open this frame's claude terminal; with a `[range]` paste the line/selection as context; with a question `Q` submit it |
 
 ### Asking claude from the editor — `:FrameClaude`
@@ -404,6 +410,51 @@ swarm_context() {
   echo "This frame owns pactduo-infra — the shared pg (5432) + minio (9000)."
 }
 ```
+
+## Agent autonomy settings: frame kv
+
+`frame kv` holds the settings that tell a frame's claude how far to carry its
+work without asking. Every key defaults to `false`, meaning you drive commits,
+merges and pushes yourself:
+
+| key               | when `true`                                                                                  |
+| ----------------- | -------------------------------------------------------------------------------------------- |
+| `autocommit`      | the agent commits each finished, working step without asking                                  |
+| `merge_on_commit` | …and then runs `frame merge` into the primary branch                                          |
+| `push_on_merge`   | `frame merge` pushes to origin itself, as if `--push` were given (`--no-push` skips it once)  |
+| `deploy_on_merge` | `frame merge` ends by telling the agent to run the project's deploy                           |
+
+```bash
+frame kv                                   # every key, its value, and which layer set it
+frame kv get push_on_merge
+frame kv set push_on_merge true            # this frame only
+frame kv set --project autocommit true     # every frame of this project
+frame kv set --user merge_on_commit true   # every project on this machine
+frame kv unset push_on_merge               # fall back to the next layer
+```
+
+In nvim: `:FrameKv`, `:FrameKvGet`, `:FrameKvSet`, `:FrameKvUnset`.
+
+Layers, first hit wins:
+
+| layer   | file                                     |
+| ------- | ---------------------------------------- |
+| frame   | `~/.local/share/frame/kv/<NAME>/<TOPIC>` (removed by `frame wt -d`) |
+| project | `<primary checkout>/.frame/local/kv` (gitignored, so it never blocks `frame merge`) |
+| user    | `~/.config/frame/kv`                     |
+| default | [`kv.defaults`](kv.defaults) in the frame repo |
+
+These are files rather than environment variables on purpose. A process's
+environment is fixed when it starts, so an `export` never reaches a claude
+that's already running. A file is read at the moment it's needed, so a change
+takes effect mid-session. The swarm block (level 1 and up) shows the agent the
+values at session start and tells it to re-check `frame kv get` before it
+commits or merges.
+
+The settings are yours, not the agent's. From inside claude, `frame kv set` only
+accepts `false` and `unset` is refused, so an agent can hold itself back but
+can't give itself more room. This guards against well-meaning drift; it isn't a
+security boundary.
 
 ## How a project plugs in
 
