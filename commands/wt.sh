@@ -496,6 +496,9 @@ export VITE_DIR="${VITE_DIR:-web}"
 # reads the frame-computed copy instead.
 export FRAME_PORT_PREFIX="$PORT_PREFIX"
 frame_export_claude_flags
+# Pre-accept claude's workspace-trust dialog for this worktree — each new
+# worktree is a new path, so claude would otherwise stop on it every boot.
+frame_trust_dir "$PROJECT_DIR"
 # Carry a warm session in: boot this frame's claude as `claude --resume <id>`
 # (from --resume/--from above). Appended after frame_export_claude_flags so it
 # composes with the yolo flag. FRAME_CLAUDE_FLAGS is word-split unquoted by the
