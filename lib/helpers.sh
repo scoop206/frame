@@ -264,6 +264,42 @@ frame_bridge_transcript() {
     && cp -f "${_src[1]}" "$_projects/$_dest_slug/$_id.jsonl"
 }
 
+frame_trust_dir() {
+  # frame_trust_dir DIR — pre-accept Claude Code's "Accessing workspace / do you
+  # trust this folder?" dialog for DIR, so a fresh worktree's claude boots
+  # straight to a prompt. Claude records trust per absolute path in
+  # ~/.claude.json as .projects[DIR].hasTrustDialogAccepted, and every new
+  # worktree is a new path — so each one prompted, even under a trusted parent
+  # (a folder whose .claude/settings*.json pre-approves tools gets its own
+  # check). There is no CLI flag that skips it interactively
+  # (--dangerously-skip-permissions doesn't), so seed the key.
+  #
+  # Best-effort, never fatal: skipped without jq or before claude has ever
+  # written ~/.claude.json, and a no-op when DIR is already trusted (so reboots
+  # don't rewrite a file live claudes also write). The write goes via a temp
+  # file in the same dir + mv, so a concurrent claude sees old-or-new, never a
+  # torn file; the worst race loses this key and the dialog shows once.
+  emulate -L zsh
+  local _dir="${1:A}"
+  local _cfg="$HOME/.claude.json"
+  command -v jq >/dev/null 2>&1 || return 0
+  [[ -f "$_cfg" ]] || return 0
+  _cfg="${_cfg:A}"    # write through a symlinked config, don't replace the link
+  jq -e --arg p "$_dir" '.projects[$p].hasTrustDialogAccepted == true' \
+    "$_cfg" >/dev/null 2>&1 && return 0
+  local _tmp
+  _tmp=$(mktemp "${_cfg:h}/.claude.json.frame.XXXXXX") || return 0
+  if jq --arg p "$_dir" \
+      '.projects[$p] = ((.projects[$p] // {}) + {hasTrustDialogAccepted: true})' \
+      "$_cfg" > "$_tmp" 2>/dev/null && [[ -s "$_tmp" ]]; then
+    chmod "$(stat -f %Lp "$_cfg" 2>/dev/null || stat -c %a "$_cfg")" "$_tmp" 2>/dev/null
+    mv -f "$_tmp" "$_cfg"
+  else
+    rm -f "$_tmp"
+  fi
+  return 0
+}
+
 # ── dependency preflight ──────────────────────────────────────────────────────
 # Frame shells out to its dependencies with no upfront check, so a missing one
 # fails deep inside with a raw "command not found": no nvim fails the `exec`
