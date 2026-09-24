@@ -120,7 +120,19 @@ What only you can know (not discoverable by grep):
                     state; raw git orphans them)
   Merging locally is yours; pushing to origin is NOT — never
   `frame merge --push` or `git push` to origin without the human
-  asking. That's their call.
+  asking. That's their call. (push_on_merge=true IS that ask: a
+  bare `frame merge` then pushes by itself.)
+• How far to carry work on your own is the human's call, set in
+  `frame kv`. At session start:
+    @KV@
+  They can change mid-session, so re-check `frame kv get KEY`
+  before you commit or merge:
+    autocommit=true      → commit each finished, working step
+                           without asking first
+    merge_on_commit=true → then `frame merge` it into main
+    push_on_merge, deploy_on_merge → `frame merge` pushes itself,
+                           and tells you when to deploy
+  Never `frame kv set` a key to true — that's the human's to grant.
 • To reach a sibling frame, that's the broker — `frame req` (see
   `frame --help`), NOT the SendMessage tool. SendMessage only
   continues a subagent you spawned; a sibling is a separate session
@@ -141,7 +153,15 @@ What only you can know (not discoverable by grep):
 Learn more anytime: `frame --help`.
 EOF
 )
-  print -r -- "${_core//@VERIFY@/$_verify}"
+  # Current kv values, so the common case needs no lookup (the block tells the
+  # agent to re-check, since they can change after this prints).
+  local _kv="" _k
+  frame_kv_scope_self
+  for _k in ${(f)"$(frame_kv_keys)"}; do
+    _kv+="${_kv:+  }$_k=$(frame_kv_get "$_k" || true)"
+  done
+  _core=${_core//@VERIFY@/$_verify}
+  print -r -- "${_core//@KV@/$_kv}"
 
   # Level 2+ (ask): the bounded ask-a-sibling recipe. Literal $t / $(…) — this is
   # a recipe for the agent to read, not to run here.

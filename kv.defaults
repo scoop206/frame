@@ -1,0 +1,21 @@
+# frame kv — shipped defaults (the bottom layer; see `frame kv`).
+#
+# Every key `frame kv` knows is listed here; `frame kv set` refuses any other
+# (a typo like merge_push would otherwise be silently ignored). Each grants a
+# frame's claude one more step of autonomy, so all default to false — today's
+# behavior, where the human drives commits, merges, and pushes.
+#
+# Override per frame / project / user:  frame kv set [--project|--user] KEY VALUE
+
+# Commit finished, working steps without asking first.
+autocommit=false
+
+# After committing, merge the topic into the primary branch (frame merge).
+merge_on_commit=false
+
+# frame merge also pushes the primary branch to origin (as if --push).
+# Enforced by frame merge itself; --no-push opts a single merge out.
+push_on_merge=false
+
+# After a merge, run the project's deploy (frame merge prints the reminder).
+deploy_on_merge=false

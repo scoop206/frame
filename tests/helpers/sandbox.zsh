@@ -58,11 +58,14 @@ EOF
   # set it explicitly before sourcing lib/helpers.sh.
   local _v
   for _v in ${(M)${(k)parameters}:#[A-Z0-9_]##_(API|VITE|HMR)_PORT}; do unset "$_v"; done
+  # NVIM: a suite run from inside a frame's nvim must not trip
+  # frame_guard_nested. CLAUDECODE: nor, run from inside claude, frame kv's
+  # agent guard (tests of that guard set it themselves).
   unset NAME PORT_PREFIX BUFFERS SERVER_CMD PORT WT_LINKS \
         API_PORT VITE_PORT HMR_PORT FRAME_SHELL_HOME \
         FRAME_NAME FRAME_TOPIC FRAME_MAIN_WT FRAME_VITE_PORT FRAME_BUFFERS \
         FRAME_CLAUDE_FLAGS \
-        NVIM  # a suite run from inside a frame's nvim must not trip frame_guard_nested
+        NVIM CLAUDECODE
   cd "$SANDBOX"
 }
 

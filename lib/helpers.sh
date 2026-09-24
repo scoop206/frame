@@ -174,24 +174,43 @@ FRAME_GLOBAL_CONFIG="$HOME/.local/share/frame/config"
 frame_global_get() {
   # frame_global_get KEY — print KEY's value, empty if the file or key is
   # absent (callers treat empty as the default). Last occurrence wins.
-  local -a _hits
-  [[ -f "$FRAME_GLOBAL_CONFIG" ]] || return 0
-  _hits=(${(M)${(@f)"$(<$FRAME_GLOBAL_CONFIG)"}:#$1=*})
-  (( $#_hits )) && print -r -- "${_hits[-1]#*=}"
+  frame_kvfile_get "$FRAME_GLOBAL_CONFIG" "$1"
   return 0
 }
 
 frame_global_set() {
   # frame_global_set KEY VALUE — update KEY in place (comments, blank lines,
   # and other keys survive) or append it; the first write creates the file.
-  local _k=$1 _v=$2 _i _found=0
+  frame_kvfile_set "$FRAME_GLOBAL_CONFIG" "$1" "$2" \
+    "# frame settings for every project on this machine (key=value)."
+}
+
+# ── key=value files ───────────────────────────────────────────────────────────
+# The one on-disk format behind both the machine-global switches above and the
+# layered `frame kv` settings below: KEY=VALUE lines, # comments and blanks
+# allowed, last occurrence wins. Read by pattern match, never sourced.
+
+frame_kvfile_get() {
+  # frame_kvfile_get FILE KEY — print KEY's value; return 1 when the file or
+  # key is absent (so callers can tell "unset" from "set to empty").
+  local -a _hits
+  [[ -f "$1" ]] || return 1
+  _hits=(${(M)${(@f)"$(<$1)"}:#$2=*})
+  (( $#_hits )) || return 1
+  print -r -- "${_hits[-1]#*=}"
+}
+
+frame_kvfile_set() {
+  # frame_kvfile_set FILE KEY VALUE [HEADER] — update KEY in place (comments,
+  # blank lines, and other keys survive) or append it. The first write creates
+  # the file (and its dir), starting with HEADER when given.
+  local _file=$1 _k=$2 _v=$3 _header=${4:-} _i _found=0
   local -a _lines
-  mkdir -p "${FRAME_GLOBAL_CONFIG:h}"
-  if [[ ! -f "$FRAME_GLOBAL_CONFIG" ]]; then
-    print -r -- "# frame settings for every project on this machine (key=value)." \
-      > "$FRAME_GLOBAL_CONFIG"
+  mkdir -p "${_file:h}"
+  if [[ ! -f "$_file" ]]; then
+    if [[ -n "$_header" ]]; then print -r -- "$_header" > "$_file"; else : > "$_file"; fi
   fi
-  _lines=("${(@f)$(<$FRAME_GLOBAL_CONFIG)}")
+  _lines=("${(@f)$(<$_file)}")
   for (( _i=1; _i <= $#_lines; _i++ )); do
     if [[ "$_lines[_i]" == $_k=* ]]; then
       _lines[_i]="$_k=$_v"
@@ -199,7 +218,114 @@ frame_global_set() {
     fi
   done
   (( _found )) || _lines+=("$_k=$_v")
-  print -rl -- "${_lines[@]}" > "$FRAME_GLOBAL_CONFIG"
+  print -rl -- "${_lines[@]}" > "$_file"
+}
+
+frame_kvfile_unset() {
+  # frame_kvfile_unset FILE KEY — drop every KEY= line; return 1 if there was
+  # none (nothing to unset). Other lines, comments included, survive.
+  local -a _lines _kept
+  [[ -f "$1" ]] || return 1
+  _lines=("${(@f)$(<$1)}")
+  _kept=(${_lines:#$2=*})
+  (( $#_kept < $#_lines )) || return 1
+  print -rl -- "${_kept[@]}" > "$1"
+}
+
+# ── frame kv: layered agent-behavior settings ─────────────────────────────────
+# Settings that tell a frame's claude how far to carry its work on its own
+# (autocommit, merge_on_commit, push_on_merge, deploy_on_merge — the full list,
+# with meanings, is the defaults file). Four layers, first hit wins:
+#
+#   frame    ~/.local/share/frame/kv/<NAME>/<TOPIC>   one frame; reaped by frame wt -d
+#   project  <primary checkout>/.frame/local/kv        every frame of one project
+#   user     ~/.config/frame/kv                        every project on this machine
+#   default  $FRAME_ROOT/kv.defaults                   shipped with frame
+#
+# Deliberately files, not environment variables: a process's env is frozen at
+# its start, so a value exported at boot (or set later in some other buffer)
+# never reaches the running claude. Files are read at the moment of use, so a
+# change lands mid-session. The project layer lives under the gitignored
+# .frame/local/ so setting it never dirties the primary checkout (which would
+# block frame merge's clean-tree guard). The frame layer is under $HOME rather
+# than $FRAME_RUNDIR because /tmp is reaped after a few idle days.
+#
+# Callers first pick WHOSE settings to read with frame_kv_scope, then query.
+
+FRAME_KV_DEFAULTS="$FRAME_ROOT/kv.defaults"
+FRAME_KV_LAYERS=(frame project user default)
+
+frame_kv_scope() {
+  # frame_kv_scope NAME TOPIC MAIN_WT — point the kv lookups at one frame. Any
+  # argument may be empty: no NAME/TOPIC drops the frame layer, no MAIN_WT the
+  # project layer (a shell frame has no primary checkout).
+  local _name=$1 _topic=$2 _main=$3
+  typeset -gA FRAME_KV_FILE
+  FRAME_KV_FILE=(
+    frame   ""
+    project ""
+    user    "${XDG_CONFIG_HOME:-$HOME/.config}/frame/kv"
+    default "$FRAME_KV_DEFAULTS"
+  )
+  if [[ -n "$_name" && -n "$_topic" ]]; then
+    # A topic may contain '/' (feature/x) — flatten so it stays one file.
+    FRAME_KV_FILE[frame]="$HOME/.local/share/frame/kv/$_name/${_topic//\//%}"
+  fi
+  [[ -n "$_main" ]] && FRAME_KV_FILE[project]="$_main/.frame/local/kv"
+  return 0
+}
+
+frame_kv_scope_self() {
+  # Scope to the frame we're running inside (or, from a bare checkout, to its
+  # branch — frame_self_identity's derivation). Never fails: outside any frame
+  # it just leaves the user + default layers.
+  local _main=""
+  if frame_self_identity 2>/dev/null; then
+    frame_load_config 2>/dev/null && _main=$MAIN_WT
+    frame_kv_scope "$SELF_NAME" "$SELF_TOPIC" "$_main"
+  else
+    frame_kv_scope "" "" ""
+  fi
+}
+
+frame_kv_lookup() {
+  # frame_kv_lookup KEY — set KV_VALUE to KEY's effective value and KV_LAYER to
+  # the layer it came from; return 1 (both empty) when no layer sets it. Sets
+  # globals rather than printing so the caller gets both without a subshell.
+  local _layer _file _v
+  for _layer in $FRAME_KV_LAYERS; do
+    _file=${FRAME_KV_FILE[$_layer]:-}
+    [[ -n "$_file" ]] || continue
+    if _v=$(frame_kvfile_get "$_file" "$1"); then
+      KV_VALUE=$_v KV_LAYER=$_layer
+      return 0
+    fi
+  done
+  KV_VALUE="" KV_LAYER=""
+  return 1
+}
+
+frame_kv_get() {
+  # frame_kv_get KEY — print KEY's effective value (nothing when unset).
+  frame_kv_lookup "$1" || return 1
+  print -r -- "$KV_VALUE"
+}
+
+frame_kv_is_true() {
+  # frame_kv_is_true KEY — succeed iff KEY resolves to true (in the current
+  # scope). Anything else — false, unset, junk — is false: every setting
+  # grants autonomy, so the fail-safe reading is "no".
+  [[ "$(frame_kv_get "$1")" == true ]]
+}
+
+frame_kv_keys() {
+  # Print the known keys, one per line, in defaults-file order.
+  [[ -f "$FRAME_KV_DEFAULTS" ]] || return 0
+  local _line
+  for _line in "${(@f)$(<$FRAME_KV_DEFAULTS)}"; do
+    [[ "$_line" == [a-z]*=* ]] && print -r -- "${_line%%=*}"
+  done
+  return 0
 }
 
 frame_export_claude_flags() {
