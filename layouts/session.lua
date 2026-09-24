@@ -1109,6 +1109,27 @@ if hook_drift ~= '' then
     vim.log.levels.WARN)
 end
 
+-- Boot status: the Stop/UserPromptSubmit hooks drive working/waiting, but a
+-- fresh claude has run no turn yet, so its status stays '' ("-" in `frame ls`)
+-- until the human types something — and sibling frames read "-" as "no claude
+-- here" and hold off a `frame req` that would have queued fine. Once claude's
+-- prompt first renders (FrameReady), call it waiting. Only from '': a brokered
+-- or human turn that already landed owns the status. Gives up after ~10 min —
+-- a first-run dialog that never renders the prompt genuinely needs a human.
+if FrameState.chan['claude'] then
+  local tries = 0
+  local function mark_waiting_when_ready()
+    if FrameState.status ~= '' then return end
+    if _G.FrameReady() == 1 then
+      _G.FrameSetStatus('waiting')
+      return
+    end
+    tries = tries + 1
+    if tries < 1200 then vim.defer_fn(mark_waiting_when_ready, 500) end
+  end
+  vim.defer_fn(mark_waiting_when_ready, 500)
+end
+
 -- Land in the focus buffer (without one, stay in the last opened), in
 -- terminal-insert mode, ready to type.
 if focus then vim.cmd.buffer(focus) end
