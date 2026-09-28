@@ -423,15 +423,19 @@ test_shell_C_local_config_wins() {
   assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_BUFFERS=claude"$'\n'
 }
 
-test_shell_ignores_config_without_C() {
-  # A plain ~/frames shell never reads a .frame config — the flag opts in.
+test_shell_honors_config_without_C() {
+  # A plain ~/frames shell reads its dir's .frame config the same way.
   export FRAME_SHELL_HOME="$SANDBOX/frames"
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
   mkdir -p "$SANDBOX/frames/jam/.frame"
   print -r -- 'BUFFERS=(claude local server)' > "$SANDBOX/frames/jam/.frame/config.sh"
   run_frame shell jam
   assert_status 0
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_BUFFERS=claude local"$'\n'
+  assert_contains "$OUT" "buffers: claude local server"
+  local log=$(<$FAKE_NVIM_LOG)
+  assert_contains "$log" "FRAME_BUFFERS=claude local server"
+  assert_contains "$log" "FRAME_TOPIC=jam"
+  assert_contains "$log" "cwd: $SANDBOX/frames/jam"
 }
 
 test_shell_does_not_inherit_worktree_buffer_env() {

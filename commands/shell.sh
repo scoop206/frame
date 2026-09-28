@@ -6,8 +6,11 @@
 # is minted so a bare `frame shell` always lands you somewhere new.
 #
 # Creates (or reuses) $FRAME_SHELL_HOME/TOPIC (default ~/frames) and boots
-# the usual session there with just the claude + local buffers (-C: DIR's
-# configured BUFFERS, see below). Everything
+# the usual session there with just the claude + local buffers — or, if the
+# dir carries a frame project config (.frame/local/config.sh, else
+# .frame/config.sh), its BUFFERS plus what those buffers run on: SERVER_CMD,
+# VITE_DIR, the port scan and app_env. Worktree machinery (stack_up, WT_LINKS)
+# is not run: there's no worktree to feed. Everything
 # non-git about a frame still works — window title shell/TOPIC, frame
 # status / frame notify (and the claude Stop hook), :FrameQuit — for
 # scratch work that deserves its own claude instance and directory but has
@@ -21,12 +24,6 @@
 #                            unless DIR is already wired with frame's claude
 #                            hooks, and points at `frame init --type=shell` (in
 #                            DIR) to do that as a deliberate, separate step.
-#                            If DIR carries a frame project config
-#                            (.frame/local/config.sh, else .frame/config.sh),
-#                            its BUFFERS are opened — plus what those buffers
-#                            run on: SERVER_CMD, VITE_DIR, the port scan and
-#                            app_env. Worktree machinery (stack_up, WT_LINKS)
-#                            is not run: there's no worktree to feed.
 #
 #   frame shell -d [TOPIC]   tear down: just quit the session. A shell has no
 #                            branch or worktree to reap, so teardown collapses
@@ -198,23 +195,6 @@ BUFFERS=(claude local)
 SERVER_CMD="" VITE_DIR="" PORT_PREFIX="" FRAME_VITE_PORT=""
 if (( IN_DIR )); then
   cd "$DIR"
-  # A frame project config in DIR picks the buffers (first hit wins, like
-  # frame_load_config). It's sourced for real — it's the user's own project
-  # code, same trust as `frame wt` — but NAME/TOPIC/DIR are this command's own
-  # and restored afterwards. NAME/PORT_PREFIX only feed the port aliases here.
-  for _f in .frame/local/config.sh .frame/config.sh; do
-    [[ -f "$_f" ]] || continue
-    _self=("$NAME" "$TOPIC" "$DIR")
-    unset NAME
-    source "$_f"
-    : "${PORT_PREFIX:=${(U)${NAME:-${DIR:t}}//[^[:alnum:]]/_}}"
-    [[ "$PORT_PREFIX" == [0-9]* ]] && PORT_PREFIX="_$PORT_PREFIX"
-    NAME=$_self[1] TOPIC=$_self[2] DIR=$_self[3]
-    echo "$OK_MARK using $DIR/$_f — buffers: ${BUFFERS[*]:-(none)}"
-    frame_export_ports
-    if (( $+functions[app_env] )); then app_env; fi
-    break
-  done
 else
   DIR="$SHELL_HOME/$TOPIC"
   if [[ -d "$DIR" ]]; then
@@ -225,6 +205,25 @@ else
   fi
   cd "$DIR"
 fi
+
+# A frame project config in the dir picks the buffers (first hit wins, like
+# frame_load_config) — for a -C dir or a ~/frames one alike. It's sourced for
+# real — it's the user's own project code, same trust as `frame wt` — but
+# NAME/TOPIC/DIR are this command's own and restored afterwards. NAME/PORT_PREFIX
+# only feed the port aliases here.
+for _f in .frame/local/config.sh .frame/config.sh; do
+  [[ -f "$_f" ]] || continue
+  _self=("$NAME" "$TOPIC" "$DIR")
+  unset NAME
+  source "$_f"
+  : "${PORT_PREFIX:=${(U)${NAME:-${DIR:t}}//[^[:alnum:]]/_}}"
+  [[ "$PORT_PREFIX" == [0-9]* ]] && PORT_PREFIX="_$PORT_PREFIX"
+  NAME=$_self[1] TOPIC=$_self[2] DIR=$_self[3]
+  echo "$OK_MARK using $DIR/$_f — buffers: ${BUFFERS[*]:-(none)}"
+  frame_export_ports
+  if (( $+functions[app_env] )); then app_env; fi
+  break
+done
 
 # No repo → no `frame init` — wire the claude-code hooks here instead, or a
 # casual claude never fires Stop → frame notify / frame reply. Shell topics
@@ -262,7 +261,7 @@ export FRAME_MAIN_WT=""
 export FRAME_WT=""
 export FRAME_VITE_PORT
 export FRAME_BUFFERS="${BUFFERS[*]}"
-# Config vars buffers.json reads (only set by a -C project config; see wt.sh).
+# Config vars buffers.json reads (only set by a project config; see wt.sh).
 export SERVER_CMD
 export VITE_DIR="${VITE_DIR:-web}"
 export FRAME_PORT_PREFIX="$PORT_PREFIX"
@@ -270,7 +269,7 @@ frame_export_claude_flags
 
 # Refuse before exec if a boot-critical dependency is missing (see frame_require).
 # A shell frame has no git repo, so git isn't required; claude only when the
-# buffers include it (always, unless a -C config says otherwise). Terminal
+# buffers include it (always, unless a project config says otherwise). Terminal
 # mismatch is a soft warning, not a refusal.
 frame_check_terminal
 _req=(zsh nvim)

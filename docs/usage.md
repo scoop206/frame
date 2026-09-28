@@ -40,8 +40,9 @@ Usage:
                                       frame dir, else mint a fresh dated one
     frame shell -C DIR [TOPIC]        shell frame in an existing DIR (TOPIC
                                       defaults to DIR's name); DIR must be
-                                      wired by `frame init --type=shell`;
-                                      opens DIR's .frame/config.sh BUFFERS
+                                      wired by `frame init --type=shell`
+                                      (either form opens the dir's
+                                      .frame/config.sh BUFFERS, if any)
     frame shell -d [TOPIC]            tear down a shell frame (default: current)
                                       — just quits the session; the dir is kept
 
