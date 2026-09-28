@@ -444,22 +444,8 @@ for _l in "${_links[@]}"; do
   fi
 done
 
-# Free ports, scanned upward from the project's primary-env defaults (primary
-# on 3000/5173/24678 → first worktree 3001/5174/24679, and so on). Exported
-# under the rename-proof FRAME_* names app code should read, plus the
-# project-prefixed aliases for code already reading those.
-FRAME_VITE_PORT=""
-if [[ -n "${API_PORT:-}${VITE_PORT:-}" ]]; then
-  export PORT=$(find_free_port "${API_PORT:-3000}")
-  FRAME_VITE_PORT=$(find_free_port "${VITE_PORT:-5173}")
-  _hmr=$(find_free_port "${HMR_PORT:-24678}")
-  export FRAME_API_PORT=$PORT
-  export FRAME_HMR_PORT=$_hmr
-  export "${PORT_PREFIX}_API_PORT=$PORT"
-  export "${PORT_PREFIX}_VITE_PORT=$FRAME_VITE_PORT"
-  export "${PORT_PREFIX}_HMR_PORT=$_hmr"
-  echo "$OK_MARK worktree env: server :$PORT · vite :$FRAME_VITE_PORT · hmr :$_hmr"
-fi
+# Free ports for the server/vite/hmr buffers (see frame_export_ports).
+frame_export_ports
 
 if (( $+functions[app_env] )); then app_env; fi
 

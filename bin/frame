@@ -12,7 +12,9 @@
 #                                       --type stacks (repeatable): base astrojs
 #                                       scaffolds a worktree-ready Astro project,
 #                                       layer cloudflare wires .dev.vars into
-#                                       WT_LINKS + .gitignore
+#                                       WT_LINKS + .gitignore; base shell wires
+#                                       only .claude/settings.json in the cwd,
+#                                       no git needed (prep for frame shell -C)
 #
 #     frame wt TOPIC                    create/reuse branch + worktree, boot it
 #     frame wt TOPIC --from SRC_FRAME   …and resume SRC_FRAME's warm claude
@@ -29,6 +31,11 @@
 #                                       no branch, just the claude + local buffers
 #     frame shell                       infer TOPIC from the cwd if it's a shell
 #                                       frame dir, else mint a fresh dated one
+#     frame shell -C DIR [TOPIC]        shell frame in an existing DIR (TOPIC
+#                                       defaults to DIR's name); DIR must be
+#                                       wired by `frame init --type=shell`
+#                                       (either form opens the dir's
+#                                       .frame/config.sh BUFFERS, if any)
 #     frame shell -d [TOPIC]            tear down a shell frame (default: current)
 #                                       — just quits the session; the dir is kept
 #

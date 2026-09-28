@@ -122,10 +122,10 @@ test_shell_rejects_extra_args_and_flags() {
   # mints or infers a topic (see test_shell_no_arg_mints_dated_frame).
   run_frame shell a b
   assert_status 2
-  assert_contains "$OUT" "Usage: frame shell [TOPIC]"
+  assert_contains "$OUT" "Usage: frame shell [-C DIR] [TOPIC]"
   run_frame shell -x
   assert_status 2
-  assert_contains "$OUT" "Usage: frame shell [TOPIC]"
+  assert_contains "$OUT" "Usage: frame shell [-C DIR] [TOPIC]"
 }
 
 test_shell_no_arg_mints_dated_frame() {
@@ -273,6 +273,195 @@ test_shell_down_rejects_second_topic() {
   run_frame shell -d a b
   assert_status 2
   assert_contains "$OUT" "more than one topic given"
+}
+
+# ── frame shell -C DIR ────────────────────────────────────────────────────────
+
+_wire_dir() {
+  # A dir prepped the way the -C refusal tells you to: frame init --type=shell.
+  mkdir -p "$1"
+  ( cd "$1" && run_frame init --type=shell ) >/dev/null
+}
+
+test_shell_C_boots_in_dir_with_dirname_topic() {
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  _wire_dir "$SANDBOX/g/foobar"
+  run_frame shell -C "$SANDBOX/g/foobar"
+  assert_status 0
+  assert_contains "$OUT" "using 'foobar' from $SANDBOX/g/foobar"
+  local log=$(<$FAKE_NVIM_LOG)
+  assert_contains "$log" "cwd: $SANDBOX/g/foobar"
+  assert_contains "$log" "FRAME_NAME=shell"
+  assert_contains "$log" "FRAME_TOPIC=foobar"
+  assert_contains "$log" "FRAME_SHELL_DIR=$SANDBOX/g/foobar"
+  # nothing conjured under the shell home
+  assert_dir_absent "$SANDBOX/frames/foobar"
+}
+
+test_shell_C_explicit_topic_either_order() {
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  _wire_dir "$SANDBOX/g/foobar"
+  run_frame shell -C "$SANDBOX/g/foobar" jam
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_TOPIC=jam"
+  rm -f "$FAKE_NVIM_LOG"
+  run_frame shell jam -C "$SANDBOX/g/foobar"
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_LOG)" "cwd: $SANDBOX/g/foobar"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_TOPIC=jam"
+}
+
+test_shell_C_resolves_relative_dir() {
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  _wire_dir "$SANDBOX/g/foobar"
+  cd "$SANDBOX/g"
+  run_frame shell -C foobar
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_SHELL_DIR=$SANDBOX/g/foobar"
+}
+
+test_shell_C_refuses_missing_dir() {
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  run_frame shell -C "$SANDBOX/nope"
+  assert_status 1
+  assert_contains "$OUT" "no such directory"
+  assert_dir_absent "$SANDBOX/nope"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_shell_C_requires_a_value() {
+  run_frame shell -C
+  assert_status 2
+  assert_contains "$OUT" "-C needs a directory"
+}
+
+test_shell_C_refuses_unwired_dir_and_writes_nothing() {
+  # -C never writes into DIR: no settings.json → refuse and name the init.
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  mkdir -p "$SANDBOX/g/foobar"
+  run_frame shell -C "$SANDBOX/g/foobar"
+  assert_status 1
+  assert_contains "$OUT" "isn't wired for frame"
+  assert_contains "$OUT" "frame init --type=shell"
+  assert_not_contains "$OUT" "--force"
+  assert_dir_absent "$SANDBOX/g/foobar/.claude"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_shell_C_refuses_stale_hooks_and_leaves_file_alone() {
+  # A settings.json without (all of) frame's hooks — the user's own, or stale
+  # frame wiring. Either way -C doesn't touch it; it points at --force.
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  mkdir -p "$SANDBOX/g/foobar/.claude"
+  print -r -- '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"frame notify >/dev/null 2>&1 || true"}]}]}}' \
+    > "$SANDBOX/g/foobar/.claude/settings.json"
+  local before=$(cksum "$SANDBOX/g/foobar/.claude/settings.json")
+  run_frame shell -C "$SANDBOX/g/foobar"
+  assert_status 1
+  assert_contains "$OUT" "missing frame's claude hooks"
+  assert_contains "$OUT" "frame init --type=shell --force"
+  assert_eq "$(cksum "$SANDBOX/g/foobar/.claude/settings.json")" "$before" "settings.json was rewritten"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_shell_C_works_in_a_git_checkout() {
+  # A git repo is fine — -C doesn't care what DIR is, only that it's wired.
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  make_repo
+  ( cd "$REPO" && run_frame init --type=shell ) >/dev/null
+  run_frame shell -C "$REPO" jam
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_LOG)" "cwd: $REPO"
+}
+
+test_shell_C_defaults_to_claude_local_without_config() {
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  _wire_dir "$SANDBOX/g/foobar"
+  run_frame shell -C "$SANDBOX/g/foobar"
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_BUFFERS=claude local"$'\n'
+}
+
+test_shell_C_honors_project_config_buffers() {
+  # DIR's .frame/config.sh picks the buffers, and what they run on comes along:
+  # SERVER_CMD and the port scan. Its NAME/DIR can't clobber the shell's own
+  # identity or dir.
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  _wire_dir "$SANDBOX/g/foobar"
+  mkdir -p "$SANDBOX/g/foobar/.frame"
+  cat > "$SANDBOX/g/foobar/.frame/config.sh" <<'EOF'
+NAME=foo
+DIR=/nowhere
+BUFFERS=(claude local server)
+SERVER_CMD='cargo run'
+API_PORT=3000
+EOF
+  run_frame shell -C "$SANDBOX/g/foobar"
+  assert_status 0
+  assert_contains "$OUT" "buffers: claude local server"
+  local log=$(<$FAKE_NVIM_LOG)
+  assert_contains "$log" "cwd: $SANDBOX/g/foobar"
+  assert_contains "$log" "FRAME_NAME=shell"
+  assert_contains "$log" "FRAME_TOPIC=foobar"
+  assert_contains "$log" "FRAME_SHELL_DIR=$SANDBOX/g/foobar"
+  assert_contains "$log" "FRAME_BUFFERS=claude local server"
+  assert_contains "$log" "SERVER_CMD=cargo run"
+  assert_contains "$log" "FRAME_API_PORT="
+  assert_contains "$log" "FOO_API_PORT="
+}
+
+test_shell_C_local_config_wins() {
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  _wire_dir "$SANDBOX/g/foobar"
+  mkdir -p "$SANDBOX/g/foobar/.frame/local"
+  print -r -- 'BUFFERS=(claude local vite)' > "$SANDBOX/g/foobar/.frame/config.sh"
+  print -r -- 'BUFFERS=(claude)' > "$SANDBOX/g/foobar/.frame/local/config.sh"
+  run_frame shell -C "$SANDBOX/g/foobar"
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_BUFFERS=claude"$'\n'
+}
+
+test_shell_honors_config_without_C() {
+  # A plain ~/frames shell reads its dir's .frame config the same way.
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  mkdir -p "$SANDBOX/frames/jam/.frame"
+  print -r -- 'BUFFERS=(claude local server)' > "$SANDBOX/frames/jam/.frame/config.sh"
+  run_frame shell jam
+  assert_status 0
+  assert_contains "$OUT" "buffers: claude local server"
+  local log=$(<$FAKE_NVIM_LOG)
+  assert_contains "$log" "FRAME_BUFFERS=claude local server"
+  assert_contains "$log" "FRAME_TOPIC=jam"
+  assert_contains "$log" "cwd: $SANDBOX/frames/jam"
+}
+
+test_shell_does_not_inherit_worktree_buffer_env() {
+  # Booted from inside a worktree frame's terminal: its exported SERVER_CMD /
+  # FRAME_VITE_PORT must not ride into the shell frame.
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  export SERVER_CMD='leaked' FRAME_VITE_PORT=5999
+  run_frame shell jam
+  assert_status 0
+  local log=$(<$FAKE_NVIM_LOG)
+  assert_not_contains "$log" "leaked"
+  assert_not_contains "$log" "FRAME_VITE_PORT=5999"
+}
+
+test_shell_down_names_C_reboot_from_inside() {
+  # From inside a -C frame (its claude carries FRAME_SHELL_DIR), the teardown
+  # note must point back at that dir, not at ~/frames/TOPIC.
+  export FRAME_SHELL_HOME="$SANDBOX/frames"
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  export FRAME_NAME=shell FRAME_TOPIC=jam FRAME_SHELL_DIR="$SANDBOX/g/foobar"
+  _plant_shell_socket jam
+  run_frame shell -d
+  assert_status 0
+  assert_contains "$OUT" "dir kept: $SANDBOX/g/foobar"
+  assert_contains "$OUT" "frame shell -C $SANDBOX/g/foobar jam"
 }
 
 test_nested_boot_refused_noninteractively() {

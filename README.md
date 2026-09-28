@@ -60,6 +60,7 @@
 | `frame wt`                            | boot the worktree you're already in                                                                                               |
 | `frame wt -d [TOPIC]`                 | tear down a frame (default: the current one)                                                                                      |
 | `frame shell TOPIC`                   | a frame with no repo — just the claude and local buffers                                                                          |
+| `frame shell -C DIR [TOPIC]`          | a shell frame in an existing dir (wire it first: `cd DIR && frame init --type=shell`)                                             |
 | `frame ls`                            | list every live frame across projects                                                                                             |
 | `frame merge [TOPIC]`                 | merge a topic branch into the primary branch                                                                                      |
 | `frame push`                          | push the primary branch to origin                                                                                                 |
