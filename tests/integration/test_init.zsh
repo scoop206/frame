@@ -354,4 +354,62 @@ test_init_in_worktree_uses_primary_name() {
   assert_contains "$(<$SANDBOX/some-random-dirname/.frame/config.sh)" "#NAME=$TNAME"
 }
 
+# ── --type shell ──────────────────────────────────────────────────────────────
+
+test_init_shell_wires_only_settings_outside_git() {
+  mkdir -p "$SANDBOX/g/foobar"
+  cd "$SANDBOX/g/foobar"
+  run_frame init --type=shell
+  assert_status 0
+  assert_contains "$OUT" "claude notifies via 'frame notify'"
+  assert_file_exists "$SANDBOX/g/foobar/.claude/settings.json"
+  assert_dir_absent "$SANDBOX/g/foobar/.frame"
+  assert_file_absent "$SANDBOX/g/foobar/.gitignore"
+  assert_not_contains "$OUT" "not inside a git repository"
+}
+
+test_init_shell_uses_cwd_not_repo_root() {
+  # In a repo subdir, --type shell wires the subdir (where `frame shell -C`
+  # would point), never climbing to the root or scaffolding .frame/.
+  make_repo
+  mkdir -p "$REPO/sub"
+  cd "$REPO/sub"
+  run_frame init --type shell
+  assert_status 0
+  assert_file_exists "$REPO/sub/.claude/settings.json"
+  assert_file_absent "$REPO/.claude/settings.json"
+  assert_dir_absent "$REPO/.frame"
+}
+
+test_init_shell_existing_settings_hints_shell_force() {
+  mkdir -p "$SANDBOX/g/foobar/.claude"
+  cd "$SANDBOX/g/foobar"
+  print -r -- '{"hooks":{}}' > .claude/settings.json
+  run_frame init --type=shell
+  assert_status 3
+  assert_contains "$OUT" "frame init --type=shell --force"
+}
+
+test_init_shell_force_resyncs() {
+  command -v jq >/dev/null 2>&1 || { skip "jq not installed"; return; }
+  mkdir -p "$SANDBOX/g/foobar/.claude"
+  cd "$SANDBOX/g/foobar"
+  print -r -- '{"hooks":{}}' > .claude/settings.json
+  run_frame init --type=shell --force
+  assert_status 0
+  assert_contains "$(<.claude/settings.json)" "frame status --prompt"
+}
+
+test_init_shell_rejects_other_types() {
+  mkdir -p "$SANDBOX/g/foobar"
+  cd "$SANDBOX/g/foobar"
+  run_frame init --type shell --type astrojs
+  assert_status 2
+  assert_contains "$OUT" "conflicting base types"
+  run_frame init --type shell --type cloudflare
+  assert_status 2
+  assert_contains "$OUT" "takes no layers"
+  assert_dir_absent "$SANDBOX/g/foobar/.claude"
+}
+
 run_tests "$0"

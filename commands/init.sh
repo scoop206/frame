@@ -12,7 +12,10 @@
 # stack_up that installs deps once in the primary), and the matching .gitignore
 # lines. --type cloudflare layers Cloudflare's .dev.vars (its .env-equivalent
 # local secrets) onto whatever base is chosen: adds it to WT_LINKS so every
-# worktree symlinks it from the primary, and gitignores it.
+# worktree symlinks it from the primary, and gitignores it. --type shell is the
+# odd one out: it wires ONLY .claude/settings.json, in the cwd, and needs no git
+# repo — the prep step for `frame shell -C DIR`, which boots a shell frame in an
+# arbitrary dir but never writes into it itself. No config.sh, no .gitignore.
 # init NEVER stages or commits on your behalf — because `frame wt` only inherits
 # COMMITTED files, it prints a reminder to review + commit the scaffold yourself
 # so the very first `frame wt` inherits a working project via git. Deps aren't
@@ -30,14 +33,9 @@
 # Exit status: 0 when everything's in sync (including a clean --force re-sync);
 # 3 when a settings.json is left out of sync — its frame hooks are missing and
 # init didn't fix it (no --force, custom content, or jq unavailable) — so `frame
-# init` doubles as a drift check. 1 = not a git repo; 2 = usage error.
+# init` doubles as a drift check. 1 = not a git repo (except --type shell);
+# 2 = usage error.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
-
-PROJECT_ROOT=$(frame_project_root) || {
-  echo "$X_MARK frame: not inside a git repository" >&2
-  exit 1
-}
-cd "$PROJECT_ROOT"
 
 # --force (-f): when .claude/settings.json already exists but is out of sync with
 # frame's hooks, overwrite it instead of leaving it alone — but only if it holds
@@ -63,8 +61,8 @@ while (( $# )); do
   shift
 done
 
-# Types stack. Each project has exactly one BASE flavour (generic | astrojs) plus
-# any composable LAYERS (cloudflare). `--type astrojs --type cloudflare` is an
+# Types stack. Each project has exactly one BASE flavour (generic | astrojs |
+# shell) plus any composable LAYERS (cloudflare). `--type astrojs --type cloudflare` is an
 # Astro project whose worktrees also carry Cloudflare's .dev.vars; a bare `--type
 # cloudflare` layers onto the default generic base. Two DIFFERENT bases is a
 # conflict — a project can't be both generic and astrojs.
@@ -73,18 +71,36 @@ _base_set=0
 CLOUDFLARE=0
 for _t in "${_types[@]}"; do
   case "$_t" in
-    generic|astrojs)
+    generic|astrojs|shell)
       if (( _base_set )) && [[ "$BASE" != "$_t" ]]; then
         echo "$X_MARK frame init: conflicting base types '$BASE' and '$_t' (a project has one base)" >&2
         exit 2
       fi
       BASE="$_t"; _base_set=1 ;;
     cloudflare) CLOUDFLARE=1 ;;
-    *) echo "$X_MARK frame init: unknown --type '$_t' (known: generic, astrojs, cloudflare)" >&2; exit 2 ;;
+    *) echo "$X_MARK frame init: unknown --type '$_t' (known: generic, astrojs, shell, cloudflare)" >&2; exit 2 ;;
   esac
 done
 
-mkdir -p .frame/local
+# The re-run hint names the exact init that produced this state.
+_init_cmd="frame init"
+[[ "$BASE" == shell ]] && _init_cmd="frame init --type=shell"
+
+if [[ "$BASE" == shell ]]; then
+  # A shell dir has no worktrees for a layer to feed, and no repo to find a
+  # root in: wire the cwd as-is.
+  if (( CLOUDFLARE )); then
+    echo "$X_MARK frame init: --type shell takes no layers (it only wires .claude/settings.json)" >&2
+    exit 2
+  fi
+else
+  PROJECT_ROOT=$(frame_project_root) || {
+    echo "$X_MARK frame: not inside a git repository" >&2
+    exit 1
+  }
+  cd "$PROJECT_ROOT"
+  mkdir -p .frame/local
+fi
 
 # WT_LINKS seed for the generated config.sh (see wt.sh — gitignored assets
 # symlinked from the primary checkout into each fresh worktree). node_modules is
@@ -110,7 +126,9 @@ fi
 typeset -a _rows
 _hooks_hint=
 
-if [[ -f .frame/config.sh ]]; then
+if [[ "$BASE" == shell ]]; then
+  :  # settings.json only — no project config
+elif [[ -f .frame/config.sh ]]; then
   _rows+=( ".frame/config.sh|no|already exists — left alone" )
 elif [[ "$BASE" == astrojs ]]; then
   _name="${$(frame_main_wt "$PROJECT_ROOT"):t}"
@@ -237,7 +255,9 @@ else
   _rows+=( ".claude/settings.json|yes|scaffolded — claude notifies via 'frame notify'" )
 fi
 
-if [[ -f .gitignore ]] && grep -qxF '.frame/local/' .gitignore; then
+if [[ "$BASE" == shell ]]; then
+  :  # no .frame/local/ to ignore
+elif [[ -f .gitignore ]] && grep -qxF '.frame/local/' .gitignore; then
   _rows+=( ".gitignore|no|already covers .frame/local/" )
 else
   printf '\n# frame — personal/local harness overrides, never committed\n.frame/local/\n' >> .gitignore
@@ -327,7 +347,7 @@ if [[ -n $_hooks_hint ]]; then
   case $_hooks_hint in
     missing)
       print -- "  $WARN_MARK .claude/settings.json already exists, so frame left it untouched —"
-      print -- "    it's missing frame's notification hooks. Re-run \`frame init --force\`"
+      print -- "    it's missing frame's notification hooks. Re-run \`$_init_cmd --force\`"
       print -- "    to overwrite it with frame's hooks (only if it holds no custom"
       print -- "    content), or add these by hand:" ;;
     custom)

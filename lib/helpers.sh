@@ -1118,6 +1118,28 @@ frame_clone_node_modules() {
 
 # ── misc ──────────────────────────────────────────────────────────────────────
 
+frame_export_ports() {
+  # Free ports, scanned upward from the project's primary-env defaults (primary
+  # on 3000/5173/24678 → first worktree 3001/5174/24679, and so on). Exported
+  # under the rename-proof FRAME_* names app code should read, plus the
+  # project-prefixed aliases for code already reading those. A config with no
+  # API_PORT/VITE_PORT gets none — FRAME_VITE_PORT stays empty. Reads
+  # API_PORT/VITE_PORT/HMR_PORT/PORT_PREFIX from the sourced project config.
+  FRAME_VITE_PORT=""
+  if [[ -n "${API_PORT:-}${VITE_PORT:-}" ]]; then
+    local _hmr
+    export PORT=$(find_free_port "${API_PORT:-3000}")
+    FRAME_VITE_PORT=$(find_free_port "${VITE_PORT:-5173}")
+    _hmr=$(find_free_port "${HMR_PORT:-24678}")
+    export FRAME_API_PORT=$PORT
+    export FRAME_HMR_PORT=$_hmr
+    export "${PORT_PREFIX}_API_PORT=$PORT"
+    export "${PORT_PREFIX}_VITE_PORT=$FRAME_VITE_PORT"
+    export "${PORT_PREFIX}_HMR_PORT=$_hmr"
+    echo "$OK_MARK frame env: server :$PORT · vite :$FRAME_VITE_PORT · hmr :$_hmr"
+  fi
+}
+
 find_free_port() {
   # Scan upward from $1 until a port nothing is listening on.
   local _p=$1
