@@ -2,8 +2,8 @@
 #
 # Every key `frame kv` knows is listed here; `frame kv set` refuses any other
 # (a typo like merge_push would otherwise be silently ignored). Each grants a
-# frame's claude one more step of autonomy, so all default to false — today's
-# behavior, where the human drives commits, merges, and pushes.
+# frame's claude one more step of autonomy. The git steps default to false —
+# the human drives commits, merges, and pushes; spawn_frames defaults to true.
 #
 # Override per frame / project / user:  frame kv set [--project|--user] KEY VALUE
 
@@ -19,3 +19,8 @@ push_on_merge=false
 
 # After a merge, run the project's deploy (frame merge prints the reminder).
 deploy_on_merge=false
+
+# Work that belongs in another repo: check `frame ls` for a frame there and
+# `frame req` it; if none exists, `frame spawn wt` one without asking first.
+# false → ask the human before spawning.
+spawn_frames=true

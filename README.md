@@ -415,8 +415,8 @@ swarm_context() {
 ## Agent autonomy settings: frame kv
 
 `frame kv` holds the settings that tell a frame's claude how far to carry its
-work without asking. Every key defaults to `false`, meaning you drive commits,
-merges and pushes yourself:
+work without asking. The git keys default to `false`, meaning you drive commits,
+merges and pushes yourself; `spawn_frames` defaults to `true`:
 
 | key               | when `true`                                                                                  |
 | ----------------- | -------------------------------------------------------------------------------------------- |
@@ -424,6 +424,7 @@ merges and pushes yourself:
 | `merge_on_commit` | …and then runs `frame merge` into the primary branch                                          |
 | `push_on_merge`   | `frame merge` pushes to origin itself, as if `--push` were given (`--no-push` skips it once)  |
 | `deploy_on_merge` | `frame merge` ends by telling the agent to run the project's deploy                           |
+| `spawn_frames`    | work for another repo goes to that repo's frame (`frame ls`); if it has none, the agent `frame spawn wt`s one without asking (`false`: it asks first) |
 
 ```bash
 frame kv                                   # every key, its value, and which layer set it
