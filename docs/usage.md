@@ -116,7 +116,8 @@ Usage:
     frame kv                          settings telling each frame's claude how
                                       far to go on its own: autocommit,
                                       merge_on_commit, push_on_merge,
-                                      deploy_on_merge (all default false).
+                                      deploy_on_merge (default false),
+                                      spawn_frames (default true).
                                       Bare form lists values + source layer
     frame kv get KEY                  print KEY's effective value
     frame kv set [--project|--user] KEY VALUE

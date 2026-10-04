@@ -17,7 +17,7 @@ test_list_shows_every_key_from_default() {
   run_frame kv
   assert_status 0
   local k
-  for k in autocommit merge_on_commit push_on_merge deploy_on_merge; do
+  for k in autocommit merge_on_commit push_on_merge deploy_on_merge spawn_frames; do
     assert_contains "$OUT" "$k"
   done
   assert_contains "$OUT" "default"
@@ -182,6 +182,7 @@ test_swarm_block_carries_kv_values() {
   assert_status 0
   assert_contains "$OUT" "merge_on_commit=true"
   assert_contains "$OUT" "autocommit=false"
+  assert_contains "$OUT" "spawn_frames=true"
   assert_contains "$OUT" "frame kv get KEY"
 }
 

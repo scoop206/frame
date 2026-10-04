@@ -43,13 +43,20 @@ test_kvfile_unset_keeps_other_lines() {
 
 test_defaults_file_lists_the_known_keys() {
   assert_eq "${(j:,:)${(f)"$(frame_kv_keys)"}}" \
-    "autocommit,merge_on_commit,push_on_merge,deploy_on_merge"
+    "autocommit,merge_on_commit,push_on_merge,deploy_on_merge,spawn_frames"
 }
 
 test_default_layer_answers_when_nothing_is_set() {
   frame_kv_scope proj topic "$SANDBOX/main"
   frame_kv_lookup push_on_merge
   assert_eq "$KV_VALUE" false
+  assert_eq "$KV_LAYER" default
+}
+
+test_spawn_frames_defaults_to_true() {
+  frame_kv_scope proj topic "$SANDBOX/main"
+  frame_kv_lookup spawn_frames
+  assert_eq "$KV_VALUE" true
   assert_eq "$KV_LAYER" default
 }
 

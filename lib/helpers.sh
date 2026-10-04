@@ -234,7 +234,7 @@ frame_kvfile_unset() {
 
 # ── frame kv: layered agent-behavior settings ─────────────────────────────────
 # Settings that tell a frame's claude how far to carry its work on its own
-# (autocommit, merge_on_commit, push_on_merge, deploy_on_merge — the full list,
+# (autocommit, merge_on_commit, push_on_merge, deploy_on_merge, spawn_frames — the full list,
 # with meanings, is the defaults file). Four layers, first hit wins:
 #
 #   frame    ~/.local/share/frame/kv/<NAME>/<TOPIC>   one frame; reaped by frame wt -d

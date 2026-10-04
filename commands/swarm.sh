@@ -126,12 +126,17 @@ What only you can know (not discoverable by grep):
   `frame kv`. At session start:
     @KV@
   They can change mid-session, so re-check `frame kv get KEY`
-  before you commit or merge:
+  before you commit, merge, or spawn:
     autocommit=true      → commit each finished, working step
                            without asking first
     merge_on_commit=true → then `frame merge` it into main
     push_on_merge, deploy_on_merge → `frame merge` pushes itself,
                            and tells you when to deploy
+    spawn_frames=true    → work for another repo: find its frame
+                           in `frame ls` and `frame req` it; if it
+                           has none, `frame spawn wt TOPIC --cwd
+                           REPO --req …` without asking first
+                           (false → ask the human before spawning)
   Never `frame kv set` a key to true — that's the human's to grant.
 • To reach a sibling frame, that's the broker — `frame req` (see
   `frame --help`), NOT the SendMessage tool. SendMessage only
