@@ -344,6 +344,20 @@ test_init_outside_git_fails() {
   assert_contains "$OUT" "not inside a git repository"
 }
 
+# A dotfiles repo at ~ must not adopt every un-git'd project dir beneath it:
+# init used to resolve ~ as the project root and scaffold into the home dir.
+test_init_refuses_home_dotfiles_repo() {
+  git init -q "$HOME"
+  mkdir -p "$HOME/code/newproj"
+  cd "$HOME/code/newproj"
+  run_frame init
+  assert_status 1
+  assert_contains "$OUT" "nearest one is your home dir"
+  assert_dir_absent "$HOME/.frame"
+  assert_file_absent "$HOME/.gitignore"
+  assert_file_absent "$HOME/.claude/settings.json"
+}
+
 test_init_in_worktree_uses_primary_name() {
   make_repo
   git -C "$REPO" worktree add -q "$SANDBOX/some-random-dirname" -b topic
