@@ -95,7 +95,14 @@ if [[ "$BASE" == shell ]]; then
   fi
 else
   PROJECT_ROOT=$(frame_project_root) || {
-    echo "$X_MARK frame: not inside a git repository" >&2
+    if [[ "$(git rev-parse --show-toplevel 2>/dev/null)" == "${HOME:A}" ]]; then
+      # frame_project_root rejects a $HOME-rooted (dotfiles) repo; say so, or
+      # "not inside a git repository" reads as a lie to someone whose ~ is one.
+      echo "$X_MARK frame init: $PWD isn't its own git repo — the nearest one is your home dir (~)." >&2
+      echo "    Run \`git init\` here first, then \`frame init\`." >&2
+    else
+      echo "$X_MARK frame: not inside a git repository" >&2
+    fi
     exit 1
   }
   cd "$PROJECT_ROOT"

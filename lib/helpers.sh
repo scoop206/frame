@@ -50,7 +50,13 @@ fi
 # ── project discovery ─────────────────────────────────────────────────────────
 
 frame_project_root() {
-  git rev-parse --show-toplevel 2>/dev/null
+  # A repo rooted at $HOME is a dotfiles repo, never a frame project: without
+  # this, any un-git'd dir under ~ (a fresh project before `git init`) resolves
+  # to ~ itself, and init scaffolds into — or reports on — the home dir.
+  local _top
+  _top=$(git rev-parse --show-toplevel 2>/dev/null) || return 1
+  [[ "${_top:A}" == "${HOME:A}" ]] && return 1
+  print -r -- "$_top"
 }
 
 frame_main_wt() {
