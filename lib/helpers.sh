@@ -121,12 +121,12 @@ frame_source_machine_config() {
 frame_self_identity() {
   # Sets SELF_NAME / SELF_TOPIC to THIS frame's own identity — used as a reply
   # return address by `frame agent` (arming) and as the socket to read by
-  # `frame reply` / `frame inbox`. Same derivation as status.sh: a shell frame
-  # (no git repo) carries it in the session env; a checkout derives it from the
-  # worktree dir (_NAME-TOPIC) or the current branch. Returns 1 with SELF_* unset
+  # `frame reply` / `frame inbox`. Same derivation as status.sh: the session env
+  # wins (a shell frame may sit in another project's checkout, where git would
+  # name the wrong frame — e.g. a reply address of ulc/master); a bare shell
+  # outside any frame derives it from the worktree dir (_NAME-TOPIC) or branch. Returns 1 with SELF_* unset
   # when not inside any frame — the caller decides whether that's fatal.
-  if ! frame_project_root >/dev/null \
-      && [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
+  if [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
     SELF_NAME=$FRAME_NAME SELF_TOPIC=$FRAME_TOPIC
     return 0
   fi

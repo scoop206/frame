@@ -43,8 +43,7 @@
 # runs from anywhere (including a plain terminal in no frame at all), so a
 # failure here just means no row gets marked — it must never abort the listing.
 _cur_name='' _cur_topic=''
-if ! frame_project_root >/dev/null 2>&1 \
-    && [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
+if [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
   _cur_name=$FRAME_NAME _cur_topic=$FRAME_TOPIC
 elif frame_project_root >/dev/null 2>&1 && frame_load_config 2>/dev/null; then
   _cur_name=$NAME

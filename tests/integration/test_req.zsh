@@ -53,6 +53,21 @@ test_emits_correlation_token_from_the_returned_id() {
   assert_contains "$OUT" "token: $TNAME/alpha#r7"
 }
 
+test_shell_frame_in_a_checkout_keeps_its_own_return_address() {
+  # A shell frame with a custom folder sits inside ANOTHER project's checkout
+  # (here: a repo on master). The session env names the frame; git would name
+  # the checkout's branch — the reply must come home to the shell frame.
+  make_repo ulc master
+  export FRAME_NAME=shell FRAME_TOPIC=review-cards
+  _mksock "$FRAME_RUNDIR/shell-review-cards.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-alpha.nvim"
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
+  run_frame req "$TNAME/alpha" "build it"
+  assert_status 0
+  assert_contains "$OUT" "reply → shell/review-cards inbox"
+  assert_contains "$(<$FAKE_NVIM_EXPR_LOG)" "'remote:shell/review-cards'"
+}
+
 test_refuses_when_not_in_a_frame() {
   # No FRAME_NAME and a non-git sandbox cwd → no return address → refuse.
   _mksock "$FRAME_RUNDIR/$TNAME-alpha.nvim"

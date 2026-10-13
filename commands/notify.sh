@@ -61,12 +61,10 @@ else
 fi
 
 # Identity for the banner's title, the blocked status-gate just below, and the
-# socket every RPC here rides on — best-effort like everything else: a shell
-# frame (frame shell — no git repo) carries it in the session env; a checkout
-# derives it as status.sh does (guarded: HEAD is unresolvable in a repo with
+# socket every RPC here rides on — best-effort like everything else: the session
+# env wins, as in status.sh; a bare checkout derives it from git (guarded: HEAD is unresolvable in a repo with
 # no commits yet); anywhere else fall back to ?/? — the banner still fires.
-if ! frame_project_root >/dev/null \
-    && [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
+if [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
   NAME=$FRAME_NAME TOPIC=$FRAME_TOPIC
 elif frame_load_config 2>/dev/null; then
   if [[ "${PROJECT_ROOT:t}" == _$NAME-* ]]; then

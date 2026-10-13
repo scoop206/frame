@@ -31,11 +31,12 @@ if [[ "${1:-}" == --prompt ]]; then
   _prompt=1
 fi
 
-# A shell frame (frame shell) has no git repo to derive identity from — its
-# buffers inherit FRAME_NAME/FRAME_TOPIC from the session instead. Inside a
-# checkout the usual config + worktree/branch derivation still wins.
-if ! frame_project_root >/dev/null \
-    && [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
+# Every frame (frame shell and frame wt alike) exports FRAME_NAME/FRAME_TOPIC
+# at boot, so its buffers inherit the session's identity — and that wins even
+# inside a checkout: a shell frame can live in another project's checkout (a
+# custom folder), where git would name the wrong frame. The config +
+# worktree/branch derivation is only for a bare shell outside any frame.
+if [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
   NAME=$FRAME_NAME TOPIC=$FRAME_TOPIC
 else
   frame_load_config

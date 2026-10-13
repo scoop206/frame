@@ -33,10 +33,9 @@ if (( $# )); then
     F_NAME="" F_TOPIC="$ARG"
   fi
 else
-  # Same identity derivation as status.sh: shell frames carry it in the
-  # session env, checkouts derive it from worktree/branch.
-  if ! frame_project_root >/dev/null \
-      && [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
+  # Same identity derivation as status.sh: the session env wins, a bare
+  # checkout derives it from worktree/branch.
+  if [[ -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
     F_NAME=$FRAME_NAME F_TOPIC=$FRAME_TOPIC
   else
     frame_load_config
