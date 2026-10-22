@@ -13,9 +13,13 @@
 # lines. --type cloudflare layers Cloudflare's .dev.vars (its .env-equivalent
 # local secrets) onto whatever base is chosen: adds it to WT_LINKS so every
 # worktree symlinks it from the primary, and gitignores it. --type shell is the
-# odd one out: it wires ONLY .claude/settings.json, in the cwd, and needs no git
-# repo — the prep step for `frame shell -C DIR`, which boots a shell frame in an
-# arbitrary dir but never writes into it itself. No config.sh, no .gitignore.
+# odd one out: it wires ONLY .claude/settings.json, in the cwd — the prep step
+# for `frame shell -C DIR`, which boots a shell frame in an arbitrary dir but
+# never writes into it itself. No config.sh, no .gitignore.
+#
+# No git repo is needed for any type. Outside one (or under a $HOME dotfiles
+# repo) init scaffolds the cwd and skips the .gitignore lines — a config.sh
+# there still picks `frame shell -C DIR`'s buffers. It refuses ~ itself.
 # init NEVER stages or commits on your behalf — because `frame wt` only inherits
 # COMMITTED files, it prints a reminder to review + commit the scaffold yourself
 # so the very first `frame wt` inherits a working project via git. Deps aren't
@@ -67,6 +71,7 @@ done
 # cloudflare` layers onto the default generic base. Two DIFFERENT bases is a
 # conflict — a project can't be both generic and astrojs.
 BASE=generic
+IN_GIT=0
 _base_set=0
 CLOUDFLARE=0
 for _t in "${_types[@]}"; do
@@ -94,20 +99,30 @@ if [[ "$BASE" == shell ]]; then
     exit 2
   fi
 else
-  PROJECT_ROOT=$(frame_project_root) || {
-    if [[ "$(git rev-parse --show-toplevel 2>/dev/null)" == "${HOME:A}" ]]; then
-      # frame_project_root rejects a $HOME-rooted (dotfiles) repo; say so, or
-      # "not inside a git repository" reads as a lie to someone whose ~ is one.
-      echo "$X_MARK frame init: $PWD isn't its own git repo — the nearest one is your home dir (~)." >&2
-      echo "    Run \`git init\` here first, then \`frame init\`." >&2
-    else
-      echo "$X_MARK frame: not inside a git repository" >&2
+  # Inside a git repo, scaffold at its root. Outside one — or under a $HOME
+  # dotfiles repo, which is never a frame project — scaffold the cwd as-is:
+  # nothing init writes needs git except the .gitignore lines, which are
+  # skipped there (re-run init after `git init` to add them).
+  if PROJECT_ROOT=$(frame_project_root); then
+    IN_GIT=1
+  else
+    IN_GIT=0
+    PROJECT_ROOT=$PWD
+    if [[ "${PWD:A}" == "${HOME:A}" ]]; then
+      echo "$X_MARK frame init: refusing to scaffold your home dir (~) — cd into a project first" >&2
+      exit 1
     fi
-    exit 1
-  }
+  fi
   cd "$PROJECT_ROOT"
   mkdir -p .frame/local
 fi
+
+# The NAME a scaffold pins in its comment: the primary checkout's dir name in a
+# repo (so init from a worktree still names the project), else the cwd's.
+_init_name() {
+  if (( IN_GIT )); then print -r -- "${$(frame_main_wt "$PROJECT_ROOT"):t}"
+  else print -r -- "${PROJECT_ROOT:t}"; fi
+}
 
 # WT_LINKS seed for the generated config.sh (see wt.sh — gitignored assets
 # symlinked from the primary checkout into each fresh worktree). node_modules is
@@ -138,7 +153,7 @@ if [[ "$BASE" == shell ]]; then
 elif [[ -f .frame/config.sh ]]; then
   _rows+=( ".frame/config.sh|no|already exists — left alone" )
 elif [[ "$BASE" == astrojs ]]; then
-  _name="${$(frame_main_wt "$PROJECT_ROOT"):t}"
+  _name=$(_init_name)
   cat > .frame/config.sh <<EOF
 # Frame project config — Astro variant, scaffolded by \`frame init --type astrojs\`.
 # Committed project facts; personal overrides go in .frame/local/config.sh
@@ -173,7 +188,7 @@ stack_up() {
 EOF
   _rows+=( ".frame/config.sh|yes|scaffolded (astrojs) — edit it to fit the project" )
 else
-  _name="${$(frame_main_wt "$PROJECT_ROOT"):t}"
+  _name=$(_init_name)
   cat > .frame/config.sh <<EOF
 # Frame project config — committed project facts (like an .env.dev + hooks).
 # Personal overrides go in .frame/local/config.sh (gitignored, wins over this).
@@ -264,6 +279,8 @@ fi
 
 if [[ "$BASE" == shell ]]; then
   :  # no .frame/local/ to ignore
+elif (( ! IN_GIT )); then
+  _rows+=( ".gitignore|no|not a git repo — skipped (re-run init after git init)" )
 elif [[ -f .gitignore ]] && grep -qxF '.frame/local/' .gitignore; then
   _rows+=( ".gitignore|no|already covers .frame/local/" )
 else
@@ -294,7 +311,9 @@ if [[ "$BASE" == astrojs ]]; then
   # anchored `/images/`, never a bare `images` — a bare pattern also swallows
   # public/images/ and silently drops committed web assets. A marker line keeps
   # this block append-once.
-  if [[ -f .gitignore ]] && grep -qF '# frame:astrojs' .gitignore; then
+  if (( ! IN_GIT )); then
+    :  # no repo to ignore build artifacts in (row already printed above)
+  elif [[ -f .gitignore ]] && grep -qF '# frame:astrojs' .gitignore; then
     _rows+=( ".gitignore|no|already covers astrojs artifacts" )
   else
     {
@@ -317,7 +336,9 @@ fi
 # make sure git ignores it. .dev.vars.* covers wrangler's per-environment
 # variants (.dev.vars.staging, …). A marker line keeps this block append-once.
 if (( CLOUDFLARE )); then
-  if [[ -f .gitignore ]] && grep -qF '# frame:cloudflare' .gitignore; then
+  if (( ! IN_GIT )); then
+    :  # no repo — .dev.vars stays untracked by default
+  elif [[ -f .gitignore ]] && grep -qF '# frame:cloudflare' .gitignore; then
     _rows+=( ".gitignore|no|already covers cloudflare (.dev.vars)" )
   else
     printf '\n# frame:cloudflare — local secrets (like .env), never committed\n.dev.vars\n.dev.vars.*\n' >> .gitignore
@@ -343,7 +364,7 @@ done
 # first-boot failure this type exists to fix — but init must never stage or
 # commit on the user's behalf (it surprised people), so we nudge rather than act.
 # Only nudge when the tree is actually dirty; a fully-committed re-run stays quiet.
-if [[ "$BASE" == astrojs ]] && [[ -n "$(git status --porcelain)" ]]; then
+if [[ "$BASE" == astrojs ]] && (( IN_GIT )) && [[ -n "$(git status --porcelain)" ]]; then
   print -- "\n  $WARN_MARK the astrojs scaffold is NOT committed — \`frame wt <topic>\` only"
   print -- "    inherits committed files, so review the scaffold and commit it yourself:"
   print -- "        git add -A && git commit -m 'frame init: scaffold Astro project'"

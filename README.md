@@ -170,6 +170,10 @@ This writes three things:
   `frame init --force` re-syncs it — but only when it holds nothing but frame's
   own hooks, so it never clobbers custom settings.
 
+No git repo needed. Outside one, `frame init` scaffolds the current dir and
+skips `.gitignore`; its `config.sh` still sets the buffers for
+`frame shell -C DIR`. Run init again after `git init` to add the ignore line.
+
 **3. (Optional) Change which buffers your frames open.**
 `frame init` already scaffolds a working default — `BUFFERS=(claude local)` — so you can skip straight
 to booting a frame. Edit `.frame/config.sh` only if you want different buffers

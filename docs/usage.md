@@ -20,8 +20,10 @@ Usage:
                                       scaffolds a worktree-ready Astro project,
                                       layer cloudflare wires .dev.vars into
                                       WT_LINKS + .gitignore; base shell wires
-                                      only .claude/settings.json in the cwd,
-                                      no git needed (prep for frame shell -C)
+                                      only .claude/settings.json in the cwd
+                                      (prep for frame shell -C). No git repo
+                                      needed: outside one it scaffolds the
+                                      cwd and skips .gitignore
 
     frame wt TOPIC                    create/reuse branch + worktree, boot it
     frame wt TOPIC --from SRC_FRAME   …and resume SRC_FRAME's warm claude
