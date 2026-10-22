@@ -23,6 +23,7 @@
   - [Install Frame](#install-frame)
   - [Onboarding a project](#onboarding-a-project)
 - [Worktrees](#worktrees)
+  - [What a worktree doesn't get from git](#what-a-worktree-doesnt-get-from-git)
 - [Vim commands](#vim-commands)
   - [Asking claude from the editor](#asking-claude-from-the-editor--frameclaude)
 - [Frame Merge](#frame-merge)
@@ -187,7 +188,7 @@ stack them: `frame init --type astrojs --type cloudflare`.
 | ------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | *(none)*     | base  | the default `config.sh`: `BUFFERS=(claude local)` plus commented-out examples of every key                                                              |
 | `astrojs`    | base  | an Astro `config.sh` (a `vite` buffer at the repo root, each worktree with its own `node_modules`), starter Astro project files, build-output `.gitignore` lines |
-| `cloudflare` | layer | `.dev.vars` (Cloudflare's local secrets) in `WT_LINKS`, so every worktree links it from the primary checkout, and in `.gitignore`                           |
+| `cloudflare` | layer | `.dev.vars` (Cloudflare's local secrets) in [`WT_LINKS`](#what-a-worktree-doesnt-get-from-git), so every worktree links it from the primary checkout, and in `.gitignore`                           |
 
 Init never overwrites an existing file, `config.sh` included. Re-running it
 with a new type adds that type's new files and `.gitignore` lines, but its
@@ -231,6 +232,21 @@ This starts neovim w/ custom layout which is usually 4 buffers:
 
 The ghostty window will now be named `$REPO [ $TOPIC :PORT ]`
 You can see vite's rendered web app at `http://localhost:PORT`
+
+### What a worktree doesn't get from git
+
+A new worktree only has committed files, so gitignored ones (`.env` secrets,
+Cloudflare's `.dev.vars`, installed dependencies) are missing from it. The
+`WT_LINKS` key in `config.sh` lists paths, relative to the repo root, that every
+worktree shares with the primary checkout: on each `frame wt` boot, frame
+symlinks each one in from the primary. It skips a path the worktree already has
+(a real file wins) and one the primary doesn't have. Unset, it defaults to
+`(.env web/node_modules)`; `WT_LINKS=()` turns linking off.
+
+These are links, not copies: editing a linked `.env` from inside a worktree
+changes the primary's file, and so every frame's. For `node_modules` that also
+means one shared set of dependencies and build caches, which is why the astrojs
+type gives each worktree its own copy instead (`frame_clone_node_modules`).
 
 ## Vim commands
 
@@ -516,6 +532,7 @@ The keys a project sets:
 | `BUFFERS=(…)`                                   | yes      | which buffers each frame opens, e.g. `(claude local)` — see [Buffer Definitions](#buffer-definitions)                                                                                                                  |
 | `SERVER_CMD`                                    | no       | the command that starts your dev server; runs verbatim in the [`server`](buffers.json) buffer type and must bind `$PORT`                                                                                               |
 | `VITE_DIR`                                      | no       | the directory the [`vite`](buffers.json) buffer runs in (default `web`; set `.` for a root-dir npm app, e.g. Astro)                                                                                                    |
+| `WT_LINKS=(…)`                                  | no       | gitignored paths every worktree symlinks from the primary checkout (default `(.env web/node_modules)`) — see [What a worktree doesn't get from git](#what-a-worktree-doesnt-get-from-git)                              |
 | `API_PORT` `VITE_PORT` `HMR_PORT` `PORT_PREFIX` | no       | port configuration — see [Port assignment](#port-assignment) below                                                                                                                                                     |
 
 Hooks:
