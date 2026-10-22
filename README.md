@@ -36,6 +36,7 @@
   - [Extending the swarm instructions](#extending-the-swarm-instructions)
 - [Agent autonomy settings: frame kv](#agent-autonomy-settings-frame-kv)
 - [How a project plugs in](#how-a-project-plugs-in)
+  - [Claude hooks](#claude-hooks)
   - [Examples](#examples)
   - [config.sh](#configsh)
   - [Port assignment](#port-assignment)
@@ -55,24 +56,24 @@
 - The default behavior is for the claude session to expire with the frame but complete context can be passed from frame to frame with `frame wt $TOPIC --from=SRC_FRAME`.
 - Ghostty is the intended terminal — window focus and spawn-into-tabs use its scripting — but a frame still runs in other terminals.
 
-| command                               | what it does                                                                                                                      |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `frame wt TOPIC [--from SRC_FRAME]`   | create/reuse a branch and worktree, boot it. --from instructs SRC_FRAME claude to teardown and then context is transferred forward |
-| `frame wt`                            | boot the worktree you're already in                                                                                               |
-| `frame wt -d [TOPIC]`                 | tear down a frame (default: the current one)                                                                                      |
-| `frame shell TOPIC`                   | a frame in the current dir with no branch — just the claude and local buffers                                                     |
-| `frame shell -C DIR TOPIC`            | the same, in DIR (any dir — nothing is written into it)                                                                           |
-| `frame ls`                            | list every live frame across projects                                                                                             |
-| `frame merge [TOPIC]`                 | merge a topic branch into the primary branch                                                                                      |
-| `frame push`                          | push the primary branch to origin                                                                                                 |
-| `frame claude TEXT…`                  | ask this frame's claude, block for the answer                                                                                     |
-| `frame req NAME/TOPIC TEXT…`          | ask another frame's claude (async)                                                                                                |
-| `frame inbox`                         | read replies routed back to you                                                                                                   |
-| `frame services up`                   | bring up the shared services stack                                                                                                |
-| `frame focus [TOPIC]`                 | raise a frame's window                                                                                                            |
-| `frame yolo on\|off`                  | toggle `--dangerously-skip-permissions` everywhere                                                                                |
-| `frame swarm [off\|1\|2]`             | how much frame context each frame's claude gets — 0 off · 1 aware · 2 ask (starts off)                                            |
-| `frame kv [get\|set\|unset …]`        | how far each frame's claude goes on its own — autocommit, merge/push/deploy on merge (per frame, project, or user)                 |
+| command                             | what it does                                                                                                                       |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `frame wt TOPIC [--from SRC_FRAME]` | create/reuse a branch and worktree, boot it. --from instructs SRC_FRAME claude to teardown and then context is transferred forward |
+| `frame wt`                          | boot the worktree you're already in                                                                                                |
+| `frame wt -d [TOPIC]`               | tear down a frame (default: the current one)                                                                                       |
+| `frame shell TOPIC`                 | a frame in the current dir with no branch — just the claude and local buffers                                                      |
+| `frame shell -C DIR TOPIC`          | the same, in DIR (any dir — nothing is written into it)                                                                            |
+| `frame ls`                          | list every live frame across projects                                                                                              |
+| `frame merge [TOPIC]`               | merge a topic branch into the primary branch                                                                                       |
+| `frame push`                        | push the primary branch to origin                                                                                                  |
+| `frame claude TEXT…`                | ask this frame's claude, block for the answer                                                                                      |
+| `frame req NAME/TOPIC TEXT…`        | ask another frame's claude (async)                                                                                                 |
+| `frame inbox`                       | read replies routed back to you                                                                                                    |
+| `frame services up`                 | bring up the shared services stack                                                                                                 |
+| `frame focus [TOPIC]`               | raise a frame's window                                                                                                             |
+| `frame yolo on\|off`                | toggle `--dangerously-skip-permissions` everywhere                                                                                 |
+| `frame swarm [off\|1\|2]`           | how much frame context each frame's claude gets — 0 off · 1 aware · 2 ask (starts off)                                             |
+| `frame kv [get\|set\|unset …]`      | how far each frame's claude goes on its own — autocommit, merge/push/deploy on merge (per frame, project, or user)                 |
 
 `worktree` is a synonym for `wt`; `list` for `ls`.  
 Not shown here: `spawn`,
@@ -160,35 +161,15 @@ This writes two things:
 - `.frame/config.sh` — the project config
 - `.frame/local/` — gitignored, for personal overrides
 
-Nothing goes in `.claude/`. Every frame starts its Claude with
-`--settings ~/.local/share/frame/claude-hooks.json`, a copy of frame's
-`claude/hooks.json` that frame refreshes on boot whenever it changes. The hooks
-plug Claude into frame's lifecycle signaling:
-
-- `Stop` → `frame notify` (banner + "waiting" title) and `frame reply` (route a reply to a requester)
-- `UserPromptSubmit` → `frame status --prompt` ("working" title + turn-start stamp)
-- `Notification` → `frame notify --blocked` ("blocked" title + banner)
-- `SessionStart` → `frame swarm --context` (frame-awareness, when swarm ≥ 1)
-- `PostToolUse` → `frame reload-editor` (reloads the just-edited file into this frame's nvim buffer, when it's open)
-
-These merge with the project's own `.claude/settings.json`, if it has one. A
-repo that still has frame's hooks committed there from an older frame doesn't
-fire them twice (Claude Code runs an identical hook once), and that file can be
-deleted.
-
-No git repo needed. Outside one, `frame init` scaffolds the current dir and
-skips `.gitignore`; its `config.sh` still sets the buffers for
-`frame shell -C DIR`. Run init again after `git init` to add the ignore line.
-
 **Project types.** `--type` picks what init scaffolds. A project has one
-*base* (default `generic`) and any number of *layers*; the flag repeats to
+_base_ (default `generic`) and any number of _layers_; the flag repeats to
 stack them: `frame init --type astrojs --type cloudflare`. `frame init --types`
 lists what's available:
 
-| type         | kind  | adds                                                                                                                                       |
-| ------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `generic`    | base  | the default `config.sh`: `BUFFERS=(claude local)`                                                                                          |
-| `astrojs`    | base  | an Astro `config.sh` (a `vite` buffer at the repo root, each worktree with its own `node_modules`), starter Astro files, build-output `.gitignore` lines |
+| type         | kind  | adds                                                                                                                                                                           |
+| ------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `generic`    | base  | the default `config.sh`: `BUFFERS=(claude local)`                                                                                                                              |
+| `astrojs`    | base  | an Astro `config.sh` (a `vite` buffer at the repo root, each worktree with its own `node_modules`), starter Astro files, build-output `.gitignore` lines                       |
 | `cloudflare` | layer | `WT_LINKS+=(.dev.vars)`, so every worktree [links](#what-a-worktree-doesnt-get-from-git) Cloudflare's local secrets from the primary checkout, and `.dev.vars` in `.gitignore` |
 
 The generated `config.sh` is deliberately bare; every key is described under
@@ -208,13 +189,13 @@ cp -R path/to/frame/templates/types/generic ~/.config/frame/types/mytype
 frame init --types   # mytype is listed as (yours)
 ```
 
-| file              | what it is                                                                                     |
-| ----------------- | ---------------------------------------------------------------------------------------------- |
-| `type`            | required: `kind=base` or `kind=layer`, and `description=…` for `frame init --types`            |
-| `config.sh`       | base: the whole `config.sh`. `{{NAME}}` becomes the project name                                |
-| `config.layer.sh` | layer: lines appended to `config.sh`, once                                                     |
-| `files/`          | copied into the project root, each file only if it isn't there yet                             |
-| `gitignore`       | lines appended to `.gitignore` once, under a `# frame:<name>` marker                           |
+| file              | what it is                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| `type`            | required: `kind=base` or `kind=layer`, and `description=…` for `frame init --types` |
+| `config.sh`       | base: the whole `config.sh`. `{{NAME}}` becomes the project name                    |
+| `config.layer.sh` | layer: lines appended to `config.sh`, once                                          |
+| `files/`          | copied into the project root, each file only if it isn't there yet                  |
+| `gitignore`       | lines appended to `.gitignore` once, under a `# frame:<name>` marker                |
 
 Anything that has to happen at runtime belongs in the generated `config.sh`
 (a `stack_up()` function, say), not in the type.
@@ -276,22 +257,22 @@ type gives each worktree its own copy instead (`frame_clone_node_modules`).
 When frame instantiates the nvim instance it injects these user commands
 (defined in `layouts/session.lua`), available from any buffer in the session:
 
-| command                   | action                                                                                                                 |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `:FrameStatus TEXT…`      | append "- TEXT" to the window title's status suffix (no TEXT clears it)                                                |
-| `:FrameName`              | copy this frame's `name/topic` to the system clipboard — the handle to paste into another frame's `frame req`/`focus`  |
-| `:FrameSilence [off]`     | silence this frame's banners (no arg, or 'on'); pass 'off' to unsilence                                                |
-| `:FrameQuit`              | quit the session only — worktree and branch stay for a later `frame wt TOPIC`                                          |
-| `:FrameDown`              | tear down the whole frame: quit nvim, remove the worktree, delete the branch                                           |
-| `:FrameDown!`             | force teardown — discard uncommitted changes and unmerged commits                                                      |
-| `:FrameMerge`             | merge this frame's branch into the primary branch (same safeguards as `frame merge`)                                   |
-| `:FrameMerge!`            | merge, then push the primary branch to origin (mirrors `frame merge --push`)                                           |
-| `:FramePush`              | push the primary branch to origin (same safeguards as `frame push`)                                                    |
-| `:FrameKv`                | list the `frame kv` settings: value + the layer it came from                                                           |
-| `:FrameKvGet KEY`         | print one setting                                                                                                      |
-| `:FrameKvSet [--project\|--user] KEY VALUE` | set a setting (default: this frame only); tab-completes keys and values                              |
-| `:FrameKvUnset [--project\|--user] KEY`     | drop a setting from that layer so the next one down shows through                                    |
-| `:[range]FrameClaude [Q]` | open this frame's claude terminal; with a `[range]` paste the line/selection as context; with a question `Q` submit it |
+| command                                     | action                                                                                                                 |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `:FrameStatus TEXT…`                        | append "- TEXT" to the window title's status suffix (no TEXT clears it)                                                |
+| `:FrameName`                                | copy this frame's `name/topic` to the system clipboard — the handle to paste into another frame's `frame req`/`focus`  |
+| `:FrameSilence [off]`                       | silence this frame's banners (no arg, or 'on'); pass 'off' to unsilence                                                |
+| `:FrameQuit`                                | quit the session only — worktree and branch stay for a later `frame wt TOPIC`                                          |
+| `:FrameDown`                                | tear down the whole frame: quit nvim, remove the worktree, delete the branch                                           |
+| `:FrameDown!`                               | force teardown — discard uncommitted changes and unmerged commits                                                      |
+| `:FrameMerge`                               | merge this frame's branch into the primary branch (same safeguards as `frame merge`)                                   |
+| `:FrameMerge!`                              | merge, then push the primary branch to origin (mirrors `frame merge --push`)                                           |
+| `:FramePush`                                | push the primary branch to origin (same safeguards as `frame push`)                                                    |
+| `:FrameKv`                                  | list the `frame kv` settings: value + the layer it came from                                                           |
+| `:FrameKvGet KEY`                           | print one setting                                                                                                      |
+| `:FrameKvSet [--project\|--user] KEY VALUE` | set a setting (default: this frame only); tab-completes keys and values                                                |
+| `:FrameKvUnset [--project\|--user] KEY`     | drop a setting from that layer so the next one down shows through                                                      |
+| `:[range]FrameClaude [Q]`                   | open this frame's claude terminal; with a `[range]` paste the line/selection as context; with a question `Q` submit it |
 
 ### Asking claude from the editor — `:FrameClaude`
 
@@ -482,12 +463,12 @@ swarm_context() {
 work without asking. The git keys default to `false`, meaning you drive commits,
 merges and pushes yourself; `spawn_frames` defaults to `true`:
 
-| key               | when `true`                                                                                  |
-| ----------------- | -------------------------------------------------------------------------------------------- |
-| `autocommit`      | the agent commits each finished, working step without asking                                  |
-| `merge_on_commit` | …and then runs `frame merge` into the primary branch                                          |
-| `push_on_merge`   | `frame merge` pushes to origin itself, as if `--push` were given (`--no-push` skips it once)  |
-| `deploy_on_merge` | `frame merge` ends by telling the agent to run the project's deploy                           |
+| key               | when `true`                                                                                                                                           |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `autocommit`      | the agent commits each finished, working step without asking                                                                                          |
+| `merge_on_commit` | …and then runs `frame merge` into the primary branch                                                                                                  |
+| `push_on_merge`   | `frame merge` pushes to origin itself, as if `--push` were given (`--no-push` skips it once)                                                          |
+| `deploy_on_merge` | `frame merge` ends by telling the agent to run the project's deploy                                                                                   |
 | `spawn_frames`    | work for another repo goes to that repo's frame (`frame ls`); if it has none, the agent `frame spawn wt`s one without asking (`false`: it asks first) |
 
 ```bash
@@ -503,12 +484,12 @@ In nvim: `:FrameKv`, `:FrameKvGet`, `:FrameKvSet`, `:FrameKvUnset`.
 
 Layers, first hit wins:
 
-| layer   | file                                     |
-| ------- | ---------------------------------------- |
-| frame   | `~/.local/share/frame/kv/<NAME>/<TOPIC>` (removed by `frame wt -d`) |
+| layer   | file                                                                                |
+| ------- | ----------------------------------------------------------------------------------- |
+| frame   | `~/.local/share/frame/kv/<NAME>/<TOPIC>` (removed by `frame wt -d`)                 |
 | project | `<primary checkout>/.frame/local/kv` (gitignored, so it never blocks `frame merge`) |
-| user    | `~/.config/frame/kv`                     |
-| default | [`kv.defaults`](kv.defaults) in the frame repo |
+| user    | `~/.config/frame/kv`                                                                |
+| default | [`kv.defaults`](kv.defaults) in the frame repo                                      |
 
 These are files rather than environment variables on purpose. A process's
 environment is fixed when it starts, so an `export` never reaches a claude
@@ -530,6 +511,21 @@ Everything project-side lives under one `.frame/` directory:
 | ------------------ | ------------------ | ----------------------------------------------------- |
 | `.frame/config.sh` | yes                | the project's config — keys and hooks, detailed below |
 | `.frame/local/`    | never (gitignored) | personal overrides — a `config.sh` here wins          |
+
+### Claude hooks
+
+Every frame starts its Claude with
+`--settings ~/.local/share/frame/claude-hooks.json`, a copy of frame's
+`claude/hooks.json` that frame refreshes on boot whenever it changes. The hooks
+plug Claude into frame's lifecycle signaling:
+
+- `Stop` → `frame notify` (banner + "waiting" title) and `frame reply` (route a reply to a requester)
+- `UserPromptSubmit` → `frame status --prompt` ("working" title + turn-start stamp)
+- `Notification` → `frame notify --blocked` ("blocked" title + banner)
+- `SessionStart` → `frame swarm --context` (frame-awareness, when swarm ≥ 1)
+- `PostToolUse` → `frame reload-editor` (reloads the just-edited file into this frame's nvim buffer, when it's open)
+
+These merge with the project's own `.claude/settings.json`, if it has one.
 
 ### Examples
 
