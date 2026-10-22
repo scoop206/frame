@@ -111,7 +111,7 @@ test_close_tab_accepts_name_topic_form() {
 test_no_topic_shell_mints_dated_worker() {
   [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   # A bare `frame spawn shell` — no TOPIC — mints a fresh dated scratch topic
-  # (like `frame shell`) and dispatches a worker on it instead of erroring. The
+  # and dispatches a worker on it instead of erroring. The
   # topic is random, so its socket can't be planted ahead of time: assert the
   # mint message and that the boot command carries the dated topic; the
   # readiness poll then times out (exit 3), which is enough to prove the launch.
@@ -120,7 +120,7 @@ test_no_topic_shell_mints_dated_worker() {
   run_frame spawn shell --timeout 1
   assert_status 3
   assert_contains "$OUT" "new scratch worker '"
-  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "frame shell $(date +%Y-%m-%d)-"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "frame shell -C $SANDBOX/frames/$(date +%Y-%m-%d)-"
 }
 
 test_no_topic_wt_shows_usage() {
@@ -177,7 +177,9 @@ test_happy_path_opens_tab_and_reports_up() {
   assert_contains "$OUT" "shell/$TNAME is up"
   local log="$(<$FAKE_OSASCRIPT_LOG)"
   assert_contains "$log" "/bin/zsh -ic"
-  assert_contains "$log" "frame shell $TNAME"
+  # each worker boots in its own scratch dir, which spawn creates
+  assert_contains "$log" "frame shell -C $HOME/.local/share/frame/shells/$TNAME $TNAME"
+  assert_dir_exists "$HOME/.local/share/frame/shells/$TNAME"
   # The bootstrap must chain the tab closer — scripted surfaces never
   # auto-close, the worker's shell closes its own tab once the frame exits.
   assert_contains "$log" "frame spawn close-tab $TNAME"
@@ -216,7 +218,7 @@ test_no_dictionary_falls_back_to_open() {
   assert_contains "$OUT" "shell/$TNAME is up"
   local log="$(<$FAKE_OPEN_LOG)"
   assert_contains "$log" "-na Ghostty.app --args --quit-after-last-window-closed=true -e zsh -ic"
-  assert_contains "$log" "frame shell $TNAME"
+  assert_contains "$log" "frame shell -C $HOME/.local/share/frame/shells/$TNAME $TNAME"
   assert_file_absent "$FRAME_RUNDIR/shell-$TNAME.nvim.gtab"
 }
 

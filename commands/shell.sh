@@ -1,42 +1,33 @@
-# frame shell [TOPIC] — a casual frame: no repo, no branch, no worktree.
+# frame shell TOPIC — a casual frame in the current dir: no branch, no
+# worktree. TOPIC is required — it's the frame's handle (window title, focus,
+# req) and must be unique across live frames.
 #
-# With no TOPIC: if the cwd is a shell frame's own dir (a direct child of
-# $FRAME_SHELL_HOME) the dir name becomes the topic and it's re-fired in place
-# (like `frame wt` with no arg); otherwise a fresh dated topic (2026-07-30-a3f9)
-# is minted so a bare `frame shell` always lands you somewhere new.
-#
-# Creates (or reuses) $FRAME_SHELL_HOME/TOPIC (default ~/frames) and boots
-# the usual session there with just the claude + local buffers — or, if the
-# dir carries a frame project config (.frame/local/config.sh, else
+# Boots the usual session in the cwd with just the claude + local buffers — or,
+# if the dir carries a frame project config (.frame/local/config.sh, else
 # .frame/config.sh), its BUFFERS plus what those buffers run on: SERVER_CMD,
 # VITE_DIR, the port scan and app_env. Worktree machinery (stack_up, WT_LINKS)
-# is not run: there's no worktree to feed. Everything
-# non-git about a frame still works — window title shell/TOPIC, frame
-# status / frame notify (claude's hooks come from frame's own
-# claude/hooks.json, so the dir is never written), :FrameQuit — for
-# scratch work that deserves its own claude instance and directory but has
-# no project behind it.
+# is not run: there's no worktree to feed. Everything non-git about a frame
+# still works — window title shell/TOPIC, frame status / frame notify, :FrameQuit.
+# The dir is never written: claude gets frame's hooks via --settings (see
+# frame_export_claude_flags). Refuses ~ itself (claude would get your whole home
+# as its cwd); in a git checkout it notes that `frame wt` gives a branch +
+# worktree instead.
 #
-#   frame shell -C DIR [TOPIC]
-#                            boot a shell frame in an existing DIR instead of
-#                            $FRAME_SHELL_HOME/TOPIC (TOPIC defaults to DIR's
-#                            name). DIR is someone else's — a project, a scratch
-#                            checkout — and -C never writes into it. Any dir
-#                            works: claude gets frame's hooks from
-#                            claude/hooks.json via --settings, not from DIR.
+#   frame shell -C DIR TOPIC boot in DIR instead of the cwd. `frame spawn shell`
+#                            uses this for its scratch dirs under
+#                            frame_shell_home (~/.local/share/frame/shells).
 #
 #   frame shell -d [TOPIC]   tear down: just quit the session. A shell has no
 #                            branch or worktree to reap, so teardown collapses
-#                            to a quit (the scratch dir is disposable and kept —
-#                            `frame shell TOPIC` reboots it). TOPIC defaults to
-#                            the shell frame you're standing in. This is the CLI
+#                            to a quit (the dir is kept). TOPIC defaults to the
+#                            shell frame you're standing in. This is the CLI
 #                            a shell's OWN claude runs to tear itself down: it
 #                            lives in a terminal buffer and can't type :FrameDown,
 #                            so it reaches nvim over the socket instead (:FrameDown
 #                            is the same quit from inside the editor).
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
-SHELL_HOME="${FRAME_SHELL_HOME:-$HOME/frames}"
+SHELL_HOME=$(frame_shell_home)
 
 # -d [-f] [TOPIC]: tear down a shell frame. No git branch/worktree means there's
 # nothing to reap and no dir to remove out from under ourselves — so unlike
@@ -82,13 +73,12 @@ if [[ "${1:-}" == "-d" ]]; then
     # delivered (it doesn't wait for them to run), so even though nvim then
     # exits and SIGHUPs this terminal, the quit has already been handed off.
     if nvim --server "$SOCKET" --remote-send '<Cmd>qa!<CR>' 2>/dev/null; then
-      # A -C frame's own claude carries its dir (FRAME_SHELL_DIR, exported at
-      # boot) — name the reboot that actually lands back there.
-      if [[ "${FRAME_TOPIC:-}" == "$TOPIC" && -n "${FRAME_SHELL_DIR:-}" \
-            && "$FRAME_SHELL_DIR" != "$SHELL_HOME/$TOPIC" ]]; then
+      # A shell frame's own claude carries its dir (FRAME_SHELL_DIR, exported at
+      # boot) — name the reboot that lands back there.
+      if [[ "${FRAME_TOPIC:-}" == "$TOPIC" && -n "${FRAME_SHELL_DIR:-}" ]]; then
         echo "$OK_MARK quit shell frame $TOPIC (dir kept: $FRAME_SHELL_DIR — reboot with: frame shell -C ${(q-)FRAME_SHELL_DIR} $TOPIC)"
       else
-        echo "$OK_MARK quit shell frame $TOPIC (dir kept: $SHELL_HOME/$TOPIC — reboot with: frame shell $TOPIC)"
+        echo "$OK_MARK quit shell frame $TOPIC"
       fi
     else
       echo "⚠ socket is stale (no nvim listening) — removing it"
@@ -102,61 +92,39 @@ if [[ "${1:-}" == "-d" ]]; then
 fi
 
 _usage() {
-  echo "Usage: frame shell [-C DIR] [TOPIC]  (no TOPIC: DIR's name with -C; else reuse the cwd if it's a shell frame dir, else a fresh dated one)" >&2
+  echo "Usage: frame shell [-C DIR] TOPIC  (boots in DIR, default the current dir)" >&2
   exit 2
 }
 
-# -C DIR: boot in an existing DIR (see header). Parsed ahead of TOPIC, and
-# accepted before or after it, like git/make/tar's -C.
-DIR=""
-IN_DIR=0
+# -C DIR: boot there instead of the cwd. Parsed ahead of TOPIC, and accepted
+# before or after it, like git/make/tar's -C.
+DIR=$PWD
 typeset -a _pos
 while (( $# )); do
   case "$1" in
     -C)
       shift
       [[ -n "${1:-}" ]] || { echo "$X_MARK frame shell: -C needs a directory" >&2; _usage; }
-      DIR=$1; IN_DIR=1 ;;
+      DIR=$1 ;;
     -*) _usage ;;
     *)  _pos+=("$1") ;;
   esac
   shift
 done
-(( ${#_pos} > 1 )) && _usage
-set -- "${_pos[@]}"
+(( ${#_pos} == 1 )) || _usage
+TOPIC=$_pos[1]
 
-if (( IN_DIR )); then
-  if [[ ! -d "$DIR" ]]; then
-    echo "$X_MARK frame shell: no such directory: $DIR" >&2
-    exit 1
-  fi
-  DIR=${DIR:A}
+if [[ ! -d "$DIR" ]]; then
+  echo "$X_MARK frame shell: no such directory: $DIR" >&2
+  exit 1
 fi
-
-if (( $# == 1 )); then
-  TOPIC=$1
-elif (( IN_DIR )); then
-  TOPIC="${DIR:t}"
-  echo "$OK_MARK no topic given — using '$TOPIC' from $DIR"
-elif [[ "${PWD:h}" == "$SHELL_HOME" ]]; then
-  # No topic, but we're standing in a shell frame's own dir (a direct child of
-  # $FRAME_SHELL_HOME) — the dir name IS the topic. Re-fire it in place, the way
-  # `frame wt` with no arg reboots the worktree you're in.
-  TOPIC="${PWD:t}"
-  echo "$OK_MARK no topic given — inferring '$TOPIC' from the current directory"
-else
-  # No topic and nowhere to infer from — mint a fresh dated scratch topic so a
-  # bare `frame shell` always lands you somewhere new (shared with spawn shell).
-  TOPIC="$(frame_mint_shell_topic)"
-  echo "$OK_MARK no topic given — new scratch frame '$TOPIC'"
+DIR=${DIR:A}
+if [[ "$DIR" == "${HOME:A}" ]]; then
+  echo "$X_MARK frame shell: refusing to boot in your home dir (~) — cd somewhere, or pass -C DIR" >&2
+  exit 1
 fi
-
-if [[ -z "$TOPIC" ]]; then
-  echo "$X_MARK frame shell: can't name a topic after $DIR — pass one" >&2
-  exit 2
-fi
-if [[ "$TOPIC" == */* ]]; then
-  echo "$X_MARK frame shell: TOPIC becomes a directory name — no slashes" >&2
+if [[ -z "$TOPIC" || "$TOPIC" == */* ]]; then
+  echo "$X_MARK frame shell: TOPIC must be a plain name — no slashes" >&2
   exit 2
 fi
 
@@ -164,7 +132,7 @@ NAME=shell
 
 # Topics are the handle `frame focus TOPIC` matches on, ignoring the owner name,
 # so a topic must be unique across every live frame (shell frames included) or
-# focus can't disambiguate. Refuse before creating the dir. (Re-entering this
+# focus can't disambiguate. Refuse before booting. (Re-entering this
 # same shell frame is exempt — see frame_assert_topic_free.)
 frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
 
@@ -175,22 +143,15 @@ frame_guard_nested || exit 1
 # its exported SERVER_CMD/FRAME_VITE_PORT would otherwise leak into this one.
 BUFFERS=(claude local)
 SERVER_CMD="" VITE_DIR="" PORT_PREFIX="" FRAME_VITE_PORT=""
-if (( IN_DIR )); then
-  cd "$DIR"
-else
-  DIR="$SHELL_HOME/$TOPIC"
-  if [[ -d "$DIR" ]]; then
-    echo "$OK_MARK directory $DIR already exists — reusing"
-  else
-    echo "$RUN_MARK creating $DIR…"
-    mkdir -p "$DIR"
-  fi
-  cd "$DIR"
+cd "$DIR"
+# frame_project_root skips a $HOME dotfiles repo; no git installed → no hint.
+if (( $+commands[git] )) && frame_project_root >/dev/null; then
+  echo "$OK_MARK $DIR is a git checkout — a shell frame works on it directly (frame wt gives a branch + worktree)"
 fi
 
 # A frame project config in the dir picks the buffers (first hit wins, like
-# frame_load_config) — for a -C dir or a ~/frames one alike. It's sourced for
-# real — it's the user's own project code, same trust as `frame wt` — but
+# frame_load_config). It's sourced for real — it's the user's own project
+# code, same trust as `frame wt` — but
 # NAME/TOPIC/DIR are this command's own and restored afterwards. NAME/PORT_PREFIX
 # only feed the port aliases here.
 for _f in .frame/local/config.sh .frame/config.sh; do

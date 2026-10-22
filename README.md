@@ -59,8 +59,8 @@
 | `frame wt TOPIC [--from SRC_FRAME]`   | create/reuse a branch and worktree, boot it. --from instructs SRC_FRAME claude to teardown and then context is transferred forward |
 | `frame wt`                            | boot the worktree you're already in                                                                                               |
 | `frame wt -d [TOPIC]`                 | tear down a frame (default: the current one)                                                                                      |
-| `frame shell TOPIC`                   | a frame with no repo — just the claude and local buffers                                                                          |
-| `frame shell -C DIR [TOPIC]`          | a shell frame in an existing dir (any dir — nothing is written into it)                                                           |
+| `frame shell TOPIC`                   | a frame in the current dir with no branch — just the claude and local buffers                                                     |
+| `frame shell -C DIR TOPIC`            | the same, in DIR (any dir — nothing is written into it)                                                                           |
 | `frame ls`                            | list every live frame across projects                                                                                             |
 | `frame merge [TOPIC]`                 | merge a topic branch into the primary branch                                                                                      |
 | `frame push`                          | push the primary branch to origin                                                                                                 |
