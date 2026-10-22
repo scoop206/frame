@@ -980,8 +980,8 @@ if main_wt ~= '' then
   end, { desc = 'Push the primary branch to origin' })
 else
   -- Shell frame (frame shell): no worktree or branch to reap, so teardown
-  -- collapses to quitting the session — same as :FrameQuit. The scratch dir is
-  -- disposable and kept (`frame shell TOPIC` reboots it), so unlike the
+  -- collapses to quitting the session — same as :FrameQuit. The dir is kept
+  -- (`frame shell -C DIR TOPIC` reboots it), so unlike the
   -- worktree branch there's nothing to remove out from under us and no reaper
   -- is needed: nvim just quits itself directly. Bang is a no-op — there are no
   -- git safeguards for it to override, accepted for muscle-memory parity. The

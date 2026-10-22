@@ -5,8 +5,9 @@
 # anywhere, keeps its own session, and follows up with `frame req` / blocks
 # on `frame inbox --wait` for the answer.
 #
-#   frame spawn shell                           worker in a fresh dated ~/frames dir
-#   frame spawn shell calc                      worker frame in ~/frames/calc
+#   frame spawn shell                           worker in a fresh dated scratch dir
+#   frame spawn shell calc                      worker in <shell home>/calc
+#                                               (frame_shell_home: ~/.local/share/frame/shells)
 #   frame spawn shell calc --req "what is 2+2? reply with just the number"
 #   frame spawn shell calc --req "…" --ephemeral    reaps itself after replying
 #   frame spawn wt search                       worktree worker in this project
@@ -162,7 +163,7 @@ while (( $# )); do
 done
 
 if [[ "$KIND" == shell && -n "$CWD" ]]; then
-  echo "$X_MARK frame spawn shell: --cwd is a wt flag (shell frames live in ~/frames)" >&2
+  echo "$X_MARK frame spawn shell: --cwd is a wt flag (shell workers live in $(frame_shell_home))" >&2
   exit 2
 fi
 if [[ "$KIND" == shell && ( -n "$RESUME" || -n "$FROM" ) ]]; then
@@ -226,7 +227,12 @@ SOCKET="$FRAME_RUNDIR/$W_NAME-$TOPIC.nvim"
 # from its own "front window" — a worker tab isn't frontmost at boot, so it would
 # capture the head window's ids and misdirect focus. (See frame_record_gtab.)
 if [[ "$KIND" == shell ]]; then
-  BOOT="FRAME_SPAWNED=1 ${EPHEMERAL:+FRAME_EPHEMERAL=1 }${(q)FRAME_ROOT}/bin/frame shell ${(q)TOPIC}"
+  # Each worker gets its own scratch dir — two claudes in one dir would edit
+  # the same files, and frame's session lookup (newest transcript per dir)
+  # could pick the wrong one.
+  W_DIR="$(frame_shell_home)/$TOPIC"
+  mkdir -p "$W_DIR"
+  BOOT="FRAME_SPAWNED=1 ${EPHEMERAL:+FRAME_EPHEMERAL=1 }${(q)FRAME_ROOT}/bin/frame shell -C ${(q)W_DIR} ${(q)TOPIC}"
   BOOT+=" && ${(q)FRAME_ROOT}/bin/frame spawn close-tab ${(q)TOPIC}"
 else
   BOOT="cd ${(q)PROJ} && FRAME_SPAWNED=1 ${(q)FRAME_ROOT}/bin/frame wt ${(q)TOPIC}"

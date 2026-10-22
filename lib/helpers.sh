@@ -595,13 +595,19 @@ APPLESCRIPT
 
 # ── shell topics ──────────────────────────────────────────────────────────────
 
+frame_shell_home() {
+  # Where `frame spawn shell` workers get their scratch dirs (TOPIC/ under it):
+  # $FRAME_SHELL_HOME, default ~/.local/share/frame/shells, beside frame's other
+  # files. (Was ~/frames; set FRAME_SHELL_HOME=~/frames to keep that.)
+  print -r -- "${FRAME_SHELL_HOME:-$HOME/.local/share/frame/shells}"
+}
+
 frame_mint_shell_topic() {
   # Mint a fresh dated scratch topic (2026-07-30-a3f9) that collides with no
-  # existing dir under $FRAME_SHELL_HOME (default ~/frames), and print it. Used
-  # by `frame shell` and `frame spawn shell` when no TOPIC is given, so a bare
-  # invocation always lands somewhere new instead of reusing someone else's
-  # scratch. Keep the two callers routed through here so the format can't drift.
-  local _home="${FRAME_SHELL_HOME:-$HOME/frames}" _topic
+  # existing dir under frame_shell_home, and print it. Used by `frame spawn
+  # shell` when no TOPIC is given, so a bare spawn always lands somewhere new
+  # instead of reusing another worker's scratch.
+  local _home=$(frame_shell_home) _topic
   _topic="$(date +%Y-%m-%d)-$(printf '%04x' $RANDOM)"
   while [[ -d "$_home/$_topic" ]]; do
     _topic="$(date +%Y-%m-%d)-$(printf '%04x' $RANDOM)"
