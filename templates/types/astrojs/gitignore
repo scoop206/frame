@@ -1,0 +1,6 @@
+node_modules
+dist/
+.astro/
+*.log
+# Anchor root asset ignores: `/images/`, NEVER a bare `images` —
+# a bare pattern also matches public/images/ and drops web assets.

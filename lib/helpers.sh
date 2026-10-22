@@ -79,6 +79,10 @@ frame_load_config() {
   }
   MAIN_WT=$(frame_main_wt "$PROJECT_ROOT")
 
+  # WT_LINKS starts at its default, so a config can replace it (WT_LINKS=(…))
+  # or extend it (WT_LINKS+=(…), what init's layers write). See wt.sh.
+  WT_LINKS=(.env web/node_modules)
+
   # Machine-wide base layer: personal hooks (e.g. merge_epilog) shared by every
   # project on this box. Sourced BEFORE the project config so any project can
   # override or unset what it defines.

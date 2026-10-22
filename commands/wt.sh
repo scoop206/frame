@@ -434,10 +434,10 @@ fi
 # so it boots instantly. Default covers .env (shared server config; exported
 # vars still win — dotenvy never overrides the environment) and web/node_modules
 # (safe until package.json diverges; npm install manually if it does). Projects
-# override with WT_LINKS=(…) in config; entries missing in the primary checkout
-# are skipped silently.
-if (( ${+WT_LINKS} )); then _links=("${WT_LINKS[@]}"); else _links=(.env web/node_modules); fi
-for _l in "${_links[@]}"; do
+# override with WT_LINKS=(…) in config, or extend with WT_LINKS+=(…) — the
+# default is preset by frame_load_config. Entries missing in the primary
+# checkout are skipped silently.
+for _l in "${WT_LINKS[@]}"; do
   if [[ ! -e "$_l" && -e "$MAIN_WT/$_l" ]]; then
     ln -s "$MAIN_WT/$_l" "$_l"
     echo "$OK_MARK symlinked $_l from $MAIN_WT"

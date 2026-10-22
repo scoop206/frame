@@ -144,6 +144,23 @@ EOF
   assert_file_absent "$SANDBOX/_$TNAME-topic/nope.txt"
 }
 
+test_wt_links_append_extends_the_default() {
+  # WT_LINKS+=(…) — what init's layers write — keeps the default .env link.
+  make_repo
+  print -r -- "SECRET=1" > "$REPO/.env"
+  print -r -- "K=v" > "$REPO/.dev.vars"
+  commit_file "$REPO" .gitignore $'.env\n.dev.vars'
+  write_config <<'EOF'
+BUFFERS=()
+WT_LINKS+=(.dev.vars)
+EOF
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  run_frame wt topic
+  assert_status 0
+  assert_link_target "$SANDBOX/_$TNAME-topic/.env" "$REPO/.env"
+  assert_link_target "$SANDBOX/_$TNAME-topic/.dev.vars" "$REPO/.dev.vars"
+}
+
 test_topic_live_elsewhere_is_refused() {
   setup_project
   plant_live_topic othername topic     # another project already owns "topic"
