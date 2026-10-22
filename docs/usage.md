@@ -13,15 +13,7 @@ running Claude with supporting service buffers and a terminal (local).
 
 Usage:
 
-    frame init [--type T…]            scaffold .frame/ into a project;
-                                      --type stacks (repeatable): base astrojs
-                                      scaffolds a worktree-ready Astro project,
-                                      layer cloudflare wires .dev.vars into
-                                      WT_LINKS + .gitignore. No git repo
-                                      needed: outside one it scaffolds the
-                                      cwd and skips .gitignore. claude's hooks
-                                      come from frame's claude/hooks.json,
-                                      never a per-project settings.json
+    frame init [--type T…]            scaffold .frame/ into a project
 
     frame wt TOPIC                    create/reuse branch + worktree, boot it
     frame wt TOPIC --from SRC_FRAME   …and resume SRC_FRAME's warm claude
