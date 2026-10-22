@@ -19,8 +19,8 @@
 #   frame swarm --context   (machinery, not for humans) the SessionStart-hook
 #                          target: prints the block for the current level, or
 #                          nothing when off / outside a frame. Wired
-#                          unconditionally into every frame's settings.json by
-#                          frame_write_claude_hooks; the level alone decides what
+#                          unconditionally into every frame's claude via
+#                          claude/hooks.json; the level alone decides what
 #                          it emits, so changing it rewrites no settings.
 #
 # Machine-global like yolo/notify (the `swarm` key of frame_global_get/set —

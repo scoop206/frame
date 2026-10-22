@@ -1,10 +1,6 @@
 #!/usr/bin/env zsh
 # frame init end-to-end in scratch repos.
 source "${${(%):-%x}:A:h:h}/helpers/harness.zsh"
-# The canonical hooks table (helpers.sh) drives both init's drift check and the
-# labels it prints; source it so the warns-test can assert EVERY row is surfaced.
-export FRAME_ROOT="$FRAME_CHECKOUT"
-source "$FRAME_ROOT/lib/helpers.sh"
 
 test_init_fresh_repo() {
   make_repo
@@ -41,75 +37,23 @@ test_init_respects_existing_gitignore_entry() {
   assert_eq "$(grep -cxF '.frame/local/' "$REPO/.gitignore")" "1"
 }
 
-test_init_warns_when_existing_settings_lacks_hooks() {
+# Claude's hooks come from frame's claude/hooks.json (--settings at boot), so
+# init writes nothing into .claude/ and never touches an existing settings.json.
+test_init_writes_no_claude_settings() {
   make_repo
-  mkdir -p "$REPO/.claude"
-  print -r -- '{"hooks":{}}' > "$REPO/.claude/settings.json"
-  local before=$(cksum "$REPO/.claude/settings.json")
   run_frame init
-  # left out of sync (no --force) → init doubles as a drift check, exit 3
-  assert_status 3
-  assert_contains "$OUT" "frame hooks missing, re-sync with --force"
-  assert_contains "$OUT" "frame's notification hooks"
-  # every missing hook must be called out — not just the first one found. The
-  # file has NO frame hooks, so every table row is missing; assert each row's
-  # command AND its event label appear, driven off the same table init reads so
-  # a newly-added hook is auto-covered (this is the drift the table prevents).
-  frame_claude_hooks_table | while IFS='|' read -r _cmd _event _why; do
-    assert_contains "$OUT" "$_cmd"    "missing hook '$_cmd' not surfaced"
-    assert_contains "$OUT" "$_event"  "event '$_event' for '$_cmd' not surfaced"
-  done
-  # the caution points at --force as the one-shot fix
-  assert_contains "$OUT" "frame init --force"
-  # the existing file must be left byte-for-byte untouched
-  assert_eq "$(cksum "$REPO/.claude/settings.json")" "$before" "settings.json was rewritten"
+  assert_status 0
+  assert_dir_absent "$REPO/.claude"
 }
 
-test_init_force_overwrites_frame_only_settings() {
-  # --force re-syncs a settings.json that holds nothing but stale/empty frame
-  # hooks: the file is rewritten to frame's canonical hooks, no caution printed.
-  command -v jq >/dev/null 2>&1 || { skip "jq not installed"; return; }
+test_init_leaves_existing_settings_alone() {
   make_repo
   mkdir -p "$REPO/.claude"
   print -r -- '{"hooks":{}}' > "$REPO/.claude/settings.json"
-  run_frame init --force
-  assert_status 0
-  assert_contains "$OUT" "overwritten (--force)"
-  assert_contains "$(<$REPO/.claude/settings.json)" "frame notify --blocked"
-  assert_contains "$(<$REPO/.claude/settings.json)" "frame status --prompt"
-  # no hand-merge caution when --force did the job
-  if [[ "$OUT" == *"re-sync with --force"* ]]; then
-    fail "printed the missing-hooks caution after --force already fixed it"
-  fi
-}
-
-test_init_force_refuses_custom_content() {
-  # --force must NOT clobber a settings.json carrying the user's own content
-  # (here a top-level "permissions" key): it leaves the file byte-for-byte
-  # untouched and points the user at a hand-merge.
-  command -v jq >/dev/null 2>&1 || { skip "jq not installed"; return; }
-  make_repo
-  mkdir -p "$REPO/.claude"
-  print -r -- '{"permissions":{"allow":["Bash"]},"hooks":{}}' > "$REPO/.claude/settings.json"
   local before=$(cksum "$REPO/.claude/settings.json")
-  run_frame init --force
-  # --force refused (custom content) → still out of sync → exit 3
-  assert_status 3
-  assert_contains "$OUT" "has custom content"
-  assert_contains "$OUT" "merge these in by hand"
-  assert_eq "$(cksum "$REPO/.claude/settings.json")" "$before" "--force clobbered custom content"
-}
-
-test_init_force_leaves_wired_settings_alone() {
-  # --force only rewrites when hooks are out of sync; an already-wired file is
-  # left byte-for-byte untouched.
-  make_repo
-  run_frame init            # writes frame's hooks
-  local before=$(cksum "$REPO/.claude/settings.json")
-  run_frame init --force    # nothing to re-sync
+  run_frame init --force   # --force is accepted and ignored now
   assert_status 0
-  assert_contains "$OUT" "already wired for frame"
-  assert_eq "$(cksum "$REPO/.claude/settings.json")" "$before" "wired settings.json was rewritten"
+  assert_eq "$(cksum "$REPO/.claude/settings.json")" "$before" "settings.json was rewritten"
 }
 
 test_init_rejects_unknown_flag() {
@@ -117,66 +61,6 @@ test_init_rejects_unknown_flag() {
   run_frame init --bogus
   assert_status 2
   assert_contains "$OUT" "unknown flag"
-}
-
-test_init_quiet_when_existing_settings_already_wired() {
-  make_repo
-  run_frame init          # writes frame's hooks
-  run_frame init          # second run sees them already wired
-  assert_status 0
-  assert_contains "$OUT" "already wired for frame"
-  # no hand-merge warning when the hooks are present
-  if [[ "$OUT" == *"merge by hand"* ]]; then
-    fail "warned about hooks that are already wired"
-  fi
-}
-
-test_init_scaffolds_notification_hook() {
-  # A fresh scaffold wires the Notification hook → `frame notify --blocked`, so
-  # a frame that pauses mid-turn on a permission prompt surfaces as "blocked".
-  make_repo
-  run_frame init
-  assert_status 0
-  assert_contains "$(<$REPO/.claude/settings.json)" '"Notification"'
-  assert_contains "$(<$REPO/.claude/settings.json)" "frame notify --blocked"
-}
-
-test_init_scaffolds_sessionstart_hook() {
-  # A fresh scaffold wires the SessionStart hook → `frame swarm --context`, the
-  # frame-awareness injection point (a no-op until `frame swarm on`).
-  make_repo
-  run_frame init
-  assert_status 0
-  assert_contains "$(<$REPO/.claude/settings.json)" '"SessionStart"'
-  assert_contains "$(<$REPO/.claude/settings.json)" "frame swarm --context"
-}
-
-test_init_scaffolds_posttooluse_hook() {
-  # A fresh scaffold wires the PostToolUse hook → `frame reload-editor` (matcher
-  # Edit|Write|MultiEdit|NotebookEdit), so this frame's nvim buffer follows
-  # Claude's on-disk edits without a manual :e.
-  make_repo
-  run_frame init
-  assert_status 0
-  local body=$(<$REPO/.claude/settings.json)
-  assert_contains "$body" '"PostToolUse"'
-  assert_contains "$body" "frame reload-editor"
-  assert_contains "$body" "Edit|Write|MultiEdit|NotebookEdit"
-}
-
-test_init_flags_wiring_predating_notification_hook() {
-  # A settings.json carrying the pre-Notification frame hooks (fingerprint
-  # present, --blocked hook absent) is stale: flag it for a hand-merge rather
-  # than reporting "already wired", and name the missing hook.
-  make_repo
-  mkdir -p "$REPO/.claude"
-  print -r -- '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"frame notify"},{"type":"command","command":"frame reply"}]}],"UserPromptSubmit":[{"hooks":[{"type":"command","command":"frame status --prompt"}]}]}}' \
-    > "$REPO/.claude/settings.json"
-  run_frame init
-  # stale pre-Notification wiring, no --force → out of sync → exit 3
-  assert_status 3
-  assert_contains "$OUT" "frame hooks missing, re-sync with --force"
-  assert_contains "$OUT" "frame notify --blocked"
 }
 
 test_init_rejects_unknown_type() {
@@ -345,7 +229,6 @@ test_init_outside_git_scaffolds_cwd() {
   assert_file_exists "$SANDBOX/plain/.frame/config.sh"
   assert_contains "$(<$SANDBOX/plain/.frame/config.sh)" "#NAME=plain"
   assert_dir_exists "$SANDBOX/plain/.frame/local"
-  assert_file_exists "$SANDBOX/plain/.claude/settings.json"
   assert_file_exists "$SANDBOX/plain/package.json"
   assert_file_absent "$SANDBOX/plain/.gitignore"
   assert_contains "$OUT" "not a git repo — skipped"
@@ -386,60 +269,16 @@ test_init_in_worktree_uses_primary_name() {
 
 # ── --type shell ──────────────────────────────────────────────────────────────
 
-test_init_shell_wires_only_settings_outside_git() {
+# --type shell used to wire a dir for `frame shell -C`; any dir works now, so it
+# says so and writes nothing.
+test_init_shell_is_a_noop() {
   mkdir -p "$SANDBOX/g/foobar"
   cd "$SANDBOX/g/foobar"
   run_frame init --type=shell
   assert_status 0
-  assert_contains "$OUT" "claude notifies via 'frame notify'"
-  assert_file_exists "$SANDBOX/g/foobar/.claude/settings.json"
-  assert_dir_absent "$SANDBOX/g/foobar/.frame"
-  assert_file_absent "$SANDBOX/g/foobar/.gitignore"
-  assert_not_contains "$OUT" "not inside a git repository"
-}
-
-test_init_shell_uses_cwd_not_repo_root() {
-  # In a repo subdir, --type shell wires the subdir (where `frame shell -C`
-  # would point), never climbing to the root or scaffolding .frame/.
-  make_repo
-  mkdir -p "$REPO/sub"
-  cd "$REPO/sub"
-  run_frame init --type shell
-  assert_status 0
-  assert_file_exists "$REPO/sub/.claude/settings.json"
-  assert_file_absent "$REPO/.claude/settings.json"
-  assert_dir_absent "$REPO/.frame"
-}
-
-test_init_shell_existing_settings_hints_shell_force() {
-  mkdir -p "$SANDBOX/g/foobar/.claude"
-  cd "$SANDBOX/g/foobar"
-  print -r -- '{"hooks":{}}' > .claude/settings.json
-  run_frame init --type=shell
-  assert_status 3
-  assert_contains "$OUT" "frame init --type=shell --force"
-}
-
-test_init_shell_force_resyncs() {
-  command -v jq >/dev/null 2>&1 || { skip "jq not installed"; return; }
-  mkdir -p "$SANDBOX/g/foobar/.claude"
-  cd "$SANDBOX/g/foobar"
-  print -r -- '{"hooks":{}}' > .claude/settings.json
-  run_frame init --type=shell --force
-  assert_status 0
-  assert_contains "$(<.claude/settings.json)" "frame status --prompt"
-}
-
-test_init_shell_rejects_other_types() {
-  mkdir -p "$SANDBOX/g/foobar"
-  cd "$SANDBOX/g/foobar"
-  run_frame init --type shell --type astrojs
-  assert_status 2
-  assert_contains "$OUT" "conflicting base types"
-  run_frame init --type shell --type cloudflare
-  assert_status 2
-  assert_contains "$OUT" "takes no layers"
+  assert_contains "$OUT" "nothing to do"
   assert_dir_absent "$SANDBOX/g/foobar/.claude"
+  assert_dir_absent "$SANDBOX/g/foobar/.frame"
 }
 
 run_tests "$0"

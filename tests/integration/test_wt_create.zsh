@@ -185,54 +185,15 @@ test_nested_boot_refused_noninteractively() {
   assert_file_absent "$FAKE_NVIM_LOG"
 }
 
-# ── committed-hook drift sniff ────────────────────────────────────────────────
-# A worktree inherits the branch's COMMITTED .claude/settings.json, so a file
-# that drifted from frame's canonical hook set silently breaks the frame's
-# notifications. wt boot greps it (frame_claude_hooks_missing) and exports
-# FRAME_HOOK_DRIFT — the comma-joined missing hooks, empty when in sync — which
-# layouts/session.lua turns into a vim.notify warning that survives the exec
-# into nvim. The stub's env dump proves what the boot exported.
+# ── claude hooks ──────────────────────────────────────────────────────────────
+# Every frame's claude gets frame's hooks from claude/hooks.json via --settings,
+# whatever .claude/settings.json the branch carries (or doesn't).
 
-commit_claude_settings() {  # commit_claude_settings <<'EOF' … EOF
-  mkdir -p "$REPO/.claude"
-  cat > "$REPO/.claude/settings.json"
-  git -C "$REPO" add .claude/settings.json
-  git -C "$REPO" commit -qm "add claude settings"
-}
-
-test_wt_boot_flags_hook_drift() {
+test_wt_boot_passes_frame_hooks() {
   setup_project
-  # committed file wired for Stop→notify + UserPromptSubmit only: 'frame reply'
-  # and 'frame notify --blocked' are absent.
-  commit_claude_settings <<'EOF'
-{ "hooks": {
-  "Stop": [{ "hooks": [{ "type": "command", "command": "frame notify" }] }],
-  "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "frame status --prompt" }] }]
-} }
-EOF
   run_frame wt topic
   assert_status 0
-  # named in canonical order, so the layout's warning reads predictably
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_HOOK_DRIFT=frame reply, frame notify --blocked"
-}
-
-test_wt_boot_no_drift_when_hooks_complete() {
-  setup_project
-  commit_claude_settings <<'EOF'
-{ "hooks": {
-  "Stop": [{ "hooks": [
-    { "type": "command", "command": "frame notify" },
-    { "type": "command", "command": "frame reply" } ] }],
-  "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "frame status --prompt" }] }],
-  "Notification": [{ "hooks": [{ "type": "command", "command": "frame notify --blocked" }] }],
-  "SessionStart": [{ "hooks": [{ "type": "command", "command": "frame swarm --context" }] }],
-  "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{ "type": "command", "command": "frame reload-editor" }] }]
-} }
-EOF
-  run_frame wt topic
-  assert_status 0
-  # all present → exported empty (no warning fires in the layout)
-  assert_contains "$(<$FAKE_NVIM_LOG)" $'FRAME_HOOK_DRIFT=\n'
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json"
 }
 
 # ── --resume / --from: carry a warm session into the new frame ────────────────
@@ -243,7 +204,7 @@ test_resume_injects_flag_into_claude_env() {
   setup_project
   run_frame wt topic --resume sid-abc-123
   assert_status 0
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-abc-123"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json --resume sid-abc-123"
 }
 
 test_from_resolves_recorded_session_and_injects() {
@@ -254,7 +215,7 @@ test_from_resolves_recorded_session_and_injects() {
   run_frame wt topic --from src
   assert_status 0
   assert_contains "$OUT" "resuming session sid-from-file from frame src"
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-from-file"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json --resume sid-from-file"
 }
 
 test_from_accepts_name_topic_handle_across_projects() {
@@ -267,7 +228,7 @@ test_from_accepts_name_topic_handle_across_projects() {
   run_frame wt topic --from otherproj/src
   assert_status 0
   assert_contains "$OUT" "resuming session sid-cross-proj from frame otherproj/src"
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-cross-proj"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json --resume sid-cross-proj"
 }
 
 # A real AF_UNIX socket file stands in for src's live nvim (the -S gate); the
@@ -294,7 +255,7 @@ test_from_live_source_hands_off_then_resumes() {
   assert_contains "$(<$SANDBOX/expr.log)" "frame wt -d"         # …telling it how to retire
   assert_contains "$OUT" "is down — taking over"
   assert_contains "$OUT" "resuming session sid-move from frame src"
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-move"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json --resume sid-move"
 }
 
 test_from_bridges_transcript_into_new_frames_project_dir() {
@@ -314,7 +275,7 @@ test_from_bridges_transcript_into_new_frames_project_dir() {
   assert_status 0
   assert_contains "$OUT" "resuming session sid-bridge"
   assert_file_exists "$dst_pdir/sid-bridge.jsonl"          # transcript bridged over
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-bridge"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json --resume sid-bridge"
 }
 
 test_from_missing_transcript_warns_but_boots() {
@@ -328,7 +289,7 @@ test_from_missing_transcript_warns_but_boots() {
   run_frame wt topic --from src
   assert_status 0
   assert_contains "$OUT" "no transcript for session sid-ghost"
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-ghost"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json --resume sid-ghost"
 }
 
 test_from_live_source_that_never_retires_times_out() {
@@ -358,7 +319,7 @@ test_from_exited_claude_proceeds_with_frame_up() {
   run_frame wt topic --from src
   assert_status 0
   assert_contains "$OUT" "resuming session sid-quit from frame src"
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-quit"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json --resume sid-quit"
 }
 
 test_from_unverifiable_source_warns_and_proceeds() {
@@ -371,7 +332,7 @@ test_from_unverifiable_source_warns_and_proceeds() {
   run_frame wt topic --from src
   assert_status 0
   assert_contains "$OUT" "couldn't check"
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--resume sid-old"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json --resume sid-old"
 }
 
 test_resume_and_from_are_mutually_exclusive() {

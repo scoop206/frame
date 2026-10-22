@@ -60,7 +60,7 @@
 | `frame wt`                            | boot the worktree you're already in                                                                                               |
 | `frame wt -d [TOPIC]`                 | tear down a frame (default: the current one)                                                                                      |
 | `frame shell TOPIC`                   | a frame with no repo — just the claude and local buffers                                                                          |
-| `frame shell -C DIR [TOPIC]`          | a shell frame in an existing dir (wire it first: `cd DIR && frame init --type=shell`)                                             |
+| `frame shell -C DIR [TOPIC]`          | a shell frame in an existing dir (any dir — nothing is written into it)                                                           |
 | `frame ls`                            | list every live frame across projects                                                                                             |
 | `frame merge [TOPIC]`                 | merge a topic branch into the primary branch                                                                                      |
 | `frame push`                          | push the primary branch to origin                                                                                                 |
@@ -154,21 +154,25 @@ cd $YOUR_PROJECT
 frame init
 ```
 
-This writes three things:
+This writes two things:
 
 - `.frame/config.sh` — the project config
 - `.frame/local/` — gitignored, for personal overrides
-- `.claude/settings.json` — claude-code hooks that put each frame's Claude into
-  frame's lifecycle signaling:
-  - `Stop` → `frame notify` (banner + "waiting" title) and `frame reply` (route a reply to a requester)
-  - `UserPromptSubmit` → `frame status --prompt` ("working" title + turn-start stamp)
-  - `Notification` → `frame notify --blocked` ("blocked" title + banner)
-  - `SessionStart` → `frame swarm --context` (frame-awareness, when swarm ≥ 1)
-  - `PostToolUse` → `frame reload-editor` (reloads the just-edited file into this frame's nvim buffer, when it's open)
 
-  If this file drifts from what frame writes (an older file missing a hook, say),
-  `frame init --force` re-syncs it — but only when it holds nothing but frame's
-  own hooks, so it never clobbers custom settings.
+Nothing goes in `.claude/`. Every frame starts its Claude with
+`--settings $FRAME_ROOT/claude/hooks.json`, frame's own hooks file, which plugs
+it into frame's lifecycle signaling:
+
+- `Stop` → `frame notify` (banner + "waiting" title) and `frame reply` (route a reply to a requester)
+- `UserPromptSubmit` → `frame status --prompt` ("working" title + turn-start stamp)
+- `Notification` → `frame notify --blocked` ("blocked" title + banner)
+- `SessionStart` → `frame swarm --context` (frame-awareness, when swarm ≥ 1)
+- `PostToolUse` → `frame reload-editor` (reloads the just-edited file into this frame's nvim buffer, when it's open)
+
+These merge with the project's own `.claude/settings.json`, if it has one. A
+repo that still has frame's hooks committed there from an older frame doesn't
+fire them twice (Claude Code runs an identical hook once), and that file can be
+deleted.
 
 No git repo needed. Outside one, `frame init` scaffolds the current dir and
 skips `.gitignore`; its `config.sh` still sets the buffers for
@@ -474,8 +478,7 @@ Everything project-side lives under one `.frame/` directory:
 ### Examples
 
 Worked, copyable integrations live in [`examples/`](examples) — each a
-complete `.frame/config.sh` plus the `.claude/settings.json` that `frame init`
-writes:
+complete `.frame/config.sh` like the one `frame init` writes:
 
 - [`barebones/`](examples/barebones) — the minimum: a `config.sh` with just `BUFFERS`
 - [`astrojs/`](examples/astrojs) — a root-dir npm app (an Astro static site): just the vite buffer, no backend

@@ -6,7 +6,7 @@
 # v:lua.FrameReload(path). See layouts/session.lua FrameReload for the buffer
 # logic (open? clean? reload; dirty → warn, never clobber) and the docs above it.
 #
-# Wired by frame_write_claude_hooks as
+# Wired in claude/hooks.json as
 #   PostToolUse (Edit|Write|MultiEdit|NotebookEdit) → 'frame reload-editor'.
 # Best-effort and STRICTLY do-no-harm: it fires synchronously after EVERY edit,
 # so the idle path (not in a frame, or the file isn't open) must be cheap and
@@ -25,7 +25,7 @@ _sock="$FRAME_RUNDIR/$FRAME_NAME-$FRAME_TOPIC.nvim"
 # any parse or RPC; nvim's own autoread catches the buffer up on the next check.
 [[ -S "$_sock" ]] || exit 0
 # Parsing the payload needs jq; without it, don't guess at JSON — just bail. jq
-# is a soft dependency across frame (cf. frame_settings_is_frame_only).
+# is a soft dependency across frame.
 command -v jq >/dev/null 2>&1 || exit 0
 
 # ── extract the edited path from the PostToolUse payload on stdin ─────────────

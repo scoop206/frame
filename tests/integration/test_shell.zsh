@@ -48,63 +48,25 @@ test_shell_home_defaults_under_home() {
   assert_dir_exists "$HOME/frames/jam"
 }
 
-test_shell_wires_claude_hooks() {
+# Claude's hooks come from frame's claude/hooks.json via --settings, so a shell
+# dir is never written: no .claude/ appears, and an existing one is untouched.
+test_shell_passes_hooks_and_writes_no_settings() {
   export FRAME_SHELL_HOME="$SANDBOX/frames"
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
   run_frame shell jam
   assert_status 0
-  assert_contains "$OUT" "wired claude hooks"
-  local settings="$SANDBOX/frames/jam/.claude/settings.json"
-  assert_file_exists "$settings"
-  assert_contains "$(<$settings)" "frame notify"
-  assert_contains "$(<$settings)" "frame status --prompt"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json"
+  assert_dir_absent "$SANDBOX/frames/jam/.claude"
 }
 
 test_shell_leaves_existing_claude_settings_alone() {
-  # Covers both a user-customized file and a dir from before hook-wiring
-  # existed once it's been written: later boots must not clobber it.
   export FRAME_SHELL_HOME="$SANDBOX/frames"
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
   mkdir -p "$SANDBOX/frames/jam/.claude"
   print -r -- '{"custom": true}' > "$SANDBOX/frames/jam/.claude/settings.json"
   run_frame shell jam
   assert_status 0
-  assert_not_contains "$OUT" "wired claude hooks"
   assert_eq "$(<$SANDBOX/frames/jam/.claude/settings.json)" '{"custom": true}'
-}
-
-test_shell_refreshes_stale_frame_hooks() {
-  # A dir wired by an older frame carries 'frame notify' but not 'frame reply'
-  # (the hook set grew). Reboot must refresh it — a stale file means a worker's
-  # reply never routes home — while test_shell_leaves_existing_claude_settings_
-  # alone pins the flip side: no frame fingerprint → user file → untouched.
-  export FRAME_SHELL_HOME="$SANDBOX/frames"
-  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
-  mkdir -p "$SANDBOX/frames/jam/.claude"
-  print -r -- '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"frame notify >/dev/null 2>&1 || true"}]}]}}' \
-    > "$SANDBOX/frames/jam/.claude/settings.json"
-  run_frame shell jam
-  assert_status 0
-  assert_contains "$OUT" "refreshed claude hooks"
-  local settings="$SANDBOX/frames/jam/.claude/settings.json"
-  assert_contains "$(<$settings)" "frame reply"
-  assert_contains "$(<$settings)" "frame notify"
-  assert_contains "$(<$settings)" "frame status --prompt"
-}
-
-test_shell_refreshes_pre_prompt_status_hook() {
-  # The full hook set as written before `frame status --prompt` existed:
-  # UserPromptSubmit → bare `frame status`. Recognizably frame-authored, but
-  # its frames never show "working" — a reboot must rewrite it.
-  export FRAME_SHELL_HOME="$SANDBOX/frames"
-  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
-  mkdir -p "$SANDBOX/frames/jam/.claude"
-  print -r -- '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"frame notify >/dev/null 2>&1 || true"},{"type":"command","command":"frame reply >/dev/null 2>&1 || true"}]}],"UserPromptSubmit":[{"hooks":[{"type":"command","command":"frame status >/dev/null 2>&1 || true"}]}]}}' \
-    > "$SANDBOX/frames/jam/.claude/settings.json"
-  run_frame shell jam
-  assert_status 0
-  assert_contains "$OUT" "refreshed claude hooks"
-  assert_contains "$(<$SANDBOX/frames/jam/.claude/settings.json)" "frame status --prompt"
 }
 
 test_shell_reuses_existing_dir() {
@@ -278,9 +240,8 @@ test_shell_down_rejects_second_topic() {
 # ── frame shell -C DIR ────────────────────────────────────────────────────────
 
 _wire_dir() {
-  # A dir prepped the way the -C refusal tells you to: frame init --type=shell.
+  # Any dir works for -C — no prep needed.
   mkdir -p "$1"
-  ( cd "$1" && run_frame init --type=shell ) >/dev/null
 }
 
 test_shell_C_boots_in_dir_with_dirname_topic() {
@@ -337,40 +298,21 @@ test_shell_C_requires_a_value() {
   assert_contains "$OUT" "-C needs a directory"
 }
 
-test_shell_C_refuses_unwired_dir_and_writes_nothing() {
-  # -C never writes into DIR: no settings.json → refuse and name the init.
+test_shell_C_boots_any_dir_and_writes_nothing() {
+  # -C never writes into DIR, and needs nothing in it: a bare dir boots, with
+  # claude's hooks passed by flag.
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
   mkdir -p "$SANDBOX/g/foobar"
   run_frame shell -C "$SANDBOX/g/foobar"
-  assert_status 1
-  assert_contains "$OUT" "isn't wired for frame"
-  assert_contains "$OUT" "frame init --type=shell"
-  assert_not_contains "$OUT" "--force"
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json"
   assert_dir_absent "$SANDBOX/g/foobar/.claude"
-  assert_file_absent "$FAKE_NVIM_LOG"
-}
-
-test_shell_C_refuses_stale_hooks_and_leaves_file_alone() {
-  # A settings.json without (all of) frame's hooks — the user's own, or stale
-  # frame wiring. Either way -C doesn't touch it; it points at --force.
-  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
-  mkdir -p "$SANDBOX/g/foobar/.claude"
-  print -r -- '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"frame notify >/dev/null 2>&1 || true"}]}]}}' \
-    > "$SANDBOX/g/foobar/.claude/settings.json"
-  local before=$(cksum "$SANDBOX/g/foobar/.claude/settings.json")
-  run_frame shell -C "$SANDBOX/g/foobar"
-  assert_status 1
-  assert_contains "$OUT" "missing frame's claude hooks"
-  assert_contains "$OUT" "frame init --type=shell --force"
-  assert_eq "$(cksum "$SANDBOX/g/foobar/.claude/settings.json")" "$before" "settings.json was rewritten"
-  assert_file_absent "$FAKE_NVIM_LOG"
 }
 
 test_shell_C_works_in_a_git_checkout() {
-  # A git repo is fine — -C doesn't care what DIR is, only that it's wired.
+  # A git repo is fine — -C doesn't care what DIR is.
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
   make_repo
-  ( cd "$REPO" && run_frame init --type=shell ) >/dev/null
   run_frame shell -C "$REPO" jam
   assert_status 0
   assert_contains "$(<$FAKE_NVIM_LOG)" "cwd: $REPO"

@@ -1,10 +1,9 @@
 # Examples
 
 Fictional projects showing what a committed frame integration looks like,
-from nothing to a project with its own container. Each carries the two pieces
-`frame init` scaffolds — a `.frame/config.sh` and a `.claude/settings.json` — so
-copying the closest one into your repo (or running `frame init` and editing)
-leaves nothing else to add.
+from nothing to a project with its own container. Each is the `.frame/config.sh`
+that `frame init` scaffolds, so copying the closest one into your repo (or
+running `frame init` and editing) leaves nothing else to add.
 
 | example                         | shows                                                                       |
 | ------------------------------- | --------------------------------------------------------------------------- |
@@ -13,11 +12,9 @@ leaves nothing else to add.
 | [`standard-web/`](standard-web) | the default web stack: a server + vite app on the shared postgres/minio     |
 | [`sidecar/`](sidecar)           | additionally running its own project-unique container from its compose file |
 
-The `.claude/settings.json` is identical in all of them — frame writes the same
-canonical hooks for every project (see the main README's
-[Onboarding a project](../README.md#onboarding-a-project) step for the
-event-by-event breakdown). The `.frame/config.sh` is the part that varies, and
-it's what each example is really about.
+None of them has a `.claude/settings.json`: frame passes its claude hooks to
+every frame itself (see the main README's
+[Onboarding a project](../README.md#onboarding-a-project) step).
 
 For the general mechanics these examples draw on, see the main README:
 [config.sh keys and the `stack_up()` / `app_env()` hooks](../README.md#configsh),
