@@ -336,15 +336,27 @@ frame_kv_keys() {
 
 frame_export_claude_flags() {
   # The claude buffer's command (buffers.json) reads ${FRAME_CLAUDE_FLAGS}.
-  # Empty — plain `claude`, normal permission prompts — unless the machine's
-  # yolo switch is on (`frame yolo on`), which adds
+  # The machine's yolo switch (`frame yolo on`) adds
   # --dangerously-skip-permissions to every frame's claude. Called by each
   # boot path (wt.sh, shell.sh) just before exec'ing the layout.
-  if [[ "$(frame_global_get yolo)" == on ]]; then
-    export FRAME_CLAUDE_FLAGS="--dangerously-skip-permissions"
+  #
+  # Always: --settings claude/hooks.json, frame's hooks (see
+  # frame_claude_hooks_file). The flags are word-split unquoted inside the
+  # buffer's `zsh -c "…"`, so a FRAME_ROOT with whitespace or quotes can't be
+  # passed safely — warn and boot without the hooks rather than a broken claude.
+  local _hooks=$(frame_claude_hooks_file)
+  FRAME_CLAUDE_FLAGS=""
+  if [[ "$_hooks" == *[[:space:]\'\"\\]* ]]; then
+    echo "$WARN_MARK frame lives at a path with spaces or quotes ($FRAME_ROOT) — claude boots without frame's hooks" >&2
+  elif [[ ! -f "$_hooks" ]]; then
+    echo "$WARN_MARK $_hooks is missing — claude boots without frame's hooks" >&2
   else
-    export FRAME_CLAUDE_FLAGS=""
+    FRAME_CLAUDE_FLAGS="--settings $_hooks"
   fi
+  if [[ "$(frame_global_get yolo)" == on ]]; then
+    FRAME_CLAUDE_FLAGS+="${FRAME_CLAUDE_FLAGS:+ }--dangerously-skip-permissions"
+  fi
+  export FRAME_CLAUDE_FLAGS
 }
 
 frame_session_id_for_dir() {
@@ -488,165 +500,28 @@ frame_is_macos() {
 
 # ── claude-code hooks ─────────────────────────────────────────────────────────
 
-# THE canonical table of claude-code hooks every frame relies on, one row per
-# hook: `COMMAND|EVENT|WHY`. Everything reads from here so nothing can drift —
-# frame_claude_required_hooks maps the COMMAND column (init's drift check,
-# shell's auto-refresh, wt's boot sniff all go through it); init's missing-hooks
-# warning maps EVENT+WHY to label each gap; frame_write_claude_hooks writes
-# precisely these COMMANDs. Add a hook in ONE place (a row here) and the drift
-# check, the write, and the warning label all pick it up together.
-#
-#   COMMAND  the exact substring that must appear in .claude/settings.json — the
-#            drift key. `frame notify` is also frame's fingerprint (present since
-#            day one): its absence means the file is the user's own, not a stale
-#            frame file.
-#   EVENT    the claude-code hook event the command lives under.
-#   WHY      the one-line reason, shown when init reports the hook missing.
-#
-# `frame reload-editor` (PostToolUse) is listed so a frame predating it reads as
-# drifted — init --force / shell re-sync then propagate the hook into existing
-# frame projects. It's a pure enhancement at runtime (without it, nvim's own
-# autoread and a manual :e still work), but it IS part of the canonical wiring,
-# so drift detection tracks it. Keep this table in step with
-# frame_write_claude_hooks.
-frame_claude_hooks_table() {
-  print -rl -- \
-    'frame notify|Stop|banner + "waiting" status' \
-    'frame reply|Stop|route the reply to a requester' \
-    'frame status --prompt|UserPromptSubmit|"working" status + turn stamp' \
-    'frame notify --blocked|Notification|banner + "blocked" status when claude needs input' \
-    'frame swarm --context|SessionStart|injects frame-awareness context at session start' \
-    "frame reload-editor|PostToolUse|enables immediate nvim buffer reload on Claude's edits"
-}
-
-# frame_claude_required_hooks — the COMMAND column of the table above, one per
-# line. The command-substring list init/shell/wt/tests have always consumed;
-# now derived from the table so it can never fall out of step with the labels.
-frame_claude_required_hooks() {
-  local _row
-  frame_claude_hooks_table | while IFS= read -r _row; do print -r -- "${_row%%|*}"; done
-}
-
-# frame_claude_hooks_missing FILE — print (one per line) the required hooks that
-# FILE lacks; nothing when all are present or FILE is absent (grep -qF on a
-# missing file just reports every hook missing). Substring match on the command
-# string, the same test init/shell have always used. Callers capture with
-#   _missing=(${(f)"$(frame_claude_hooks_missing .claude/settings.json)"})
-# — unquoted, so zsh drops the lone empty element when nothing is missing.
-frame_claude_hooks_missing() {
-  local _f=$1 _h
-  frame_claude_required_hooks | while IFS= read -r _h; do
-    grep -qF "$_h" "$_f" 2>/dev/null || print -r -- "$_h"
-  done
-}
-
-frame_settings_is_frame_only() {
-  # Classify .claude/settings.json (path $1) for a `frame init --force`
-  # overwrite. Prints one word:
-  #   safe   — empty, or nothing but frame's own hooks; a rewrite loses nothing
-  #   custom — foreign hooks, non-frame hook events, or any top-level key besides
-  #            "hooks"; a rewrite would clobber the user's content
-  #   nojq   — jq isn't installed, so we can't prove the file is safe
-  # Proving "there's nothing here but frame's hooks" is a JSON-structure
-  # question, not a text one — grep can't tell a frame hook from a lookalike or
-  # notice an unknown top-level key a future claude-code adds — so we lean on jq
-  # and refuse (classify custom) rather than guess when it can't parse the file.
-  local _f=$1
-  command -v jq >/dev/null 2>&1 || { print -r -- nojq; return; }
-  jq -re '
-    def frame_ok:
-      (keys - ["hooks"] | length == 0)
-      and ((.hooks // {}) | keys - ["Stop","UserPromptSubmit","Notification","SessionStart","PostToolUse"] | length == 0)
-      and ([(.hooks // {}) | to_entries[] | .value[]? | .hooks[]? | .command | select(. != null)]
-            | all(startswith("frame ")));
-    if frame_ok then "safe" else "custom" end
-  ' "$_f" 2>/dev/null || print -r -- custom
-}
-
-frame_write_claude_hooks() {
-  # .claude/settings.json in cwd, wiring claude-code to frame's notification
-  # channels: Stop → `frame notify` (banner + "- waiting" title status) and
-  # `frame reply` (routes the turn's last message to anyone who req'd this
-  # frame); UserPromptSubmit → `frame status --prompt` ("- working" + the
-  # turn-start stamp); Notification → `frame notify --blocked` ("- blocked"
-  # status + banner) for when claude pauses MID-turn on a permission prompt (or
-  # any input) — the one state Stop/UserPromptSubmit structurally can't see, so
-  # without it a blocked frame reads as "working" forever. Working/waiting/blocked
-  # between them put claude's lifecycle in the window title and `frame ls`.
-  # SessionStart → `frame swarm --context`, which injects the frame-awareness
-  # block iff the `frame swarm` level is ≥1 (and we're in a frame) — wired
-  # unconditionally here; the dial, not this file, decides what it emits.
-  # PostToolUse (Edit|Write|MultiEdit|NotebookEdit) → `frame reload-editor`, which
-  # reloads the just-edited file into this frame's nvim buffer if it's open and
-  # clean, so a buffer-tied viewer (markdown-preview) follows Claude's edits with
-  # zero manual action. A pure enhancement: a no-op outside a frame, and nvim's
-  # own autoread (or a manual :e) still works if the RPC hook is absent or fails.
-  # `frame reply` and `frame reload-editor` both read the hook JSON on stdin
-  # (transcript path / edited file_path) — the redirects touch stdout/stderr
-  # only, so stdin still flows. Callers guard the file-exists case — this always
-  # writes.
-  mkdir -p .claude
-  cat > .claude/settings.json <<'EOF'
-{
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "frame notify >/dev/null 2>&1 || true"
-          },
-          {
-            "type": "command",
-            "command": "frame reply >/dev/null 2>&1 || true"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "frame status --prompt >/dev/null 2>&1 || true"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "frame notify --blocked >/dev/null 2>&1 || true"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "frame swarm --context 2>/dev/null || true"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "frame reload-editor >/dev/null 2>&1 || true"
-          }
-        ]
-      }
-    ]
-  }
-}
-EOF
+# claude/hooks.json — the claude-code hooks every frame's claude runs with,
+# passed by path (`claude --settings FILE`, see frame_export_claude_flags) so no
+# project or shell dir needs its own .claude/settings.json. Claude Code merges
+# these with the dir's own settings and runs an identical hook only once, so a
+# repo still carrying frame's hooks in a committed settings.json doesn't fire
+# them twice. The hooks:
+#   Stop             → `frame notify` (banner + "waiting" title status) and
+#                      `frame reply` (routes the turn's last message to anyone
+#                      who req'd this frame)
+#   UserPromptSubmit → `frame status --prompt` ("working" + the turn stamp)
+#   Notification     → `frame notify --blocked` ("blocked" + banner) when claude
+#                      pauses MID-turn on a permission prompt — the one state
+#                      Stop/UserPromptSubmit can't see
+#   SessionStart     → `frame swarm --context` (frame-awareness block, iff the
+#                      swarm level is ≥1; the dial decides what it emits)
+#   PostToolUse      → `frame reload-editor` (Edit|Write|MultiEdit|NotebookEdit:
+#                      reload the edited file into this frame's nvim buffer)
+# `frame reply` and `frame reload-editor` read the hook JSON on stdin; the
+# redirects touch stdout/stderr only. Every hook is `… || true`, so a failure
+# never disrupts claude.
+frame_claude_hooks_file() {
+  print -r -- "$FRAME_ROOT/claude/hooks.json"
 }
 
 # ── window titling ────────────────────────────────────────────────────────────

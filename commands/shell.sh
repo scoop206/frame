@@ -12,7 +12,8 @@
 # VITE_DIR, the port scan and app_env. Worktree machinery (stack_up, WT_LINKS)
 # is not run: there's no worktree to feed. Everything
 # non-git about a frame still works — window title shell/TOPIC, frame
-# status / frame notify (and the claude Stop hook), :FrameQuit — for
+# status / frame notify (claude's hooks come from frame's own
+# claude/hooks.json, so the dir is never written), :FrameQuit — for
 # scratch work that deserves its own claude instance and directory but has
 # no project behind it.
 #
@@ -20,10 +21,9 @@
 #                            boot a shell frame in an existing DIR instead of
 #                            $FRAME_SHELL_HOME/TOPIC (TOPIC defaults to DIR's
 #                            name). DIR is someone else's — a project, a scratch
-#                            checkout — so -C never writes into it: it refuses
-#                            unless DIR is already wired with frame's claude
-#                            hooks, and points at `frame init --type=shell` (in
-#                            DIR) to do that as a deliberate, separate step.
+#                            checkout — and -C never writes into it. Any dir
+#                            works: claude gets frame's hooks from
+#                            claude/hooks.json via --settings, not from DIR.
 #
 #   frame shell -d [TOPIC]   tear down: just quit the session. A shell has no
 #                            branch or worktree to reap, so teardown collapses
@@ -168,24 +168,6 @@ NAME=shell
 # same shell frame is exempt — see frame_assert_topic_free.)
 frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
 
-# -C: DIR isn't frame's to write, so no auto-wiring — refuse (before any side
-# effect) unless its claude hooks are already current, and name the one init
-# that fixes it. --force only when a settings.json is already there: that's the
-# case plain init leaves alone.
-if (( IN_DIR )); then
-  _settings="$DIR/.claude/settings.json"
-  if [[ ! -f "$_settings" ]]; then
-    echo "$X_MARK $DIR isn't wired for frame (no .claude/settings.json)" >&2
-    echo "    run:  cd ${(q-)DIR} && frame init --type=shell" >&2
-    exit 1
-  fi
-  if [[ -n "$(frame_claude_hooks_missing "$_settings")" ]]; then
-    echo "$X_MARK $DIR's .claude/settings.json is missing frame's claude hooks" >&2
-    echo "    run:  cd ${(q-)DIR} && frame init --type=shell --force" >&2
-    exit 1
-  fi
-fi
-
 # Ask before any side effect — a nested boot aborted here leaves nothing behind.
 frame_guard_nested || exit 1
 
@@ -224,27 +206,6 @@ for _f in .frame/local/config.sh .frame/config.sh; do
   if (( $+functions[app_env] )); then app_env; fi
   break
 done
-
-# No repo → no `frame init` — wire the claude-code hooks here instead, or a
-# casual claude never fires Stop → frame notify / frame reply. Shell topics
-# get reused across months, and the hook set grows: a dir wired before a hook
-# existed would otherwise be frozen without it forever (the worker answers but
-# its reply never routes home — how shell/qqq silently ate a reply). So a file
-# that is recognizably frame-authored but stale — it carries 'frame notify',
-# frame's fingerprint since day one, yet lacks a current hook — is rewritten.
-# A file WITHOUT the fingerprint is the user's own: left alone, same promise
-# frame init makes.
-# (-C dirs were checked above and are never written.)
-if (( IN_DIR )); then
-  :
-elif [[ ! -f .claude/settings.json ]]; then
-  frame_write_claude_hooks
-  echo "$OK_MARK wired claude hooks (.claude/settings.json) — Stop → frame notify"
-elif grep -qF 'frame notify' .claude/settings.json \
-  && [[ -n "$(frame_claude_hooks_missing .claude/settings.json)" ]]; then
-  frame_write_claude_hooks
-  echo "$OK_MARK refreshed claude hooks (.claude/settings.json) — stale frame wiring"
-fi
 
 set_title "$(frame_base_title "$NAME" "$TOPIC")"
 frame_record_gtab "$NAME" "$TOPIC"

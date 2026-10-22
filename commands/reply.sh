@@ -3,7 +3,7 @@
 # to the broker (FrameOnStop → FrameBrokerOnTurnEnd in layouts/session.lua),
 # which routes the in-flight request's answer home and feeds claude the next
 # queued one. Wired into the Stop hook alongside `frame notify` (see
-# frame_write_claude_hooks); like notify it must never disrupt the hook, so it
+# claude/hooks.json); like notify it must never disrupt the hook, so it
 # always exits 0. Takes no arguments — routing is the broker's job.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
