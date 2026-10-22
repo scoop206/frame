@@ -33,13 +33,14 @@ rename for free. This is exactly how an infra/docs repo plugs in.
 ### astrojs
 
 A static-site generator (Astro here, but any root-dir npm app fits): one dev
-server, no backend, no shared services — so no `stack_up()`/`app_env()`, no
-`server`/`ngrok` buffers. Two keys do the work:
+server, no backend, no shared services — so no `app_env()`, no
+`server`/`ngrok` buffers. It's exactly what `frame init --type astrojs` writes:
 
 - `VITE_DIR=.` — the `vite` buffer runs `npm run dev` in `$VITE_DIR`, which
   defaults to the classic `web/` subdir; Astro apps live at the repo root.
-- `WT_LINKS=(node_modules)` — the default worktree symlinks cover
-  `web/node_modules`; a root-dir app wants `node_modules` itself.
+- `WT_LINKS=(.env)` plus `stack_up() { frame_clone_node_modules; }` — instead
+  of sharing one `node_modules` through a link, each worktree gets its own
+  copy, so the frames' dev servers don't fight over one build cache.
 
 No port key: Vite picks the port itself, walking up from 4321 to the first open
 one, so sibling worktrees never collide without anyone prescribing a port. The

@@ -1,0 +1,2 @@
+kind=layer
+description=links Cloudflare's .dev.vars (local secrets) into every worktree and gitignores it

@@ -1,0 +1,2 @@
+kind=base
+description=an Astro site: vite buffer at the repo root, per-worktree node_modules, starter project files

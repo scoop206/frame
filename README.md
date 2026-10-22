@@ -180,21 +180,37 @@ No git repo needed. Outside one, `frame init` scaffolds the current dir and
 skips `.gitignore`; its `config.sh` still sets the buffers for
 `frame shell -C DIR`. Run init again after `git init` to add the ignore line.
 
-**Project types.** `--type` picks what init scaffolds beyond the default. A
-project has one *base* and any number of *layers*, and the flag repeats to
-stack them: `frame init --type astrojs --type cloudflare`.
+**Project types.** `--type` picks what init scaffolds. A project has one
+*base* (default `generic`) and any number of *layers*; the flag repeats to
+stack them: `frame init --type astrojs --type cloudflare`. `frame init --types`
+lists what's available:
 
-| type         | kind  | adds                                                                                                                                                    |
-| ------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| *(none)*     | base  | the default `config.sh`: `BUFFERS=(claude local)` plus commented-out examples of every key                                                              |
-| `astrojs`    | base  | an Astro `config.sh` (a `vite` buffer at the repo root, each worktree with its own `node_modules`), starter Astro project files, build-output `.gitignore` lines |
-| `cloudflare` | layer | `.dev.vars` (Cloudflare's local secrets) in [`WT_LINKS`](#what-a-worktree-doesnt-get-from-git), so every worktree links it from the primary checkout, and in `.gitignore`                           |
+| type         | kind  | adds                                                                                                                                       |
+| ------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `generic`    | base  | the default `config.sh`: `BUFFERS=(claude local)`                                                                                          |
+| `astrojs`    | base  | an Astro `config.sh` (a `vite` buffer at the repo root, each worktree with its own `node_modules`), starter Astro files, build-output `.gitignore` lines |
+| `cloudflare` | layer | `WT_LINKS+=(.dev.vars)`, so every worktree [links](#what-a-worktree-doesnt-get-from-git) Cloudflare's local secrets from the primary checkout, and `.dev.vars` in `.gitignore` |
 
-Init never overwrites an existing file, `config.sh` included. Re-running it
-with a new type adds that type's new files and `.gitignore` lines, but its
-`config.sh` changes have to be made by hand (for `cloudflare`: add `.dev.vars`
-to `WT_LINKS`). [`examples/astrojs/`](examples/astrojs) shows the astrojs
-config in full.
+The generated `config.sh` is deliberately bare; every key is described under
+[config.sh](#configsh). Init never overwrites a file. Re-running it with a new
+layer appends that layer's lines to your existing `config.sh`; a new base only
+applies to a project that has no `config.sh` yet.
+
+**Your own types.** A type is a folder of plain files; init copies them and
+runs nothing. Put yours in `~/.config/frame/types/<name>/`. A folder with the
+same name as a built-in replaces it.
+
+| file              | what it is                                                                                     |
+| ----------------- | ---------------------------------------------------------------------------------------------- |
+| `type`            | required: `kind=base` or `kind=layer`, and `description=…` for `frame init --types`            |
+| `config.sh`       | base: the whole `config.sh`. `{{NAME}}` becomes the project name                                |
+| `config.layer.sh` | layer: lines appended to `config.sh`, once                                                     |
+| `files/`          | copied into the project root, each file only if it isn't there yet                             |
+| `gitignore`       | lines appended to `.gitignore` once, under a `# frame:<name>` marker                           |
+
+Anything that has to happen at runtime belongs in the generated `config.sh`
+(a `stack_up()` function, say), not in the type. The built-ins in
+[`templates/types/`](templates/types) are working examples.
 
 **3. (Optional) Change which buffers your frames open.**
 `frame init` already scaffolds a working default — `BUFFERS=(claude local)` — so you can skip straight
@@ -552,6 +568,10 @@ Hooks:
   port under a name other than the `PORT` frame tracks (see `buffers.json`),
   a re-export of it here (e.g. `export SERVICE_PORT="$PORT"`). Exported vars
   win over `.env` (dotenvy never overrides the environment).
+- `merge_epilog()` — runs after a successful `frame merge`, as
+  `merge_epilog TOPIC PUSHED` (`$2` is `true` when it pushed). Off unless you
+  define it; a common use is reminding whoever merged to tear the frame down.
+  Define it in `~/.config/frame/config.sh` to apply to every project.
 
 ### Port assignment
 

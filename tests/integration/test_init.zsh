@@ -6,12 +6,11 @@ test_init_fresh_repo() {
   make_repo
   run_frame init
   assert_status 0
-  assert_contains "$OUT" "scaffolded — edit it to fit"
+  assert_contains "$OUT" "scaffolded (generic) — edit it to fit"
   assert_file_exists "$REPO/.frame/config.sh"
-  # NAME is dynamic (defaults to the checkout's dirname) — the scaffold only
-  # carries it as a commented-out pin, never sets it.
-  assert_contains "$(<$REPO/.frame/config.sh)" "#NAME=$TNAME"
-  assert_not_contains "$(<$REPO/.frame/config.sh)" $'\nNAME='
+  # sparse: one header comment pointing at the README, then the keys. NAME is
+  # never set — it defaults to the checkout's dirname.
+  assert_eq "$(<$REPO/.frame/config.sh)" $'# frame project config — keys: see the README\'s "config.sh" section\nBUFFERS=(claude local)'
   assert_dir_exists "$REPO/.frame/local"
   grep -qxF '.frame/local/' "$REPO/.gitignore" || fail ".gitignore missing .frame/local/"
 }
@@ -163,18 +162,17 @@ test_init_generic_makes_no_commit() {
   assert_file_absent "$REPO/package.json"
   assert_eq "$(git -C "$REPO" rev-parse HEAD)" "$head_before" "generic init made a commit"
   assert_not_contains "$OUT" "committed the astrojs scaffold"
-  # generic leaves WT_LINKS commented so wt.sh's default (.env web/node_modules)
+  # generic leaves WT_LINKS unset so the default (.env web/node_modules)
   # applies; no cloudflare wiring leaks into a plain init
   local cfg="$(<$REPO/.frame/config.sh)"
-  assert_contains "$cfg" "#WT_LINKS=(.env web/node_modules)"
-  assert_not_contains "$cfg" ".dev.vars"
+  assert_not_contains "$cfg" "WT_LINKS"
   assert_not_contains "$(<$REPO/.gitignore)" ".dev.vars"
 }
 
 test_init_cloudflare_layers_onto_generic_base() {
-  # a bare `--type cloudflare` layers onto the default generic base: the
-  # commented WT_LINKS default is promoted to an active line carrying .dev.vars,
-  # and .dev.vars is gitignored. No astro scaffold, no commit.
+  # a bare `--type cloudflare` layers onto the default generic base: its line
+  # extends the WT_LINKS default with .dev.vars, and .dev.vars is gitignored.
+  # No astro scaffold, no commit.
   make_repo
   local head_before=$(git -C "$REPO" rev-parse HEAD)
   run_frame init --type cloudflare
@@ -182,8 +180,8 @@ test_init_cloudflare_layers_onto_generic_base() {
   assert_file_absent "$REPO/package.json"
   assert_eq "$(git -C "$REPO" rev-parse HEAD)" "$head_before" "cloudflare init made a commit"
   local cfg="$(<$REPO/.frame/config.sh)"
-  assert_contains "$cfg" "WT_LINKS=(.env .dev.vars)"
-  assert_not_contains "$cfg" "#WT_LINKS="
+  assert_contains "$cfg" "BUFFERS=(claude local)"
+  assert_contains "$cfg" "WT_LINKS+=(.dev.vars)"
   local gi="$(<$REPO/.gitignore)"
   assert_contains "$gi" $'\n.dev.vars\n'
   assert_contains "$gi" "# frame:cloudflare"
@@ -198,7 +196,8 @@ test_init_astrojs_cloudflare_stack() {
   assert_status 0
   assert_file_exists "$REPO/package.json"
   local cfg="$(<$REPO/.frame/config.sh)"
-  assert_contains "$cfg" "WT_LINKS=(.env .dev.vars)"
+  assert_contains "$cfg" $'WT_LINKS=(.env)'
+  assert_contains "$cfg" "WT_LINKS+=(.dev.vars)"
   assert_contains "$cfg" "BUFFERS=(claude local vite)"
   local gi="$(<$REPO/.gitignore)"
   assert_contains "$gi" $'\n.dev.vars\n'
@@ -227,7 +226,6 @@ test_init_outside_git_scaffolds_cwd() {
   run_frame init --type astrojs --type cloudflare
   assert_status 0
   assert_file_exists "$SANDBOX/plain/.frame/config.sh"
-  assert_contains "$(<$SANDBOX/plain/.frame/config.sh)" "#NAME=plain"
   assert_dir_exists "$SANDBOX/plain/.frame/local"
   assert_file_exists "$SANDBOX/plain/package.json"
   assert_file_absent "$SANDBOX/plain/.gitignore"
@@ -257,14 +255,89 @@ test_init_refuses_home_dir() {
   assert_dir_absent "$HOME/.frame"
 }
 
-test_init_in_worktree_uses_primary_name() {
+# ── layers on an existing project ─────────────────────────────────────────────
+
+test_init_layer_appends_to_existing_config() {
+  # Adding a layer later appends its lines to the project's own config.sh,
+  # once; the rest of the file is untouched.
+  make_repo
+  run_frame init
+  print -r -- 'SERVER_CMD=mine' >> "$REPO/.frame/config.sh"
+  run_frame init --type cloudflare
+  assert_status 0
+  assert_contains "$OUT" "added cloudflare lines"
+  local cfg="$(<$REPO/.frame/config.sh)"
+  assert_contains "$cfg" $'SERVER_CMD=mine\nWT_LINKS+=(.dev.vars)'
+  run_frame init --type cloudflare
+  assert_contains "$OUT" "already exists — left alone"
+  assert_eq "$(grep -c 'WT_LINKS+=(.dev.vars)' "$REPO/.frame/config.sh")" "1" "layer appended twice"
+}
+
+# ── types: listing and your own ───────────────────────────────────────────────
+
+_user_type() {  # _user_type NAME KIND — a type folder under ~/.config/frame/types
+  local d="$HOME/.config/frame/types/$1"
+  mkdir -p "$d"
+  print -r -- "kind=$2"$'\n'"description=my $1" > "$d/type"
+  print -r -- "$d"
+}
+
+test_init_types_lists_builtins() {
+  run_frame init --types
+  assert_status 0
+  assert_contains "$OUT" "astrojs"
+  assert_contains "$OUT" "cloudflare  layer"
+  assert_contains "$OUT" "(default)"
+}
+
+test_init_user_type_is_listed_and_used() {
+  local d=$(_user_type rusty base)
+  print -r -- $'BUFFERS=(claude local server)\nSERVER_CMD=\'cargo run -p {{NAME}}-server\'' > "$d/config.sh"
+  mkdir -p "$d/files" && print -r -- 'fn main() {}' > "$d/files/main.rs"
+  run_frame init --types
+  assert_contains "$OUT" "rusty"
+  assert_contains "$OUT" "(yours)"
+  make_repo
+  run_frame init --type rusty
+  assert_status 0
+  local cfg="$(<$REPO/.frame/config.sh)"
+  assert_contains "$cfg" "SERVER_CMD='cargo run -p $TNAME-server'"
+  assert_file_exists "$REPO/main.rs"
+}
+
+test_init_user_type_replaces_builtin() {
+  local d=$(_user_type cloudflare layer)
+  print -r -- 'WT_LINKS+=(.dev.vars wrangler.local.toml)' > "$d/config.layer.sh"
+  run_frame init --types
+  assert_contains "$OUT" "replaces built-in"
+  make_repo
+  run_frame init --type cloudflare
+  assert_status 0
+  assert_contains "$(<$REPO/.frame/config.sh)" "wrangler.local.toml"
+  # the user type has no gitignore file, so the built-in's block isn't used
+  assert_not_contains "$(<$REPO/.gitignore)" "# frame:cloudflare"
+}
+
+test_init_type_without_kind_is_refused() {
+  mkdir -p "$HOME/.config/frame/types/broken"
+  print -r -- 'description=no kind' > "$HOME/.config/frame/types/broken/type"
+  make_repo
+  run_frame init --type broken
+  assert_status 2
+  assert_contains "$OUT" "has no kind=base|layer"
+  assert_file_absent "$REPO/.frame/config.sh"
+}
+
+test_init_name_placeholder_uses_primary_name() {
+  # {{NAME}} is the primary checkout's name, even when init runs in a worktree.
+  local d=$(_user_type named base)
+  print -r -- 'SERVER_CMD={{NAME}}' > "$d/config.sh"
   make_repo
   git -C "$REPO" worktree add -q "$SANDBOX/some-random-dirname" -b topic
   cd "$SANDBOX/some-random-dirname"
-  run_frame init
+  run_frame init --type named
   assert_status 0
-  # the commented NAME pin names the primary checkout, not the worktree dir
-  assert_contains "$(<$SANDBOX/some-random-dirname/.frame/config.sh)" "#NAME=$TNAME"
+  assert_eq "$(<$SANDBOX/some-random-dirname/.frame/config.sh)" "SERVER_CMD=$TNAME"
 }
 
 # ── --type shell ──────────────────────────────────────────────────────────────
