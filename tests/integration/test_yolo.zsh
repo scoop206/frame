@@ -60,7 +60,7 @@ test_wt_boot_default_exports_only_the_hooks_flag() {
   setup_project
   run_frame wt topic
   assert_status 0
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json"$'\n'
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $HOME/.local/share/frame/claude-hooks.json"$'\n'
 }
 
 test_wt_boot_yolo_on_exports_skip_permissions() {
@@ -69,7 +69,7 @@ test_wt_boot_yolo_on_exports_skip_permissions() {
   run_frame wt topic
   assert_status 0
   assert_contains "$(<$FAKE_NVIM_LOG)" \
-    "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json --dangerously-skip-permissions"
+    "FRAME_CLAUDE_FLAGS=--settings $HOME/.local/share/frame/claude-hooks.json --dangerously-skip-permissions"
 }
 
 test_shell_boot_yolo_on_exports_skip_permissions() {
@@ -78,7 +78,7 @@ test_shell_boot_yolo_on_exports_skip_permissions() {
   run_frame shell scratch
   assert_status 0
   assert_contains "$(<$FAKE_NVIM_LOG)" \
-    "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json --dangerously-skip-permissions"
+    "FRAME_CLAUDE_FLAGS=--settings $HOME/.local/share/frame/claude-hooks.json --dangerously-skip-permissions"
 }
 
 run_tests "$0"

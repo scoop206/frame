@@ -340,18 +340,25 @@ frame_export_claude_flags() {
   # --dangerously-skip-permissions to every frame's claude. Called by each
   # boot path (wt.sh, shell.sh) just before exec'ing the layout.
   #
-  # Always: --settings claude/hooks.json, frame's hooks (see
-  # frame_claude_hooks_file). The flags are word-split unquoted inside the
-  # buffer's `zsh -c "…"`, so a FRAME_ROOT with whitespace or quotes can't be
-  # passed safely — warn and boot without the hooks rather than a broken claude.
-  local _hooks=$(frame_claude_hooks_file)
+  # Always: --settings FILE, where FILE is a copy of frame's claude/hooks.json
+  # (see frame_claude_hooks_file) beside the machine config, in
+  # ~/.local/share/frame/ — re-copied whenever frame's version differs, so a hook
+  # added to frame reaches every claude on its next boot. The copy, not frame's
+  # own file, because the flags are word-split unquoted inside the buffer's
+  # `zsh -c "…"`: frame may live at a path with spaces (~/My Tools/frame), a home
+  # dir practically never does. If it does, or the copy fails, warn and boot
+  # without the hooks.
+  local _src=$(frame_claude_hooks_file) _dst="${FRAME_GLOBAL_CONFIG:h}/claude-hooks.json"
   FRAME_CLAUDE_FLAGS=""
-  if [[ "$_hooks" == *[[:space:]\'\"\\]* ]]; then
-    echo "$WARN_MARK frame lives at a path with spaces or quotes ($FRAME_ROOT) — claude boots without frame's hooks" >&2
-  elif [[ ! -f "$_hooks" ]]; then
-    echo "$WARN_MARK $_hooks is missing — claude boots without frame's hooks" >&2
+  if [[ ! -f "$_src" ]]; then
+    echo "$WARN_MARK $_src is missing — claude boots without frame's hooks" >&2
+  elif [[ "$_dst" == *[[:space:]\'\"\\]* ]]; then
+    echo "$WARN_MARK $_dst has spaces or quotes, so claude can't be pointed at it — booting without frame's hooks" >&2
+  elif ! { cmp -s "$_src" "$_dst" || { mkdir -p "${_dst:h}" \
+          && cp "$_src" "$_dst.$$" && mv -f "$_dst.$$" "$_dst"; }; }; then
+    echo "$WARN_MARK couldn't copy frame's hooks to $_dst — claude boots without them" >&2
   else
-    FRAME_CLAUDE_FLAGS="--settings $_hooks"
+    FRAME_CLAUDE_FLAGS="--settings $_dst"
   fi
   if [[ "$(frame_global_get yolo)" == on ]]; then
     FRAME_CLAUDE_FLAGS+="${FRAME_CLAUDE_FLAGS:+ }--dangerously-skip-permissions"
@@ -501,7 +508,8 @@ frame_is_macos() {
 # ── claude-code hooks ─────────────────────────────────────────────────────────
 
 # claude/hooks.json — the claude-code hooks every frame's claude runs with,
-# passed by path (`claude --settings FILE`, see frame_export_claude_flags) so no
+# passed as `claude --settings ~/.local/share/frame/claude-hooks.json`, a copy
+# kept in step with this file (see frame_export_claude_flags), so no
 # project or shell dir needs its own .claude/settings.json. Claude Code merges
 # these with the dir's own settings and runs an identical hook only once, so a
 # repo still carrying frame's hooks in a committed settings.json doesn't fire

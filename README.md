@@ -160,8 +160,9 @@ This writes two things:
 - `.frame/local/` — gitignored, for personal overrides
 
 Nothing goes in `.claude/`. Every frame starts its Claude with
-`--settings $FRAME_ROOT/claude/hooks.json`, frame's own hooks file, which plugs
-it into frame's lifecycle signaling:
+`--settings ~/.local/share/frame/claude-hooks.json`, a copy of frame's
+`claude/hooks.json` that frame refreshes on boot whenever it changes. The hooks
+plug Claude into frame's lifecycle signaling:
 
 - `Stop` → `frame notify` (banner + "waiting" title) and `frame reply` (route a reply to a requester)
 - `UserPromptSubmit` → `frame status --prompt` ("working" title + turn-start stamp)
