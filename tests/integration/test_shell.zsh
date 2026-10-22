@@ -55,7 +55,7 @@ test_shell_passes_hooks_and_writes_no_settings() {
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
   run_frame shell jam
   assert_status 0
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $HOME/.local/share/frame/claude-hooks.json"
   assert_dir_absent "$SANDBOX/frames/jam/.claude"
 }
 
@@ -305,7 +305,7 @@ test_shell_C_boots_any_dir_and_writes_nothing() {
   mkdir -p "$SANDBOX/g/foobar"
   run_frame shell -C "$SANDBOX/g/foobar"
   assert_status 0
-  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $FRAME_CHECKOUT/claude/hooks.json"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $HOME/.local/share/frame/claude-hooks.json"
   assert_dir_absent "$SANDBOX/g/foobar/.claude"
 }
 

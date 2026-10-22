@@ -37,27 +37,50 @@ test_hooks_never_fail_the_hook() {
   done
 }
 
-test_flags_pass_the_hooks_file() {
-  FRAME_GLOBAL_CONFIG="$SANDBOX/no-config"   # not this machine's yolo switch
+# The flag points at a copy beside the machine config, never frame's own path
+# (which may contain spaces); the copy tracks frame's file.
+test_flags_pass_a_home_copy_of_the_hooks() {
+  FRAME_GLOBAL_CONFIG="$SANDBOX/share/frame/config"   # not this machine's yolo switch
   frame_export_claude_flags 2>/dev/null
-  assert_contains "$FRAME_CLAUDE_FLAGS" "--settings $(_hooks)"
+  assert_eq "$FRAME_CLAUDE_FLAGS" "--settings $SANDBOX/share/frame/claude-hooks.json"
+  assert_eq "$(<$SANDBOX/share/frame/claude-hooks.json)" "$(<$(_hooks))" "copy differs"
+}
+
+test_flags_refresh_a_stale_copy() {
+  FRAME_GLOBAL_CONFIG="$SANDBOX/share/frame/config"
+  mkdir -p "$SANDBOX/share/frame"
+  print -r -- '{"hooks":{}}' > "$SANDBOX/share/frame/claude-hooks.json"
+  frame_export_claude_flags 2>/dev/null
+  assert_eq "$(<$SANDBOX/share/frame/claude-hooks.json)" "$(<$(_hooks))" "stale copy kept"
 }
 
 test_flags_compose_with_yolo() {
+  FRAME_GLOBAL_CONFIG="$SANDBOX/share/frame/config"
   local flags
   flags=$(frame_global_get() { [[ $1 == yolo ]] && print on; }
           frame_export_claude_flags 2>/dev/null; print -r -- "$FRAME_CLAUDE_FLAGS")
-  assert_eq "$flags" "--settings $(_hooks) --dangerously-skip-permissions"
+  assert_eq "$flags" "--settings $SANDBOX/share/frame/claude-hooks.json --dangerously-skip-permissions"
 }
 
-test_flags_skip_a_path_with_spaces() {
-  FRAME_GLOBAL_CONFIG="$SANDBOX/no-config"
-  local root="$SANDBOX/has space"
+# frame at a path with spaces is fine — only the copy's path rides the flag.
+test_flags_frame_path_with_spaces_still_works() {
+  FRAME_GLOBAL_CONFIG="$SANDBOX/share/frame/config"
+  local root="$SANDBOX/has space" out
   mkdir -p "$root/claude" && cp "$(_hooks)" "$root/claude/"
-  local err
-  err=$(FRAME_ROOT=$root; frame_export_claude_flags 2>&1; print -r -- "FLAGS=[$FRAME_CLAUDE_FLAGS]")
-  assert_contains "$err" "boots without frame's hooks"
-  assert_contains "$err" "FLAGS=[]"
+  out=$(FRAME_ROOT=$root; frame_export_claude_flags 2>&1; print -r -- "FLAGS=[$FRAME_CLAUDE_FLAGS]")
+  assert_contains "$out" "FLAGS=[--settings $SANDBOX/share/frame/claude-hooks.json]"
+}
+
+# A home path with spaces can't ride the flag: warn, boot without hooks, and
+# write nothing into the cwd.
+test_flags_unsafe_home_warns_and_skips() {
+  FRAME_GLOBAL_CONFIG="$SANDBOX/my home/frame/config"
+  mkdir -p "$SANDBOX/work" && cd "$SANDBOX/work"
+  local out
+  out=$(frame_export_claude_flags 2>&1; print -r -- "FLAGS=[$FRAME_CLAUDE_FLAGS]")
+  assert_contains "$out" "booting without frame's hooks"
+  assert_contains "$out" "FLAGS=[]"
+  assert_dir_absent "$SANDBOX/work/.claude"
 }
 
 run_tests "$0"
