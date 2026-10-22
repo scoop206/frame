@@ -14,6 +14,7 @@ running Claude with supporting service buffers and a terminal (local).
 Usage:
 
     frame init [--type T…]            scaffold .frame/ into a project
+                                      (types: astrojs, cloudflare — see README)
 
     frame wt TOPIC                    create/reuse branch + worktree, boot it
     frame wt TOPIC --from SRC_FRAME   …and resume SRC_FRAME's warm claude

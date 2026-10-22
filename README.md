@@ -179,6 +179,22 @@ No git repo needed. Outside one, `frame init` scaffolds the current dir and
 skips `.gitignore`; its `config.sh` still sets the buffers for
 `frame shell -C DIR`. Run init again after `git init` to add the ignore line.
 
+**Project types.** `--type` picks what init scaffolds beyond the default. A
+project has one *base* and any number of *layers*, and the flag repeats to
+stack them: `frame init --type astrojs --type cloudflare`.
+
+| type         | kind  | adds                                                                                                                                                    |
+| ------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| *(none)*     | base  | the default `config.sh`: `BUFFERS=(claude local)` plus commented-out examples of every key                                                              |
+| `astrojs`    | base  | an Astro `config.sh` (a `vite` buffer at the repo root, each worktree with its own `node_modules`), starter Astro project files, build-output `.gitignore` lines |
+| `cloudflare` | layer | `.dev.vars` (Cloudflare's local secrets) in `WT_LINKS`, so every worktree links it from the primary checkout, and in `.gitignore`                           |
+
+Init never overwrites an existing file, `config.sh` included. Re-running it
+with a new type adds that type's new files and `.gitignore` lines, but its
+`config.sh` changes have to be made by hand (for `cloudflare`: add `.dev.vars`
+to `WT_LINKS`). [`examples/astrojs/`](examples/astrojs) shows the astrojs
+config in full.
+
 **3. (Optional) Change which buffers your frames open.**
 `frame init` already scaffolds a working default — `BUFFERS=(claude local)` — so you can skip straight
 to booting a frame. Edit `.frame/config.sh` only if you want different buffers
