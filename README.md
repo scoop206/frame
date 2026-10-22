@@ -198,7 +198,15 @@ applies to a project that has no `config.sh` yet.
 
 **Your own types.** A type is a folder of plain files; init copies them and
 runs nothing. Put yours in `~/.config/frame/types/<name>/`. A folder with the
-same name as a built-in replaces it.
+same name as a built-in replaces it. The built-ins in
+[`templates/types/`](templates/types) show the layout: `generic` and `astrojs`
+are bases, `cloudflare` is a layer. Copying one is the quickest start:
+
+```bash
+mkdir -p ~/.config/frame/types
+cp -R path/to/frame/templates/types/generic ~/.config/frame/types/mytype
+frame init --types   # mytype is listed as (yours)
+```
 
 | file              | what it is                                                                                     |
 | ----------------- | ---------------------------------------------------------------------------------------------- |
@@ -209,8 +217,7 @@ same name as a built-in replaces it.
 | `gitignore`       | lines appended to `.gitignore` once, under a `# frame:<name>` marker                           |
 
 Anything that has to happen at runtime belongs in the generated `config.sh`
-(a `stack_up()` function, say), not in the type. The built-ins in
-[`templates/types/`](templates/types) are working examples.
+(a `stack_up()` function, say), not in the type.
 
 **3. (Optional) Change which buffers your frames open.**
 `frame init` already scaffolds a working default — `BUFFERS=(claude local)` — so you can skip straight
