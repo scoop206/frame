@@ -336,26 +336,42 @@ test_init_rejects_conflicting_base_types() {
   assert_contains "$OUT" "conflicting base types"
 }
 
-test_init_outside_git_fails() {
+# init needs no git: outside a repo it scaffolds the cwd, skipping .gitignore.
+test_init_outside_git_scaffolds_cwd() {
   mkdir -p "$SANDBOX/plain"
   cd "$SANDBOX/plain"
-  run_frame init
-  assert_status 1
-  assert_contains "$OUT" "not inside a git repository"
+  run_frame init --type astrojs --type cloudflare
+  assert_status 0
+  assert_file_exists "$SANDBOX/plain/.frame/config.sh"
+  assert_contains "$(<$SANDBOX/plain/.frame/config.sh)" "#NAME=plain"
+  assert_dir_exists "$SANDBOX/plain/.frame/local"
+  assert_file_exists "$SANDBOX/plain/.claude/settings.json"
+  assert_file_exists "$SANDBOX/plain/package.json"
+  assert_file_absent "$SANDBOX/plain/.gitignore"
+  assert_contains "$OUT" "not a git repo — skipped"
+  assert_not_contains "$OUT" "NOT committed"
 }
 
 # A dotfiles repo at ~ must not adopt every un-git'd project dir beneath it:
-# init used to resolve ~ as the project root and scaffold into the home dir.
-test_init_refuses_home_dotfiles_repo() {
+# the project dir is scaffolded as a plain dir, never ~ itself.
+test_init_under_home_dotfiles_repo_uses_cwd() {
   git init -q "$HOME"
   mkdir -p "$HOME/code/newproj"
   cd "$HOME/code/newproj"
   run_frame init
-  assert_status 1
-  assert_contains "$OUT" "nearest one is your home dir"
+  assert_status 0
+  assert_file_exists "$HOME/code/newproj/.frame/config.sh"
   assert_dir_absent "$HOME/.frame"
   assert_file_absent "$HOME/.gitignore"
   assert_file_absent "$HOME/.claude/settings.json"
+}
+
+test_init_refuses_home_dir() {
+  cd "$HOME"
+  run_frame init
+  assert_status 1
+  assert_contains "$OUT" "refusing to scaffold your home dir"
+  assert_dir_absent "$HOME/.frame"
 }
 
 test_init_in_worktree_uses_primary_name() {
