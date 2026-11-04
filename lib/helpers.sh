@@ -419,6 +419,212 @@ frame_bridge_transcript() {
     && cp -f "${_src[1]}" "$_projects/$_dest_slug/$_id.jsonl"
 }
 
+frame_session_transcript() {
+  # frame_session_transcript SESSION_ID — echo the path of SESSION_ID's
+  # transcript (the newest copy, when frame_bridge_transcript has copied it into
+  # several project dirs), or return 1 if there is none.
+  emulate -L zsh
+  local _f=( "$HOME/.claude/projects"/*/"$1".jsonl(N.om[1]) )
+  (( $#_f )) || return 1
+  print -r -- "$_f[1]"
+}
+
+frame_session_cwd() {
+  # frame_session_cwd TRANSCRIPT — echo the cwd the session last ran in, from
+  # the newest "cwd" field in the transcript. `claude --resume` only finds a
+  # session from that dir's project key. The LAST cwd, not the first: a session
+  # bridged into a new worktree and resumed there now lives in the new dir.
+  # Only the file's tail is read; transcripts run to tens of MB.
+  emulate -L zsh
+  local _cwd
+  _cwd=$(tail -n 200 "$1" | LC_ALL=C grep -F '"cwd":' \
+    | jq -r 'select(type == "object") | .cwd // empty' 2>/dev/null | tail -n 1)
+  [[ -n "$_cwd" ]] || return 1
+  print -r -- "$_cwd"
+}
+
+frame_session_preview() {
+  # frame_session_preview TRANSCRIPT — print what the user typed in a session,
+  # newest last, for the `frame shell --find` picker's preview pane. Same
+  # filters as frame_session_search: typed messages only.
+  emulate -L zsh
+  [[ -f "$1" ]] || return 1
+  print -r -- "session ${1:t:r}"
+  print -r -- "cwd     $(frame_session_cwd "$1" || print '?')"
+  print
+  perl -ne '
+      next unless index($_, q{"type":"user"}) >= 0;
+      next if index($_, q{"type":"tool_result"}) >= 0;
+      s/"data":"[^"]{200,}"/"data":""/g; print;' -- "$1" \
+    | jq -R -r '
+        fromjson? // empty
+        | select(type == "object" and .type == "user" and .isMeta != true
+                 and .isSidechain != true and .isCompactSummary != true)
+        | (.message.content
+           | if type == "string" then .
+             else [.[]? | select(.type? == "text") | .text] | join("\n") end) as $t
+        | select($t != "")
+        | select($t | test("^\\s*(<(command-|local-command|system-reminder|task-notification|bash-|user-prompt)|Caveat:)") | not)
+        | "\((.timestamp // "")[0:16] | sub("T"; " "))  \($t[0:600] | gsub("[\\s]+"; " "))\n"' \
+    | tail -n 80
+}
+
+frame_session_pick() {
+  # frame_session_pick ROWS — let the user choose one of frame_session_search's
+  # rows; echo its session id. fzf (with a preview of what was typed in the
+  # session) when it's installed, else a numbered list read from the tty.
+  # With no tty to ask on, print the list and how to resume one, and return 1.
+  # The UI goes to stderr / the tty; stdout carries only the id.
+  emulate -L zsh
+  zmodload -F zsh/datetime b:strftime
+  local _rows=$1 _mt _id _cwd _f _snip _when _where _i
+  local -a _ids _lines _menu
+  while IFS=$'\t' read -r _mt _id _cwd _f _snip; do
+    [[ -n "$_id" ]] || continue
+    strftime -s _when '%Y-%m-%d %H:%M' "$_mt"
+    _where=${_cwd/#$HOME/\~}
+    _ids+=("$_id")
+    _lines+=("$_when  $_where  $_snip")
+    _menu+=("$_id"$'\t'"$_f"$'\t'"$_when  $_where  $_snip")
+  done <<< "$_rows"
+  (( $#_ids )) || return 1
+
+  if [[ -t 2 ]] && { : < /dev/tty; } 2>/dev/null; then
+    if (( $+commands[fzf] )); then
+      local _pick _preview
+      _preview="zsh -fc 'source \"\$1\"/lib/helpers.sh && frame_session_preview \"\$2\"' _ ${(q)FRAME_ROOT} {2}"
+      _pick=$(print -rl -- "${_menu[@]}" | fzf --delimiter=$'\t' --with-nth=3 \
+        --no-sort --no-multi --layout=reverse --height=80% \
+        --prompt='resume> ' --header='pick a session to resume (esc to cancel)' \
+        --preview="$_preview" --preview-window='down,50%,wrap' \
+        </dev/tty 2>/dev/tty) || return 1
+      print -r -- "${_pick%%$'\t'*}"
+      return 0
+    fi
+    local _n=$(( $#_ids < 20 ? $#_ids : 20 )) _ans
+    for _i in {1..$_n}; do
+      print -r -- "  $_i) ${_lines[_i][1,150]}" >&2
+    done
+    (( $#_ids > _n )) && print -r -- "  … $(( $#_ids - _n )) older — narrow the search to see them" >&2
+    print -n -- "resume which? [1-$_n, enter to cancel] " >&2
+    read -r _ans < /dev/tty || return 1
+    [[ "$_ans" == <1-> ]] && (( _ans <= _n )) || return 1
+    print -r -- "$_ids[_ans]"
+    return 0
+  fi
+
+  for _i in {1..$(( $#_ids < 20 ? $#_ids : 20 ))}; do
+    print -r -- "  $_ids[_i]  ${_lines[_i][1,130]}" >&2
+  done
+  print -r -- "no tty to pick on — rerun with --resume ID" >&2
+  return 1
+}
+
+frame_session_search() {
+  # frame_session_search WORD… — find past claude sessions whose human-typed
+  # messages contain every WORD (case-insensitive, any order, across the
+  # session's messages). Only what the user typed counts: tool results,
+  # assistant text, hook/command echoes and subagent sidechains are skipped,
+  # so "tax" doesn't hit every transcript that mentions "syntax".
+  #
+  # Prints one tab-separated row per session, newest activity first:
+  #   EPOCH  SESSION_ID  CWD  TRANSCRIPT  SNIPPET
+  # SNIPPET is the newest message matching the most words, on one line; CWD is
+  # where that message was typed (frame_session_cwd gives the session's latest).
+  # Returns 1 when nothing matches.
+  #
+  # Speed: ~/.claude/projects runs to GBs. One perl pass (fast and everywhere;
+  # BSD grep -i is ~10x slower) keeps only user lines that hold some word,
+  # drops tool results, and blanks base64 image payloads, so jq only parses
+  # a few MB.
+  emulate -L zsh
+  setopt pipefail extendedglob
+  (( $# )) || return 1
+  local -a _files _pre _words
+  _files=( "$HOME/.claude/projects"/*/*.jsonl(N.) )
+  (( $#_files )) || return 1
+  local _w
+  for _w in "$@"; do
+    _words+=("${(L)_w}")
+    # A word JSON would escape (quotes, backslashes, non-ASCII) can't be
+    # matched in the raw line; leave it to jq.
+    [[ "$_w" == [[:print:]]## && "$_w" != *[\"\\]* ]] && _pre+=("${(L)_w}")
+  done
+
+  local _hits
+  _hits=$(FRAME_SEARCH_PRE="${(pj:\n:)_pre}" perl -ne '
+      BEGIN { @w = grep { length } split /\n/, ($ENV{FRAME_SEARCH_PRE} // "") }
+      next unless index($_, q{"type":"user"}) >= 0;
+      next if index($_, q{"type":"tool_result"}) >= 0;
+      if (@w) { my $l = lc $_; next unless grep { index($l, $_) >= 0 } @w }
+      s/"data":"[^"]{200,}"/"data":""/g;
+      print "$ARGV:$_";' -- "${_files[@]}" \
+    | jq -R -r --args '
+        $ARGS.positional as $words
+        | ($ARGS.positional | map(gsub("(?<c>[\\\\^$.|?*+()\\[\\]{}])"; "\\\(.c)"))) as $res
+        | capture("^(?<f>[^:]*\\.jsonl):(?<j>.*)$")? | . as $l
+        | ($l.j | fromjson?) // empty
+        | select(type == "object" and .type == "user"
+                 and .isMeta != true and .isSidechain != true
+                 and .isCompactSummary != true
+                 and .entrypoint != "sdk-cli")
+        | (.message.content
+           | if type == "string" then .
+             else [.[]? | select(.type? == "text") | .text] | join("\n") end) as $t
+        | select($t != "")
+        | select($t | test("^\\s*(<(command-|local-command|system-reminder|task-notification|bash-|user-prompt)|Caveat:)") | not)
+        | ($t | ascii_downcase) as $lt
+        # A word matches at a word start: "tax" finds "taxes", not "syntax".
+        | [range($res | length) | select(. as $i | ($lt | contains($words[$i]))
+                                            and ($lt | test("(^|[^[:alnum:]])" + $res[$i])))] as $hit
+        | select($hit | length > 0)
+        # No empty fields: IFS=tab read would merge the tabs around one.
+        | [$l.f, (.timestamp // "-"), (.cwd // "?"), ($hit | map(tostring) | join(",")),
+           # Snippet: the text around the first hit, so a long paste shows
+           # why it matched rather than its first line.
+           ((($lt | index($words[$hit[0]])) // 0) as $at
+           | ($at - 40 | if . < 0 then 0 else . end) as $from
+           | (if $from > 0 then "…" else "" end)
+             + ($t[$from:$from + 400] | gsub("[\\s]+"; " ") | .[0:160]))] | @tsv' "${_words[@]}") || true
+  [[ -n "$_hits" ]] || return 1
+
+  # Per transcript: keep it only if its messages cover every word, and pick the
+  # snippet (most words hit, then newest). Then dedupe bridged copies of one
+  # session (same id in several project dirs) to the newest, and sort by mtime.
+  zmodload -F zsh/stat b:zstat
+  local -A _cover _best _bscore _bts _bcwd _seen
+  local _f _ts _cwd _hw _snip _k _n
+  while IFS=$'\t' read -r _f _ts _cwd _hw _snip; do
+    for _k in "${(@s:,:)_hw}"; do _cover[$_f]+="|$_k|"; done
+    _n=${#${(@s:,:)_hw}}
+    if (( _n > ${_bscore[$_f]:-0} )) || { (( _n == ${_bscore[$_f]:-0} )) && [[ "$_ts" > "${_bts[$_f]:-}" ]]; }; then
+      _bscore[$_f]=$_n _bts[$_f]=$_ts _best[$_f]=$_snip _bcwd[$_f]=$_cwd
+    fi
+  done <<< "$_hits"
+
+  local -a _rows
+  local -a _st
+  local _ok _mt _id
+  for _f in "${(@k)_best}"; do
+    _ok=1
+    for _k in {0..$(( $#_words - 1 ))}; do
+      [[ "${_cover[$_f]}" == *"|$_k|"* ]] || { _ok=0; break; }
+    done
+    (( _ok )) || continue
+    zstat -A _st +mtime -- "$_f" 2>/dev/null || continue
+    _rows+=("$_st[1]"$'\t'"$_f")
+  done
+  (( $#_rows )) || return 1
+  local _row
+  for _row in "${(@On)_rows}"; do
+    _f=${_row#*$'\t'} _mt=${_row%%$'\t'*}
+    _id=${_f:t:r}
+    [[ -n "${_seen[$_id]:-}" ]] && continue
+    _seen[$_id]=1
+    print -r -- "$_mt"$'\t'"$_id"$'\t'"${_bcwd[$_f]}"$'\t'"$_f"$'\t'"${_best[$_f]}"
+  done
+}
+
 frame_trust_dir() {
   # frame_trust_dir DIR — pre-accept Claude Code's "Accessing workspace / do you
   # trust this folder?" dialog for DIR, so a fresh worktree's claude boots
@@ -471,6 +677,8 @@ frame_dep_hint() {
     git)    print -r -- "'brew install git', or 'xcode-select --install'" ;;
     nvim)   print -r -- "neovim, frame's buffer layer — 'brew install neovim'" ;;
     claude) print -r -- "Claude Code CLI — https://claude.com/claude-code" ;;
+    jq)     print -r -- "'brew install jq' (or your package manager's jq)" ;;
+    perl)   print -r -- "ships with macOS and most Linux distros; else your package manager's perl" ;;
     *)      print -r -- "not found on PATH" ;;
   esac
 }
