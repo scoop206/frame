@@ -564,8 +564,10 @@ Hooks:
   instance instead of spawning a per-worktree compose project. For an npm
   project, `frame_clone_node_modules` gives each worktree its own
   copy-on-write `node_modules` (an APFS clonefile where supported, a plain copy
-  otherwise; either way per-frame dep-optimizer caches stop fighting) and
-  self-heals the primary's deps on a fresh clone.
+  otherwise; either way per-frame dep-optimizer caches stop fighting). It
+  first brings the primary's deps up to date (installs there when its
+  `node_modules` is missing or out of step with its package.json, lockfile or
+  node version), so a worktree never inherits a stale tree.
 - `app_env()` — export the vars pointing the app at what Frame set up: the
   shared services (`DATABASE_URL`, S3 endpoint, …) and, if your app reads its
   port under a name other than the `PORT` frame tracks (see `buffers.json`),
