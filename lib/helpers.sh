@@ -497,7 +497,10 @@ frame_session_pick() {
         --no-sort --no-multi --layout=reverse --height=80% \
         --prompt='resume> ' --header='pick a session to resume (esc to cancel)' \
         --preview="$_preview" --preview-window='down,50%,wrap' \
-        </dev/tty 2>/dev/tty) || return 1
+        2>/dev/tty) || return 1
+      # No `</dev/tty` on fzf: it opens the tty for keys itself, and in zsh
+      # (MULTIOS) `pipe | fzf </dev/tty` feeds fzf the pipe AND the tty —
+      # the list never ends and a helper eats keystrokes, so fzf hangs blank.
       print -r -- "${_pick%%$'\t'*}"
       return 0
     fi
