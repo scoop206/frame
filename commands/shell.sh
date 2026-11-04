@@ -17,6 +17,19 @@
 #                            uses this for its scratch dirs under
 #                            frame_shell_home (~/.local/share/frame/shells).
 #
+#   frame shell TOPIC --resume ID
+#                            resume past claude session ID. Boots in the dir the
+#                            session last ran in (`claude --resume` only finds a
+#                            session from its own dir), unless -C says
+#                            otherwise; then the transcript is bridged there.
+#
+#   frame shell TOPIC --find "WORDS"
+#                            search past sessions for WORDS (every word, at a
+#                            word start, case-insensitive) in what YOU typed:
+#                            tool output and claude's replies don't count. Pick
+#                            one (fzf when installed, else a numbered list) and
+#                            it's resumed as with --resume.
+#
 #   frame shell -d [TOPIC]   tear down: just quit the session. A shell has no
 #                            branch or worktree to reap, so teardown collapses
 #                            to a quit (the dir is kept). TOPIC defaults to the
@@ -92,20 +105,33 @@ if [[ "${1:-}" == "-d" ]]; then
 fi
 
 _usage() {
-  echo "Usage: frame shell [-C DIR] TOPIC  (boots in DIR, default the current dir)" >&2
+  echo "Usage: frame shell [-C DIR] TOPIC [--resume ID | --find \"WORDS\"]" >&2
+  echo "       (boots in DIR, default the current dir — or the session's own dir)" >&2
   exit 2
 }
 
-# -C DIR: boot there instead of the cwd. Parsed ahead of TOPIC, and accepted
-# before or after it, like git/make/tar's -C.
+# -C DIR: boot there instead of the cwd. Flags are accepted before or after
+# TOPIC, like git/make/tar's -C.
 DIR=$PWD
+DIR_GIVEN=0
+RESUME_ID="" FIND=""
 typeset -a _pos
 while (( $# )); do
   case "$1" in
     -C)
       shift
       [[ -n "${1:-}" ]] || { echo "$X_MARK frame shell: -C needs a directory" >&2; _usage; }
-      DIR=$1 ;;
+      DIR=$1 DIR_GIVEN=1 ;;
+    --resume)
+      shift
+      [[ -n "${1:-}" ]] || { echo "$X_MARK frame shell: --resume needs a session id" >&2; _usage; }
+      RESUME_ID=$1 ;;
+    --resume=*) RESUME_ID=${1#--resume=} ;;
+    --find)
+      shift
+      [[ -n "${1:-}" ]] || { echo "$X_MARK frame shell: --find needs search words" >&2; _usage; }
+      FIND=$1 ;;
+    --find=*) FIND=${1#--find=} ;;
     -*) _usage ;;
     *)  _pos+=("$1") ;;
   esac
@@ -113,6 +139,64 @@ while (( $# )); do
 done
 (( ${#_pos} == 1 )) || _usage
 TOPIC=$_pos[1]
+if [[ -n "$RESUME_ID" && -n "$FIND" ]]; then
+  echo "$X_MARK frame shell: --resume and --find are mutually exclusive" >&2; exit 2
+fi
+if [[ -z "$TOPIC" || "$TOPIC" == */* ]]; then
+  echo "$X_MARK frame shell: TOPIC must be a plain name — no slashes" >&2
+  exit 2
+fi
+NAME=shell
+
+# Topics are the handle `frame focus TOPIC` matches on, ignoring the owner name,
+# so a topic must be unique across every live frame (shell frames included) or
+# focus can't disambiguate. Refuse before booting — and before --find asks you
+# to pick a session. (Re-entering this same shell frame is exempt — see
+# frame_assert_topic_free.)
+frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
+
+# --find WORDS: search past sessions, let the user pick one, resume it.
+if [[ -n "$FIND" ]]; then
+  _words=( ${=FIND} )
+  (( $#_words )) || { echo "$X_MARK frame shell: --find needs search words" >&2; exit 2; }
+  frame_require jq perl
+  echo "$RUN_MARK searching your past claude sessions for: ${_words[*]}…" >&2
+  if ! _rows=$(frame_session_search "${_words[@]}"); then
+    echo "$X_MARK no past session has a message of yours matching: ${_words[*]}" >&2
+    exit 1
+  fi
+  RESUME_ID=$(frame_session_pick "$_rows") || exit 1
+fi
+
+# --resume ID (or the --find pick): boot claude as `claude --resume ID` in the
+# dir the session last ran in, unless -C names another (bridged further down).
+if [[ -n "$RESUME_ID" ]]; then
+  # It flows straight onto claude's command line — keep it to the UUID charset
+  # (defends the buffers.json `claude ${FRAME_CLAUDE_FLAGS}` split).
+  if [[ ! "$RESUME_ID" =~ '^[A-Za-z0-9-]+$' ]]; then
+    echo "$X_MARK not a valid session id: $RESUME_ID" >&2; exit 2
+  fi
+  if ! _transcript=$(frame_session_transcript "$RESUME_ID"); then
+    echo "$X_MARK no transcript for session $RESUME_ID under ~/.claude/projects" >&2
+    exit 1
+  fi
+  if (( ! DIR_GIVEN )); then
+    if ! DIR=$(frame_session_cwd "$_transcript"); then
+      echo "$X_MARK can't tell which dir session $RESUME_ID ran in — pass -C DIR" >&2
+      exit 1
+    fi
+    if [[ ! -d "$DIR" ]]; then
+      echo "$X_MARK session $RESUME_ID ran in $DIR, which is gone —" >&2
+      echo "  pass -C DIR to resume it somewhere else" >&2
+      exit 1
+    fi
+    if [[ "${DIR:A}" == "${HOME:A}" ]]; then
+      echo "$X_MARK session $RESUME_ID ran in your home dir (~), where frame shell won't boot —" >&2
+      echo "  pass -C DIR to resume it somewhere else" >&2
+      exit 1
+    fi
+  fi
+fi
 
 if [[ ! -d "$DIR" ]]; then
   echo "$X_MARK frame shell: no such directory: $DIR" >&2
@@ -123,18 +207,6 @@ if [[ "$DIR" == "${HOME:A}" ]]; then
   echo "$X_MARK frame shell: refusing to boot in your home dir (~) — cd somewhere, or pass -C DIR" >&2
   exit 1
 fi
-if [[ -z "$TOPIC" || "$TOPIC" == */* ]]; then
-  echo "$X_MARK frame shell: TOPIC must be a plain name — no slashes" >&2
-  exit 2
-fi
-
-NAME=shell
-
-# Topics are the handle `frame focus TOPIC` matches on, ignoring the owner name,
-# so a topic must be unique across every live frame (shell frames included) or
-# focus can't disambiguate. Refuse before booting. (Re-entering this
-# same shell frame is exempt — see frame_assert_topic_free.)
-frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
 
 # Ask before any side effect — a nested boot aborted here leaves nothing behind.
 frame_guard_nested || exit 1
@@ -188,6 +260,13 @@ export SERVER_CMD
 export VITE_DIR="${VITE_DIR:-web}"
 export FRAME_PORT_PREFIX="$PORT_PREFIX"
 frame_export_claude_flags
+# Same as `frame wt --resume`: appended after frame_export_claude_flags so it
+# composes with the yolo flag, and bridged in case -C moved it to a new dir.
+if [[ -n "$RESUME_ID" ]]; then
+  export FRAME_CLAUDE_FLAGS="${FRAME_CLAUDE_FLAGS:+$FRAME_CLAUDE_FLAGS }--resume $RESUME_ID"
+  frame_bridge_transcript "$RESUME_ID" "$DIR" || true
+  echo "$OK_MARK resuming session $RESUME_ID in $DIR"
+fi
 
 # Refuse before exec if a boot-critical dependency is missing (see frame_require).
 # A shell frame has no git repo, so git isn't required; claude only when the

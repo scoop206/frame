@@ -386,4 +386,87 @@ test_nested_boot_refused_noninteractively() {
   assert_contains "$OUT" "frame spawn"
 }
 
+# ── resuming a past session: --resume ID / --find WORDS ──────────────────────
+
+_session() {  # _session ID CWD TEXT — plant a transcript of a message typed in CWD
+  local pdir="$HOME/.claude/projects/${2//[^A-Za-z0-9]/-}"
+  mkdir -p "$pdir"
+  jq -nc --arg c "$2" --arg t "$3" \
+    '{type:"user", cwd:$c, timestamp:"2026-11-03T10:00:00Z", entrypoint:"cli", message:{role:"user", content:$t}}' \
+    >> "$pdir/$1.jsonl"
+}
+
+test_shell_resume_boots_in_the_sessions_dir() {
+  # claude --resume only finds a session from its own dir, so boot there —
+  # wherever frame shell was run from.
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  local docs="${${:-$SANDBOX/w/docs}:A}"
+  mkdir -p "$docs" "$SANDBOX/w/elsewhere" && cd "$SANDBOX/w/elsewhere"
+  _session abc-123 "$docs" "my 2023 tax return"
+  run_frame shell taxes --resume abc-123
+  assert_status 0
+  local log=$(<$FAKE_NVIM_LOG)
+  assert_contains "$log" "cwd: $docs"
+  assert_contains "$log" "FRAME_SHELL_DIR=$docs"
+  assert_contains "$log" "--resume abc-123"
+}
+
+test_shell_resume_with_C_bridges_the_transcript() {
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  local docs="${${:-$SANDBOX/w/docs}:A}" other="${${:-$SANDBOX/w/other}:A}"
+  mkdir -p "$docs" "$other"
+  _session abc-123 "$docs" "my 2023 tax return"
+  run_frame shell taxes --resume=abc-123 -C "$other"
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_LOG)" "cwd: $other"
+  assert_file_exists "$HOME/.claude/projects/${other//[^A-Za-z0-9]/-}/abc-123.jsonl"
+}
+
+test_shell_resume_refuses_unknown_bad_or_gone() {
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  run_frame shell taxes --resume nope-000
+  assert_status 1
+  assert_contains "$OUT" "no transcript for session nope-000"
+  run_frame shell taxes --resume 'x;rm'
+  assert_status 2
+  assert_contains "$OUT" "not a valid session id"
+  _session gone-1 "$SANDBOX/w/deleted" "hi"
+  run_frame shell taxes --resume gone-1
+  assert_status 1
+  assert_contains "$OUT" "which is gone"
+  assert_contains "$OUT" "-C DIR"
+  run_frame shell taxes --resume
+  assert_status 2
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_shell_resume_and_find_are_exclusive() {
+  run_frame shell taxes --resume a-1 --find tax
+  assert_status 2
+  assert_contains "$OUT" "mutually exclusive"
+}
+
+test_shell_find_without_tty_lists_matches() {
+  # No tty to pick on (an agent, a script): list the hits and how to resume.
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  local docs="${${:-$SANDBOX/w/docs}:A}"
+  mkdir -p "$docs"
+  _session tax-1 "$docs" "my 2023 tax return"
+  _session syn-2 "$docs" "fix this syntax error"
+  run_frame shell taxes --find "tax 2023" < /dev/null
+  assert_status 1
+  assert_contains "$OUT" "tax-1"
+  assert_contains "$OUT" "my 2023 tax return"
+  assert_not_contains "$OUT" "syn-2"
+  assert_contains "$OUT" "--resume ID"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_shell_find_no_match() {
+  _session tax-1 "$SANDBOX/w/docs" "my 2023 tax return"
+  run_frame shell taxes --find zebra < /dev/null
+  assert_status 1
+  assert_contains "$OUT" "no past session"
+}
+
 run_tests "$0"

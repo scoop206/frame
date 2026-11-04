@@ -32,6 +32,12 @@ Usage:
                                       nothing is written into the dir (refuses ~)
     frame shell -C DIR TOPIC          …in DIR instead (either form opens the
                                       dir's .frame/config.sh BUFFERS, if any)
+    frame shell TOPIC --find "WORDS"  find a past claude session by what YOU
+                                      typed in it (every word; tool output and
+                                      replies don't count), pick one, resume
+                                      it in the dir it ran in
+    frame shell TOPIC --resume ID     …resume a known session id the same way
+                                      (-C DIR resumes it in DIR instead)
     frame shell -d [TOPIC]            tear down a shell frame (default: current)
                                       — just quits the session; the dir is kept
 
