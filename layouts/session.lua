@@ -283,13 +283,23 @@ _G.FrameStopBuffers = function()
   return n
 end
 
--- frame_submit(chan, text) — type TEXT into a claude terminal channel and
--- submit it. Two writes with the Enter deferred ~200ms: claude's TUI
--- paste-detection folds a CR arriving in the same rapid chunk into a newline
--- instead of a submit; a lone late '\r' registers as a real keypress. Used by
--- the broker's pump — the sole writer into claude.
+-- frame_paste(chan, text) — write TEXT into a claude terminal as ONE paste.
+-- A macOS pty takes ~1 KB per read, so a longer raw write reaches claude in
+-- pieces, and its paste detection kept only the last piece (the start of a
+-- long :FrameClaude selection vanished). Bracketed-paste markers tell claude
+-- where the paste starts and ends however many reads it spans. Any end marker
+-- inside the text is stripped so a selection can't close the paste early.
+local function frame_paste(chan, text)
+  text = text:gsub('\27%[201~', '')
+  vim.fn.chansend(chan, '\27[200~' .. text .. '\27[201~')
+end
+
+-- frame_submit(chan, text) — paste TEXT into a claude terminal channel and
+-- submit it. The Enter goes as a separate write ~200ms after the paste ends:
+-- a CR inside the paste is just a newline; a lone late '\r' registers as a
+-- real keypress. Used by the broker's pump — the sole writer into claude.
 local function frame_submit(chan, text)
-  vim.fn.chansend(chan, text)
+  frame_paste(chan, text)
   vim.defer_fn(function() vim.fn.chansend(chan, '\r') end, 200)
 end
 
@@ -853,7 +863,7 @@ vim.api.nvim_create_user_command('FrameClaude', function(opts)
   local chan = frameclaude_open()
   if not chan then return end
   if not text then return end -- bare, rangeless → just opened the prompt
-  -- Both paths send one rapid chunk — claude's TUI paste-detection folds the
+  -- Both paths send one bracketed paste (frame_paste) — claude folds the
   -- embedded newlines into the input box rather than submitting each line.
   if has_q then
     -- Question → run it. frame_submit sends the paste, then a LONE '\r' ~200ms
@@ -862,7 +872,7 @@ vim.api.nvim_create_user_command('FrameClaude', function(opts)
   else
     -- Range but no question → leave the context in the prompt (trailing newline
     -- drops your cursor onto a fresh line) for you to type your question + submit.
-    vim.fn.chansend(chan, text .. '\n')
+    frame_paste(chan, text .. '\n')
   end
 end, {
   range = true,
