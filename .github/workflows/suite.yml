@@ -18,7 +18,22 @@ jobs:
       - uses: actions/checkout@v5
       - name: Install zsh (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
+        # Skip when the image already has zsh. Otherwise retry, and after a
+        # failed try drop security.ubuntu.com from the runner's mirror list:
+        # runners sometimes can't resolve it, and zsh is also on the main
+        # archive mirrors.
+        run: |
+          if command -v zsh >/dev/null; then zsh --version; exit 0; fi
+          mirrors=/etc/apt/apt-mirrors.txt
+          for try in 1 2 3; do
+            sudo apt-get update -qq || true
+            sudo apt-get install -y -qq -o Acquire::Retries=3 zsh && exit 0
+            if [ -f "$mirrors" ] && grep -qv security.ubuntu.com "$mirrors"; then
+              sudo sed -i '/security\.ubuntu\.com/d' "$mirrors"
+            fi
+            sleep $((try * 10))
+          done
+          exit 1
       - name: Lint
         run: zsh tests/run.sh --lint
       - name: Usage doc is current
