@@ -196,6 +196,14 @@ else
     exit 1
   fi
   PROJ=${PROJ:A}
+  # `frame wt` refuses a project whose config doesn't define BUFFERS (e.g. a
+  # repo nobody ran `frame init` in). Catch it HERE: inside the tab it dies in
+  # ~100ms and Ghostty shows only "failed to launch the requested command".
+  if ! (cd "$PROJ" && unset BUFFERS && frame_load_config 2>/dev/null && (( ${+BUFFERS} ))); then
+    echo "$X_MARK frame spawn wt: $PROJ isn't set up for frame — its .frame/config.sh must define BUFFERS=(…)" >&2
+    echo "  run \`frame init\` there (then commit .frame/config.sh), or add BUFFERS=(claude local)" >&2
+    exit 1
+  fi
 fi
 
 # --req means a reply will route home — same rule as `frame req`: refuse before

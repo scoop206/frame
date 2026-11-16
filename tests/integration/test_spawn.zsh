@@ -44,6 +44,23 @@ test_spawn_wt_needs_a_project() {
   assert_contains "$OUT" "no project at"
 }
 
+test_spawn_wt_refuses_uninitialized_project() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
+  # A repo nobody ran `frame init` in has no BUFFERS, so `frame wt` would die
+  # inside the new tab (Ghostty shows only "failed to launch"). Spawn refuses
+  # here instead, before opening anything.
+  _spawn_env
+  make_repo "checkout-$TNAME"
+  write_config <<'EOF'
+NAME=stompy
+EOF
+  run_frame spawn wt $TNAME
+  assert_status 1
+  assert_contains "$OUT" "isn't set up for frame"
+  assert_contains "$OUT" "frame init"
+  [[ ! -e "$FAKE_OSASCRIPT_LOG" ]] || fail "spawn opened a tab for an uninitialized project"
+}
+
 test_spawn_wt_rejects_ephemeral() {
   [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   run_frame spawn wt calc --ephemeral
@@ -67,6 +84,7 @@ test_spawn_wt_boots_project_worker_as_tab() {
   make_repo "checkout-$TNAME"
   write_config <<'EOF'
 NAME=stompy
+BUFFERS=(claude)
 EOF
   _mksock "$FRAME_RUNDIR/stompy-$TNAME.nvim"
   touch "$FRAME_RUNDIR/stompy-$TNAME.nvim.ready"
@@ -89,6 +107,7 @@ test_spawn_wt_cwd_targets_another_project() {
   make_repo "checkout-$TNAME"
   write_config <<'EOF'
 NAME=stompy
+BUFFERS=(claude)
 EOF
   _mksock "$FRAME_RUNDIR/stompy-$TNAME.nvim"
   touch "$FRAME_RUNDIR/stompy-$TNAME.nvim.ready"
