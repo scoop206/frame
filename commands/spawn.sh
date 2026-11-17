@@ -25,8 +25,12 @@
 # rendered on screen — and only then reports up and sends --req. The rendered
 # prompt matters: text sent while claude's own process is still booting piles
 # up in the pty and is read as one pasted chunk, which swallows the submitting
-# Enter (see frame_submit). --timeout N (default 30) bounds the wait; exit 3
-# on timeout, mirroring `frame inbox --wait`.
+# Enter (see frame_submit). A startup menu (folder trust, external CLAUDE.md
+# imports, …) also draws a '❯' but is NOT the prompt: FrameReady answers 2
+# while one is up, spawn keeps waiting (a human may answer it in the tab), and
+# a timeout says the menu needs a human instead of sending --req into it.
+# --timeout N (default 30) bounds the wait; exit 3 on timeout, mirroring
+# `frame inbox --wait`.
 #
 # wt workers belong to a project: NAME comes from its .frame config (socket
 # $FRAME_RUNDIR/NAME-TOPIC.nvim), resolved at --cwd or the current directory. No
@@ -266,6 +270,7 @@ else
   echo "$RUN_MARK spawned window for $W_NAME/$TOPIC — waiting for it to boot…"
 fi
 DEADLINE=$(( SECONDS + TIMEOUT ))
+_ready=0
 while :; do
   if [[ -S "$SOCKET" ]]; then
     _ready=$(nvim --headless --server "$SOCKET" \
@@ -274,7 +279,12 @@ while :; do
   fi
   if (( SECONDS >= DEADLINE )); then
     echo "$X_MARK spawn: $W_NAME/$TOPIC didn't come up within ${TIMEOUT}s —" >&2
-    echo "  check the new tab: still booting (retry with --timeout), or died mid-boot" >&2
+    if [[ "$_ready" == 2 ]]; then
+      echo "  claude is showing a startup menu (folder trust, CLAUDE.md imports, …) that needs a human:" >&2
+      echo "  answer it in the new tab${REQ:+, then resend with: frame req $W_NAME/$TOPIC …}" >&2
+    else
+      echo "  check the new tab: still booting (retry with --timeout), or died mid-boot" >&2
+    fi
     exit 3
   fi
   sleep 0.5
