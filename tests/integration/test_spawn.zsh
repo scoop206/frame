@@ -283,6 +283,24 @@ test_not_ready_session_times_out() {
   assert_contains "$OUT" "didn't come up within 1s"
 }
 
+test_startup_menu_times_out_naming_the_menu() {
+  [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
+  in_head
+  export FAKE_OPEN_LOG="$SANDBOX/open.log"
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
+  # claude is up but a startup menu holds the screen (FrameReady 2): spawn must
+  # keep waiting, never send the --req into the menu, and say a human is needed.
+  _mksock "$FRAME_RUNDIR/shell-$TNAME.nvim"
+  touch "$FRAME_RUNDIR/shell-$TNAME.nvim.menu"
+  run_frame spawn shell $TNAME --req "compute 2+2" --timeout 1
+  assert_status 3
+  assert_contains "$OUT" "startup menu"
+  assert_contains "$OUT" "frame req shell/$TNAME"
+  assert_not_contains "$OUT" "is up"
+  [[ -f $FAKE_NVIM_EXPR_LOG ]] && assert_not_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameBrokerSubmit"
+  return 0
+}
+
 test_req_outside_a_frame_is_refused() {
   [[ $OSTYPE == darwin* ]] || { skip "spawn launch path is macOS-only"; return }
   run_frame spawn shell $TNAME --req "compute 2+2"

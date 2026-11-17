@@ -38,7 +38,13 @@ if [[ "${1:-}" == "--server" ]]; then
     # `frame spawn` polls FrameReady() while a worker boots. A test marks the
     # planted socket "booted" with a <sock>.ready companion; without one the
     # session answers 0 (still booting) and spawn keeps polling to its timeout.
-    *FrameReady*) [[ -f "$_sock.ready" ]] && print -rn -- 1 || print -rn -- 0; exit 0 ;;
+    # A <sock>.menu companion answers 2: claude is up but a startup menu holds
+    # the screen (not the input prompt), so spawn must keep waiting too.
+    *FrameReady*)
+      if [[ -f "$_sock.ready" ]]; then print -rn -- 1
+      elif [[ -f "$_sock.menu" ]]; then print -rn -- 2
+      else print -rn -- 0; fi
+      exit 0 ;;
     # The claude broker (docs/claude-broker.md). Submit returns a request id
     # (FAKE_BROKER_SUBMIT, default 'r1'; 'FAIL' → RPC errors, as an old layout
     # would; or a verdict like 'no-claude-buffer'/'queue-full'). Await polls:

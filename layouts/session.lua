@@ -196,22 +196,29 @@ end
 
 -- _G.FrameReady() — 1 once this session can accept a `frame req`: the claude
 -- buffer's terminal channel is captured (the last step of boot, bottom of this
--- file) AND claude's TUI has rendered its input prompt ('❯' on screen). The
--- channel alone fires seconds too early — claude the process is still booting,
--- so anything sent meanwhile piles up unread in the pty and arrives as ONE
--- chunk when its TUI first reads stdin; paste-detection then eats the
--- submitting CR (see frame_submit). A rendered prompt means claude is actively
--- reading, so a deferred Enter lands as its own keypress. First-run chrome
--- (trust dialog etc.) never renders '❯' — spawn times out and points at the
--- window, which genuinely needs a human. `frame spawn` polls this after
+-- file) AND claude's TUI has rendered its INPUT prompt. The channel alone fires
+-- seconds too early — claude the process is still booting, so anything sent
+-- meanwhile piles up unread in the pty and arrives as ONE chunk when its TUI
+-- first reads stdin; paste-detection then eats the submitting CR (see
+-- frame_submit). A rendered prompt means claude is actively reading, so a
+-- deferred Enter lands as its own keypress.
+-- A bare '❯' is not enough: claude's startup menus (folder trust, "allow
+-- external CLAUDE.md imports?", version notices) and permission dialogs use
+-- '❯' as their selection cursor, and a request typed + Enter'd there answers
+-- the menu and is lost. claude_screen.lua tells the real input box (─── rule,
+-- '❯ …', ─── rule) from a menu; FrameReady returns 2 while a menu is up, so
+-- `frame spawn` keeps waiting and, on timeout, says a human must answer it.
+-- Callers treat anything but 1 as not ready. `frame spawn` polls this after
 -- opening a worker's window; the socket alone is not readiness either
 -- (serverstart runs before the buffers open).
+local claude_screen = dofile(
+  vim.fn.fnamemodify(debug.getinfo(1, 'S').source:sub(2), ':p:h') .. '/claude_screen.lua')
 _G.FrameReady = function()
   local chan, buf = FrameState.chan['claude'], FrameState.buf['claude']
   if not chan or not buf then return 0 end
-  for _, s in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
-    if s:find('❯', 1, true) then return 1 end
-  end
+  local kind = claude_screen.classify(vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+  if kind == 'prompt' then return 1 end
+  if kind == 'menu' then return 2 end
   return 0
 end
 
@@ -1112,7 +1119,7 @@ end
 -- here" and hold off a `frame req` that would have queued fine. Once claude's
 -- prompt first renders (FrameReady), call it waiting. Only from '': a brokered
 -- or human turn that already landed owns the status. Gives up after ~10 min —
--- a first-run dialog that never renders the prompt genuinely needs a human.
+-- a startup menu nobody answers (FrameReady 2) genuinely needs a human.
 if FrameState.chan['claude'] then
   local tries = 0
   local function mark_waiting_when_ready()
