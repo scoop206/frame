@@ -628,6 +628,71 @@ frame_session_search() {
   done
 }
 
+frame_session_recent() {
+  # frame_session_recent [N] — the N (default 100) most recently active claude
+  # sessions you typed in, newest first, in frame_session_search's row shape:
+  #   EPOCH  SESSION_ID  CWD  TRANSCRIPT  SNIPPET
+  # SNIPPET is the FIRST message you typed (what the session was for); CWD is
+  # where the last one was typed. Same filters as the search: headless
+  # (sdk-cli) runs and sessions with nothing typed are dropped, and bridged
+  # copies of one session collapse to the newest. Returns 1 when there are none.
+  emulate -L zsh
+  setopt pipefail
+  local _max=${1:-100}
+  zmodload -F zsh/stat b:zstat
+  # Newest transcripts first, one per session id; read a few extra since some
+  # turn out to be headless or empty.
+  local -a _all _files _st
+  local -A _seen
+  local _f _id
+  _all=( "$HOME/.claude/projects"/*/*.jsonl(N.om) )
+  for _f in "${_all[@]}"; do
+    _id=${_f:t:r}
+    [[ -n "${_seen[$_id]:-}" ]] && continue
+    _seen[$_id]=1
+    _files+=("$_f")
+    (( $#_files >= _max * 2 )) && break
+  done
+  (( $#_files )) || return 1
+
+  local _hits
+  _hits=$(perl -ne '
+      next unless index($_, q{"type":"user"}) >= 0;
+      next if index($_, q{"type":"tool_result"}) >= 0;
+      s/"data":"[^"]{200,}"/"data":""/g;
+      print "$ARGV:$_";' -- "${_files[@]}" \
+    | jq -R -r '
+        capture("^(?<f>[^:]*\\.jsonl):(?<j>.*)$")? | . as $l
+        | ($l.j | fromjson?) // empty
+        | select(type == "object" and .type == "user"
+                 and .isMeta != true and .isSidechain != true
+                 and .isCompactSummary != true
+                 and .entrypoint != "sdk-cli")
+        | (.message.content
+           | if type == "string" then .
+             else [.[]? | select(.type? == "text") | .text] | join("\n") end) as $t
+        | select($t != "")
+        | select($t | test("^\\s*(<(command-|local-command|system-reminder|task-notification|bash-|user-prompt)|Caveat:)") | not)
+        | [$l.f, (.cwd // "?"), ($t | sub("^\\s+"; "") | gsub("[\\s]+"; " ") | .[0:160])] | @tsv') || true
+  [[ -n "$_hits" ]] || return 1
+
+  local -A _first _cwd
+  local _c _snip
+  while IFS=$'\t' read -r _f _c _snip; do
+    [[ -n "${_first[$_f]:-}" ]] || _first[$_f]=$_snip
+    _cwd[$_f]=$_c
+  done <<< "$_hits"
+
+  local _n=0
+  for _f in "${_files[@]}"; do      # already newest first
+    [[ -n "${_first[$_f]:-}" ]] || continue
+    zstat -A _st +mtime -- "$_f" 2>/dev/null || continue
+    print -r -- "$_st[1]"$'\t'"${_f:t:r}"$'\t'"${_cwd[$_f]}"$'\t'"$_f"$'\t'"${_first[$_f]}"
+    (( ++_n >= _max )) && break
+  done
+  (( _n ))
+}
+
 frame_trust_dir() {
   # frame_trust_dir DIR — pre-accept Claude Code's "Accessing workspace / do you
   # trust this folder?" dialog for DIR, so a fresh worktree's claude boots

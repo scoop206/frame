@@ -469,4 +469,24 @@ test_shell_find_no_match() {
   assert_contains "$OUT" "no past session"
 }
 
+test_shell_recent_without_tty_lists_sessions() {
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  local docs="${${:-$SANDBOX/w/docs}:A}"
+  mkdir -p "$docs"
+  _session tax-1 "$docs" "my 2023 tax return"
+  _session syn-2 "$docs" "fix this syntax error"
+  run_frame shell taxes --recent < /dev/null
+  assert_status 1
+  assert_contains "$OUT" "tax-1"
+  assert_contains "$OUT" "syn-2"
+  assert_contains "$OUT" "fix this syntax error"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_shell_recent_is_exclusive_with_find() {
+  run_frame shell taxes --recent --find tax
+  assert_status 2
+  assert_contains "$OUT" "mutually exclusive"
+}
+
 run_tests "$0"

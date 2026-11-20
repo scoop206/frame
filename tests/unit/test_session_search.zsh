@@ -98,4 +98,29 @@ test_session_cwd_is_the_latest() {
   assert_eq "$(frame_session_cwd "$f")" "/w/new"
 }
 
+test_recent_lists_newest_with_first_message() {
+  local a=$(_t r-old /w/a) b=$(_t r-new /w/b) h=$(_t r-headless /w/h) e=$(_t r-empty /w/e)
+  _typed "$a" /w/a "first thing in old"
+  _typed "$a" /w/a "second thing in old"
+  _typed "$b" /w/b "  the new one"
+  _typed "$b" /w/c "moved on"
+  _typed "$h" /w/h "a headless run" '{entrypoint:"sdk-cli"}'
+  _line "$e" '{"type":"assistant","message":{"role":"assistant","content":"hi"}}'
+  touch -t 202001010000 "$a"; touch -t 202401010000 "$b"
+  local out=$(frame_session_recent)
+  local -a ids=( ${(f)"$(print -r -- "$out" | cut -f2)"} )
+  assert_eq "${ids[*]}" "r-new r-old"
+  local -a cols=( "${(@s:	:)${(f)out}[1]}" )
+  assert_eq "$cols[3]" "/w/c"
+  assert_eq "$cols[5]" "the new one"
+  assert_contains "$out" "first thing in old"
+  assert_not_contains "$out" "second thing"
+}
+
+test_recent_respects_limit() {
+  local i f
+  for i in 1 2 3; do f=$(_t r-$i /w/$i); _typed "$f" /w/$i "msg $i"; done
+  assert_eq "$(frame_session_recent 2 | wc -l | tr -d ' ')" "2"
+}
+
 run_tests "$0"
