@@ -1046,6 +1046,62 @@ frame_dir_in_use() {
   return 0
 }
 
+frame_reap_orphans_in() {
+  # frame_reap_orphans_in DIR — after a frame's nvim has exited, stop whatever
+  # it left running inside DIR so nothing writes there once the worktree is
+  # gone. The case: a dev server (astro/vite) that survived the Ctrl-C and the
+  # SIGHUP, reparented to launchd, keeps regenerating its gitignored cache
+  # (.astro/, node_modules/.vite/). Its mkdir -p recreates the worktree dir
+  # right after git removed it, leaving a cache-only husk in the repos dir.
+  #
+  # First wait a few seconds for holders to exit on their own (terminal jobs
+  # linger a beat after nvim dies). Then SIGTERM the survivors that are
+  # ORPHANS — reparented to pid 1, or descended from such a process — and
+  # SIGKILL any that ignore it. A holder that still has a live parent (your
+  # own shell cd'd into the worktree from another tab) is never signalled,
+  # only reported. Prints one line per process it stopped. Best-effort: no
+  # lsof → nothing found → no-op.
+  emulate -L zsh
+  local _dir=$1 _i _pid _cmd _p _hold
+  local -a _pids _orph
+  local -A _ppid _name
+  for _i in {1..25}; do
+    _hold=$(frame_dir_in_use "$_dir")
+    [[ -z "$_hold" ]] && return 0
+    sleep 0.2
+  done
+  while read -r _pid _cmd; do
+    [[ "$_pid" == <1-> && "$_pid" != $$ ]] || continue
+    _pids+=("$_pid") _name[$_pid]=$_cmd
+  done <<< "$_hold"
+  for _pid in "${_pids[@]}"; do
+    # Walk up the parent chain: an orphan is one whose chain reaches pid 1
+    # before hitting a living process that isn't itself a holder.
+    _p=$_pid
+    while :; do
+      _p=$(ps -o ppid= -p "$_p" 2>/dev/null | tr -d ' ')
+      [[ -z "$_p" ]] && break
+      if [[ "$_p" == 1 ]]; then _orph+=("$_pid"); break; fi
+      [[ -n "${_name[$_p]:-}" ]] || break   # parent is alive and outside DIR
+    done
+  done
+  for _pid in "${_pids[@]}"; do
+    (( ${_orph[(Ie)$_pid]} )) && continue
+    print -r -- "$WARN_MARK still running in $_dir (not ours to stop): $_pid ${_name[$_pid]}" >&2
+  done
+  (( $#_orph )) || return 0
+  kill -TERM "${_orph[@]}" 2>/dev/null
+  for _i in {1..15}; do
+    kill -0 "${_orph[@]}" 2>/dev/null || break
+    sleep 0.2
+  done
+  for _pid in "${_orph[@]}"; do
+    kill -0 "$_pid" 2>/dev/null && kill -KILL "$_pid" 2>/dev/null
+    print -r -- "stopped leftover process $_pid ${_name[$_pid]}"
+  done
+  return 0
+}
+
 frame_live_frames() {
   # Print one `name<TAB>topic<TAB>port<TAB>status` row per running frame on this
   # machine, unsorted. A running frame is exactly one with a live nvim socket at
