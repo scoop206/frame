@@ -161,6 +161,14 @@ if [[ "${1:-}" == "-d" ]]; then
       exit 1
     fi
   fi
+  # The session is down, but a dev server it hosted can outlive it (orphaned
+  # to launchd) and keep writing its cache into the worktree — recreating the
+  # dir as a cache-only husk right after git removes it. Stop those orphans
+  # first. (Not under -f without a confirmed quit: the in-use check above was
+  # skipped, so we can't tell an orphan from the live session.)
+  if (( _confirmed_down )); then
+    frame_reap_orphans_in "$WT_DIR"
+  fi
   # git worktree remove races a lingering dev server. :qa! kills nvim, whose
   # exit SIGHUPs the vite/astro job it hosted — but an orphaned child can keep
   # regenerating gitignored caches (.astro/, node_modules/.vite/) for a beat.
