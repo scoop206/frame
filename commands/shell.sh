@@ -30,6 +30,12 @@
 #                            one (fzf when installed, else a numbered list) and
 #                            it's resumed as with --resume.
 #
+#   frame shell TOPIC --recent
+#                            list your most recent past sessions (newest first,
+#                            each with the first thing you typed in it) in the
+#                            same picker as --find, to browse and resume one.
+#                            In fzf, typing filters the list.
+#
 #   frame shell -d [TOPIC]   tear down: just quit the session. A shell has no
 #                            branch or worktree to reap, so teardown collapses
 #                            to a quit (the dir is kept). TOPIC defaults to the
@@ -105,7 +111,7 @@ if [[ "${1:-}" == "-d" ]]; then
 fi
 
 _usage() {
-  echo "Usage: frame shell [-C DIR] TOPIC [--resume ID | --find \"WORDS\"]" >&2
+  echo "Usage: frame shell [-C DIR] TOPIC [--resume ID | --find \"WORDS\" | --recent]" >&2
   echo "       (boots in DIR, default the current dir — or the session's own dir)" >&2
   exit 2
 }
@@ -114,7 +120,7 @@ _usage() {
 # TOPIC, like git/make/tar's -C.
 DIR=$PWD
 DIR_GIVEN=0
-RESUME_ID="" FIND=""
+RESUME_ID="" FIND="" RECENT=0
 typeset -a _pos
 while (( $# )); do
   case "$1" in
@@ -132,6 +138,7 @@ while (( $# )); do
       [[ -n "${1:-}" ]] || { echo "$X_MARK frame shell: --find needs search words" >&2; _usage; }
       FIND=$1 ;;
     --find=*) FIND=${1#--find=} ;;
+    --recent) RECENT=1 ;;
     -*) _usage ;;
     *)  _pos+=("$1") ;;
   esac
@@ -139,8 +146,8 @@ while (( $# )); do
 done
 (( ${#_pos} == 1 )) || _usage
 TOPIC=$_pos[1]
-if [[ -n "$RESUME_ID" && -n "$FIND" ]]; then
-  echo "$X_MARK frame shell: --resume and --find are mutually exclusive" >&2; exit 2
+if (( (${#RESUME_ID} > 0) + (${#FIND} > 0) + RECENT > 1 )); then
+  echo "$X_MARK frame shell: --resume, --find and --recent are mutually exclusive" >&2; exit 2
 fi
 if [[ -z "$TOPIC" || "$TOPIC" == */* ]]; then
   echo "$X_MARK frame shell: TOPIC must be a plain name — no slashes" >&2
@@ -163,6 +170,16 @@ if [[ -n "$FIND" ]]; then
   echo "$RUN_MARK searching your past claude sessions for: ${_words[*]}…" >&2
   if ! _rows=$(frame_session_search "${_words[@]}"); then
     echo "$X_MARK no past session has a message of yours matching: ${_words[*]}" >&2
+    exit 1
+  fi
+  RESUME_ID=$(frame_session_pick "$_rows") || exit 1
+fi
+
+# --recent: the newest past sessions, same picker, no search words.
+if (( RECENT )); then
+  frame_require jq perl
+  if ! _rows=$(frame_session_recent 100); then
+    echo "$X_MARK no past claude sessions under ~/.claude/projects" >&2
     exit 1
   fi
   RESUME_ID=$(frame_session_pick "$_rows") || exit 1

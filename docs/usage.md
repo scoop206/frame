@@ -36,6 +36,8 @@ Usage:
                                       typed in it (every word; tool output and
                                       replies don't count), pick one, resume
                                       it in the dir it ran in
+    frame shell TOPIC --recent        browse your most recent sessions (first
+                                      message of each) and resume the one you pick
     frame shell TOPIC --resume ID     …resume a known session id the same way
                                       (-C DIR resumes it in DIR instead)
     frame shell -d [TOPIC]            tear down a shell frame (default: current)
