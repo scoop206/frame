@@ -450,7 +450,9 @@ frame_session_preview() {
   emulate -L zsh
   [[ -f "$1" ]] || return 1
   print -r -- "session ${1:t:r}"
-  print -r -- "cwd     $(frame_session_cwd "$1" || print '?')"
+  local _cwd
+  _cwd=$(frame_session_cwd "$1") || _cwd='?'
+  print -r -- "cwd     ${_cwd/#$HOME/~}"
   print
   perl -ne '
       next unless index($_, q{"type":"user"}) >= 0;
@@ -465,7 +467,8 @@ frame_session_preview() {
              else [.[]? | select(.type? == "text") | .text] | join("\n") end) as $t
         | select($t != "")
         | select($t | test("^\\s*(<(command-|local-command|system-reminder|task-notification|bash-|user-prompt)|Caveat:)") | not)
-        | "\((.timestamp // "")[0:16] | sub("T"; " "))  \($t[0:600] | gsub("[\\s]+"; " "))\n"' \
+        | ((.timestamp // "") | (sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601 | strflocaltime("%Y-%m-%d %H:%M"))? // .[0:16]) as $when
+        | "\($when)  \($t[0:600] | gsub("[\\s]+"; " "))\n"' \
     | tail -n 80
 }
 
