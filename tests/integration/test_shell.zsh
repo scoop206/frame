@@ -532,6 +532,13 @@ _open_session() {  # _open_session ID [ENV…] — a live stand-in claude for se
   print -r -- "{\"sessionId\":\"$1\"}" > "$HOME/.claude/sessions/$!.json"
   print -r -- $!
 }
+_decoy_sessions() {  # other open sessions besides ours, as on a real machine:
+  # the lookup must read past them (an early-exit pipe once died of SIGPIPE).
+  local p
+  for p in $$ $PPID; do
+    print -r -- "{\"sessionId\":\"decoy-$p\"}" > "$HOME/.claude/sessions/$p.json"
+  done
+}
 
 test_shell_recent_marks_open_sessions() {
   local docs="${${:-$SANDBOX/w/docs}:A}"
@@ -551,6 +558,7 @@ test_shell_resume_open_session_outside_a_frame_refuses() {
   mkdir -p "$docs"
   _session open-1 "$docs" "the open one"
   local pid=$(_open_session open-1)
+  _decoy_sessions
   run_frame shell --resume open-1
   kill $pid 2>/dev/null
   assert_status 1
@@ -569,6 +577,7 @@ test_shell_resume_open_session_in_a_frame_switches_to_it() {
 s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$sock"
   printf '%s\t%s\t%s\t%s\n' shell cowpoke '' '' > "$sock.info"
   local pid=$(_open_session open-1 FRAME_NAME=shell FRAME_TOPIC=cowpoke)
+  _decoy_sessions
   # the osascript stub stands in for AppleScript's answer (see test_focus.zsh)
   export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log" FAKE_OSASCRIPT_RESULT=raised
   sleep 0.2
