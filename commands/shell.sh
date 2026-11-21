@@ -235,8 +235,19 @@ if [[ -n "$RESUME_ID" ]]; then
     if [[ -n "$_rname" && -n "$_rtopic" ]] \
         && frame_live_frames | awk -F'\t' -v n="$_rname" -v t="$_rtopic" \
              '$1 == n && $2 == t { f = 1 } END { exit !f }'; then
-      echo "$OK_MARK session $RESUME_ID is already open in frame $_rname/$_rtopic — switching to it"
-      exec "$FRAME_ROOT/bin/frame" focus "$_rname/$_rtopic"
+      # Switching rides `frame focus`: AppleScript driving Ghostty, so macOS
+      # only, and only if that frame's terminal IS Ghostty (asked of the
+      # running claude, not of this terminal — you may launch from another).
+      # Otherwise name the frame rather than fail inside focus.
+      _rterm=$(frame_proc_env "$_pid" TERM_PROGRAM) || _rterm=""
+      if frame_is_macos && [[ "$_rterm" == ghostty ]]; then
+        echo "$OK_MARK session $RESUME_ID is already open in frame $_rname/$_rtopic — switching to it"
+        exec "$FRAME_ROOT/bin/frame" focus "$_rname/$_rtopic"
+      fi
+      echo "$X_MARK session $RESUME_ID is already open in frame $_rname/$_rtopic — switch to that window" >&2
+      echo "  (frame can only bring it to the front in Ghostty on macOS; resuming it" >&2
+      echo "  again would start a second claude writing to the same conversation)" >&2
+      exit 1
     fi
     _rdir=$(frame_session_cwd "$_transcript" 2>/dev/null) || _rdir="?"
     echo "$X_MARK session $RESUME_ID is already open (claude pid $_pid, in ${_rdir/#$HOME/~}) —" >&2
