@@ -115,6 +115,13 @@ ul.ticks li::before { content: "→"; position: absolute; left: 0; color: var(--
 .tip h3 { font-size: 22px; margin-bottom: 14px; }
 @media (max-width: 560px) { .tip { padding: 20px; } }
 
+.cta { text-align: center; padding: 112px 0; background: radial-gradient(ellipse at 50% 0%, rgba(217,119,87,.12), transparent 65%); }
+.cta p { margin-left: auto; margin-right: auto; }
+.cta .ctas, .cta .badges { justify-content: center; }
+.cta .ctas { margin: 32px 0 28px; }
+.btn.big { font-size: 17px; padding: 15px 26px; }
+.cta .fine { font-size: 14.5px; color: var(--fg-mute); }
+
 /* coordinator diagram */
 .diagram { margin-top: 40px; }
 .diagram svg { width: 100%; height: auto; display: block; }
@@ -131,12 +138,6 @@ table.kv { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 
 table.kv td { padding: 10px 12px; border-top: 1px solid var(--line); color: var(--fg-dim); vertical-align: top; }
 table.kv td:first-child { font-family: var(--mono); color: var(--gold); white-space: nowrap; width: 1%; }
 
-/* install */
-.install pre { position: relative; }
-.copy { position: absolute; top: 10px; right: 10px; font: 600 12px var(--mono); background: var(--bg-3); color: var(--fg-dim); border: 1px solid var(--line); border-radius: 5px; padding: 5px 10px; cursor: pointer; }
-.copy:hover { color: var(--fg); }
-.prereqs { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0; padding: 0; list-style: none; }
-.prereqs li { font: 14px var(--mono); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; color: var(--fg); }
 .badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
 .badges img { height: 20px; }
 
@@ -168,7 +169,7 @@ footer a:hover { color: var(--fg); }
     <ul>
       <li class="hide-sm"><a href="#resume">resume</a></li>
       <li class="hide-sm"><a href="#coordinate">coordinate</a></li>
-      <li><a href="#install">install</a></li>
+      <li><a href="#start">get started</a></li>
       <li><a href="https://github.com/scoop206/frame">github</a></li>
     </ul>
   </div>
@@ -180,7 +181,7 @@ footer a:hover { color: var(--fg); }
     <h1>Let Vim run all your claudes.<br><span class="h1-accent">Use frame to coordinate them all.</span><span class="cursor" aria-hidden="true"></span></h1>
     <p class="lede">Every Claude session lives in a Neovim buffer, next to your shell and your dev server. Jump between them with the key combos you already use, and send any selection, from a buffer, a text file, or further up the Claude session itself, straight to the frame's local Claude.</p>
     <div class="ctas">
-      <a class="btn primary" href="#install">Install frame</a>
+      <a class="btn primary" href="https://github.com/scoop206/frame#getting-started">Get started</a>
       <a class="btn" href="https://github.com/scoop206/frame">View on GitHub</a>
       <a class="btn" href="https://www.youtube.com/watch?v=Z2tggjBM5w4">Watch the demo</a>
     </div>
@@ -343,22 +344,16 @@ vim.keymap.set(<span class="ok">'x'</span>, <span class="ok">'&lt;leader&gt;l'</
   </div>
 </section>
 
-<section id="install" class="install">
+<section id="start" class="cta">
   <div class="wrap">
-    <p class="kicker">install</p>
-    <h2>Four lines to a first frame.</h2>
-    <ul class="prereqs">
-      <li>zsh</li><li>git ≥ 2.5</li><li>Neovim</li><li>Claude Code</li><li>Ghostty (recommended)</li><li>docker (shared services only)</li>
-    </ul>
-    <div class="term">
-      <div class="term-bar"><i></i><i></i><i></i><b>zsh</b></div>
-<pre id="install-cmd"><button class="copy" type="button" data-copy="install-cmd">copy</button>git clone https://github.com/scoop206/frame.git
-cd frame
-echo "export PATH=\"$PWD/bin:\$PATH\"" &gt;&gt; ~/.zshrc &amp;&amp; source ~/.zshrc
-frame --help</pre>
+    <p class="kicker">get started</p>
+    <h2>Run your first frame today.</h2>
+    <p>To get started with frame today, head to the repo. The Getting Started guide covers prerequisites, install, and onboarding your first project, from <code>frame init</code> to your first <code>frame wt</code>.</p>
+    <div class="ctas">
+      <a class="btn primary big" href="https://github.com/scoop206/frame#getting-started">Get started on GitHub →</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=Z2tggjBM5w4">Watch the demo</a>
     </div>
-    <p style="margin-top:24px">Then <code>cd</code> into a project, run <code>frame init</code>, and <code>frame wt my-topic</code>. The <a href="https://github.com/scoop206/frame#onboarding-a-project">onboarding guide</a> covers project types, buffers and ports.</p>
-    <p>macOS is the primary target. The core workflow (worktrees, the Neovim layout, the Claude broker, merge and teardown, ports, shared services) runs on Linux too and is tested there in CI. Window focus and <code>frame spawn</code> are macOS-only.</p>
+    <p class="fine">Built on zsh, Neovim and Claude Code, with Ghostty recommended. macOS is the primary target; the core workflow also runs on Linux and is tested there in CI.</p>
     <div class="badges">
       <a href="https://github.com/scoop206/frame/actions/workflows/test-macos.yml"><img src="https://github.com/scoop206/frame/actions/workflows/test-macos.yml/badge.svg?branch=main" alt="macOS tests"></a>
       <a href="https://github.com/scoop206/frame/actions/workflows/test-linux.yml"><img src="https://github.com/scoop206/frame/actions/workflows/test-linux.yml/badge.svg?branch=main" alt="Linux tests"></a>
@@ -378,17 +373,5 @@ frame --help</pre>
   </div>
 </footer>
 
-<script>
-document.querySelectorAll('.copy').forEach(function (b) {
-  b.addEventListener('click', function () {
-    var pre = document.getElementById(b.dataset.copy);
-    var text = pre.innerText.replace(/^copy\s*/, '').trim();
-    navigator.clipboard.writeText(text).then(function () {
-      b.textContent = 'copied';
-      setTimeout(function () { b.textContent = 'copy'; }, 1500);
-    });
-  });
-});
-</script>
 </body>
 </html>
