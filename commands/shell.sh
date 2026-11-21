@@ -245,8 +245,6 @@ if [[ -n "$RESUME_ID" ]]; then
         exec "$FRAME_ROOT/bin/frame" focus "$_rname/$_rtopic"
       fi
       echo "$X_MARK session $RESUME_ID is already open in frame $_rname/$_rtopic — switch to that window" >&2
-      echo "  (frame can only bring it to the front in Ghostty on macOS; resuming it" >&2
-      echo "  again would start a second claude writing to the same conversation)" >&2
       exit 1
     fi
     _rdir=$(frame_session_cwd "$_transcript" 2>/dev/null) || _rdir="?"
