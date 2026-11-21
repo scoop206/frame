@@ -1,7 +1,7 @@
 # frame — "ask" clip for the landing page (site/clips/ask.*)
 #
 # Select lines in neovim, ask this frame's claude about them with
-# :'<,'>FrameClaude (mapped to <leader>L in the demo's init.lua).
+# :'<,'>FrameClaude (mapped to <leader>l in the demo's init.lua).
 # Build the sandbox once with assets/clips/make-demo-home.sh (demo repos and
 # demo sessions, never your real ~/.claude/projects), then record from the
 # repo root with:  assets/clips/record.sh assets/ask.tape
@@ -37,7 +37,7 @@ Sleep 300ms
 Type "j"
 Sleep 900ms
 Space
-Type "L"
+Type "l"
 Sleep 700ms
 Type "Why do we retry a 502 here? Could that charge twice?"
 Sleep 900ms

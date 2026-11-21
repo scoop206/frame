@@ -85,7 +85,7 @@ vim.g.mapleader = " "
 vim.o.termguicolors = true
 vim.o.number = true
 vim.o.cursorline = true
-vim.keymap.set("v", "<leader>L", ":FrameClaude ")
+vim.keymap.set("x", "<leader>l", ":FrameClaude ")
 EOF
 
 # seed REPO AGE_SECONDS PROMPT — one real session, made to look AGE old and
