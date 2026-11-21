@@ -63,8 +63,8 @@
 | `frame wt -d [TOPIC]`               | tear down a frame (default: the current one)                                                                                       |
 | `frame shell TOPIC`                 | a frame in the current dir with no branch — just the claude and local buffers                                                      |
 | `frame shell -C DIR TOPIC`          | the same, in DIR (any dir — nothing is written into it)                                                                            |
-| `frame shell TOPIC --find "WORDS"`  | find a past claude session by what you typed in it, pick one, and resume it in the dir it ran in (`--resume ID` for a known id)    |
-| `frame shell TOPIC --recent`       | browse your most recent claude sessions (first message of each), pick one, and resume it (worktree sessions are left out)           |
+| `frame shell [TOPIC] --find "WORDS"` | find a past claude session by what you typed in it, pick one, and resume it in the dir it ran in (`--resume ID` for a known id)    |
+| `frame shell [TOPIC] --recent`     | browse your most recent claude sessions (first message of each), pick one, and resume it (worktree sessions are left out)           |
 | `frame ls`                          | list every live frame across projects                                                                                              |
 | `frame merge [TOPIC]`               | merge a topic branch into the primary branch                                                                                       |
 | `frame push`                        | push the primary branch to origin                                                                                                  |
