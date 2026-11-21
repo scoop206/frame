@@ -477,15 +477,19 @@ frame_session_pick() {
   # The UI goes to stderr / the tty; stdout carries only the id.
   emulate -L zsh
   zmodload -F zsh/datetime b:strftime
-  local _rows=$1 _mt _id _cwd _f _snip _when _where _i
+  local _rows=$1 _mt _id _cwd _f _snip _when _where _i _mark _k _v
   local -a _ids _lines _menu
+  # ● marks a session that's open right now (picking it switches to it).
+  local -A _running
+  while IFS=$'\t' read -r _k _v; do _running[$_k]=$_v; done < <(frame_session_running)
   while IFS=$'\t' read -r _mt _id _cwd _f _snip; do
     [[ -n "$_id" ]] || continue
     strftime -s _when '%Y-%m-%d %H:%M' "$_mt"
     _where=${_cwd/#$HOME/\~}
+    [[ -n "${_running[$_id]:-}" ]] && _mark='● ' || _mark='  '
     _ids+=("$_id")
-    _lines+=("$_when  $_where  $_snip")
-    _menu+=("$_id"$'\t'"$_f"$'\t'"$_when  $_where  $_snip")
+    _lines+=("$_mark$_when  $_where  $_snip")
+    _menu+=("$_id"$'\t'"$_f"$'\t'"$_mark$_when  $_where  $_snip")
   done <<< "$_rows"
   (( $#_ids )) || return 1
 
@@ -495,7 +499,7 @@ frame_session_pick() {
       _preview="zsh -fc 'source \"\$1\"/lib/helpers.sh && frame_session_preview \"\$2\"' _ ${(q)FRAME_ROOT} {2}"
       _pick=$(print -rl -- "${_menu[@]}" | fzf --delimiter=$'\t' --with-nth=3 \
         --no-sort --no-multi --layout=reverse --height=80% \
-        --prompt='resume> ' --header='pick a session to resume (esc to cancel)' \
+        --prompt='resume> ' --header='pick a session to resume (● = open now: switches to it; esc to cancel)' \
         --preview="$_preview" --preview-window='down,50%,wrap' \
         2>/dev/tty) || return 1
       # No `</dev/tty` on fzf: it opens the tty for keys itself, and in zsh
@@ -717,6 +721,43 @@ frame_session_recent() {
     (( ++_n >= _max )) && break
   done
   (( _n ))
+}
+
+frame_session_running() {
+  # frame_session_running — print "SESSION_ID<tab>PID" for each claude session
+  # open right now. Claude Code keeps ~/.claude/sessions/<pid>.json (with its
+  # sessionId) per live interactive session; a file whose pid is dead is stale
+  # debris and skipped. That dir is Claude Code internals, not an API — if it
+  # moves, this prints nothing and sessions just stop showing as running.
+  emulate -L zsh
+  local _f _pid _id
+  for _f in "$HOME/.claude/sessions"/<->.json(N.); do
+    _pid=${_f:t:r}
+    kill -0 "$_pid" 2>/dev/null || continue
+    _id=$(jq -r '.sessionId // empty' "$_f" 2>/dev/null) || continue
+    [[ -n "$_id" ]] && print -r -- "$_id"$'\t'"$_pid"
+  done
+  return 0
+}
+
+frame_proc_env() {
+  # frame_proc_env PID VAR — echo VAR from a running process's environment (one
+  # of yours), or return 1. Linux reads /proc; macOS asks `ps -E`, which
+  # appends the env to the command line — a VAR=value word in there. macOS
+  # hides the env of Apple-signed binaries (/bin/sleep, /bin/zsh…) even from
+  # their owner; claude isn't one, so its env reads fine.
+  emulate -L zsh
+  local _pid=$1 _var=$2 _w
+  if [[ -r /proc/$_pid/environ ]]; then
+    for _w in "${(@0)$(</proc/$_pid/environ)}"; do
+      [[ "$_w" == "$_var="* ]] && { print -r -- "${_w#*=}"; return 0; }
+    done
+    return 1
+  fi
+  for _w in ${=$(ps -E -p "$_pid" -o command= 2>/dev/null)}; do
+    [[ "$_w" == "$_var="* ]] && { print -r -- "${_w#*=}"; return 0; }
+  done
+  return 1
 }
 
 frame_session_last_cwds() {
