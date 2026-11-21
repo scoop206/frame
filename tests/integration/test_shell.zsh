@@ -576,7 +576,7 @@ test_shell_resume_open_session_in_a_frame_switches_to_it() {
   python3 -c 'import socket,sys
 s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$sock"
   printf '%s\t%s\t%s\t%s\n' shell cowpoke '' '' > "$sock.info"
-  local pid=$(_open_session open-1 FRAME_NAME=shell FRAME_TOPIC=cowpoke)
+  local pid=$(_open_session open-1 FRAME_NAME=shell FRAME_TOPIC=cowpoke TERM_PROGRAM=ghostty)
   _decoy_sessions
   # the osascript stub stands in for AppleScript's answer (see test_focus.zsh)
   export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log" FAKE_OSASCRIPT_RESULT=raised
@@ -587,6 +587,30 @@ s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$sock"
   assert_contains "$OUT" "already open in frame shell/cowpoke — switching to it"
   assert_contains "$OUT" "focused shell/cowpoke"
   assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - shell cowpoke"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_shell_resume_open_session_in_a_non_ghostty_frame_names_it() {
+  # Its frame isn't in Ghostty (or this isn't macOS): focus can't raise it,
+  # so name the frame instead of failing inside focus.
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log"
+  local docs="${${:-$SANDBOX/w/docs}:A}"
+  mkdir -p "$docs"
+  _session open-1 "$docs" "the open one"
+  local sock="$FRAME_RUNDIR/$TNAME-cow.nvim"
+  python3 -c 'import socket,sys
+s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$sock"
+  printf '%s\t%s\t%s\t%s\n' shell cowpoke '' '' > "$sock.info"
+  local pid=$(_open_session open-1 FRAME_NAME=shell FRAME_TOPIC=cowpoke TERM_PROGRAM=kitty)
+  _decoy_sessions
+  sleep 0.2
+  run_frame shell --resume open-1
+  kill $pid 2>/dev/null
+  assert_status 1
+  assert_contains "$OUT" "already open in frame shell/cowpoke — switch to that window"
+  assert_not_contains "$OUT" "switching to it"
+  assert_file_absent "$FAKE_OSASCRIPT_LOG"
   assert_file_absent "$FAKE_NVIM_LOG"
 }
 
