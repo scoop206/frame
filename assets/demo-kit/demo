@@ -1,0 +1,286 @@
+#!/usr/bin/env zsh
+# demo — a scene-by-scene kit for recording frame's video demo live in Ghostty.
+#
+#   demo setup --astro REPO   build the sandboxes once (REPO: an Astro project
+#                             with a .frame/config.sh, e.g. ~/git_repos/pdoomtracker)
+#   demo SCENE                reset SCENE, then open its recording shell
+#   demo reset [SCENE]        just reset (all scenes when none given)
+#   demo cues [SCENE]         print a scene's cue card (keep it on another screen)
+#   demo scenes               list the scenes
+#
+# Each SCENE drops you into a clean zsh (no inherited frame/nvim env) with the
+# scene's first command already typed: press Enter to run it, Ctrl-N to type
+# the next one. Record from a fresh Ghostty window, not from inside a frame.
+#
+# Two sandboxes, never your real ~/.claude sessions or username on screen:
+#   DEMO_HOME (/Users/Shared/frame-demo)       demo repos acme-api/-web/-infra
+#                                              and four seeded claude sessions
+#   HERO_HOME (/Users/Shared/frame-demo-hero)  a local clone of the Astro repo
+# Both use your real nvim config and plugins (symlinked) and see this frame
+# checkout at ~/git_repos/frame (where an init.lua may wire bin/buf-preview.sh).
+# The coordinate scene runs under your REAL home: `frame spawn` opens real
+# Ghostty tabs, which start your login shell, so a sandbox HOME can't follow.
+emulate -L zsh
+set -euo pipefail
+setopt extended_glob
+
+KIT=${0:A:h}
+ROOT=${KIT:h:h}
+DEMO_HOME=${DEMO_HOME:-/Users/Shared/frame-demo}
+HERO_HOME=${HERO_HOME:-/Users/Shared/frame-demo-hero}
+SCENES=(wt resume coordinate deliver)
+
+die() { print -u2 "✗ $*"; exit 1; }
+ok()  { print "✓ $*"; }
+
+# fx HOME CMD… — run frame (or anything) as if logged in with HOME, clean env.
+fx() {
+  local h=$1; shift
+  env -i HOME=$h USER=$USER LOGNAME=$USER TERM=${TERM:-xterm-256color} \
+    LANG=${LANG:-en_US.UTF-8} PATH="$ROOT/bin:$(tool_path)" "$@"
+}
+tool_path() {
+  typeset -U d=()
+  local t
+  for t in claude nvim fzf jq git node npm vhs; do (( $+commands[$t] )) && d+=(${commands[$t]:h}); done
+  print -r -- "${(j.:.)d}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+}
+astro_repo() { cat $HERO_HOME/.demo-repo 2>/dev/null || die "no HERO_HOME — run: demo setup --astro REPO"; }
+
+# ── setup ────────────────────────────────────────────────────────────────────
+link_real_nvim() {  # link_real_nvim HOME (also gives HOME a demo git identity)
+  local h=$1
+  [[ -f $h/.gitconfig ]] || print -l '[user]' '	name = demo' '	email = demo@example.com' > $h/.gitconfig
+  mkdir -p $h/.config $h/.local/share $h/git_repos
+  [[ -L $h/.config/nvim ]] || { rm -rf $h/.config/nvim; ln -s ~/.config/nvim $h/.config/nvim; }
+  [[ -e $h/.local/share/nvim ]] || ln -s ~/.local/share/nvim $h/.local/share/nvim
+  [[ -e $h/git_repos/frame ]] || ln -s $ROOT $h/git_repos/frame
+}
+
+setup() {
+  local astro=""
+  [[ "${1:-}" == --astro ]] && { astro=${2:?--astro REPO}; astro=${~astro}; astro=${astro:A}; }
+
+  # DEMO_HOME: demo repos + seeded sessions (make-demo-home.sh), then extras.
+  if [[ ! -d $DEMO_HOME/.claude/projects ]]; then
+    zsh $ROOT/assets/clips/make-demo-home.sh $DEMO_HOME
+  fi
+  link_real_nvim $DEMO_HOME
+  local r
+  for r in acme-api acme-web; do
+    local d=$DEMO_HOME/code/$r
+    if [[ ! -f $d/.frame/config.sh ]]; then
+      mkdir -p $d/.frame/local
+      print -r -- 'BUFFERS=(claude local)' > $d/.frame/config.sh
+      print -r -- '.frame/local/' >> $d/.gitignore
+      git -C $d add -A
+      git -C $d -c user.name=demo -c user.email=demo@example.com commit -qm "frame config"
+    fi
+    # workers commit their step but never merge or push on their own
+    print -l autocommit=true merge_on_commit=false push_on_merge=false deploy_on_merge=false \
+      > $d/.frame/local/kv
+    git -C $d tag -f demo-base >/dev/null
+  done
+  git -C $DEMO_HOME/code/acme-infra tag -f demo-base >/dev/null
+  [[ -d $DEMO_HOME/.claude/projects.pristine ]] \
+    || cp -Rp $DEMO_HOME/.claude/projects $DEMO_HOME/.claude/projects.pristine
+  # the claudes need to know they're in a frame for the coordinate scene
+  fx $DEMO_HOME frame swarm 2 >/dev/null
+  chmod 700 $DEMO_HOME
+  ok "DEMO_HOME ready: $DEMO_HOME"
+
+  # HERO_HOME: a clone of the Astro repo (no remote, no .env).
+  if [[ ! -d $HERO_HOME ]]; then
+    [[ -n "$astro" ]] || die "first setup needs --astro REPO (an Astro project with .frame/config.sh)"
+    [[ -f $astro/.frame/config.sh ]] || die "$astro has no .frame/config.sh"
+    mkdir -p $HERO_HOME/.claude/projects $HERO_HOME/git_repos
+    [[ "$OSTYPE" == darwin* ]] && ln -s ~/Library $HERO_HOME/Library
+    git clone -q $astro $HERO_HOME/git_repos/${astro:t}
+    git -C $HERO_HOME/git_repos/${astro:t} remote remove origin
+    [[ -d $astro/node_modules ]] && cp -cR $astro/node_modules $HERO_HOME/git_repos/${astro:t}/node_modules
+    cp $DEMO_HOME/.claude.json $HERO_HOME/.claude.json
+    jq --arg p $HERO_HOME/git_repos/${astro:t} '.projects = {} | .projects[$p].hasTrustDialogAccepted = true' \
+      $HERO_HOME/.claude.json > $HERO_HOME/.claude.json.tmp && mv $HERO_HOME/.claude.json.tmp $HERO_HOME/.claude.json
+    print -r -- $HERO_HOME/git_repos/${astro:t} > $HERO_HOME/.demo-repo
+  elif [[ ! -f $HERO_HOME/.demo-repo ]]; then
+    [[ -n "$astro" && -d $HERO_HOME/git_repos/${astro:t} ]] \
+      || die "$HERO_HOME exists without a clone — pass --astro REPO, or remove it"
+    print -r -- $HERO_HOME/git_repos/${astro:t} > $HERO_HOME/.demo-repo
+  fi
+  link_real_nvim $HERO_HOME
+  chmod 600 $HERO_HOME/.claude.json $DEMO_HOME/.claude.json
+  chmod 700 $HERO_HOME
+  ok "HERO_HOME ready: $HERO_HOME ($(astro_repo))"
+}
+
+# ── reset ────────────────────────────────────────────────────────────────────
+# teardown HOME REPO_DIR — remove every non-primary worktree frame of REPO_DIR
+# and put its primary back on demo-base (or its default branch head).
+teardown_repo() {
+  local h=$1 d=$2 wt topic
+  for wt in ${(f)"$(git -C $d worktree list --porcelain | sed -n 's/^worktree //p' | tail -n +2)"}; do
+    topic=$(git -C $wt branch --show-current 2>/dev/null || true)
+    [[ -n "$topic" ]] && (cd $d && fx $h frame wt -d -f $topic </dev/null >/dev/null 2>&1) || true
+    [[ -d $wt ]] && git -C $d worktree remove --force $wt 2>/dev/null || true
+  done
+  git -C $d worktree prune
+  git -C $d checkout -q -f $(git -C $d rev-parse --abbrev-ref HEAD) 2>/dev/null || true
+  if git -C $d rev-parse -q --verify demo-base >/dev/null; then
+    git -C $d reset -q --hard demo-base
+  else
+    git -C $d reset -q --hard
+  fi
+  git -C $d clean -qfd -e .frame/local
+  local b
+  for b in ${(f)"$(git -C $d for-each-ref --format='%(refname:short)' refs/heads)"}; do
+    [[ "$b" == "$(git -C $d branch --show-current)" ]] || git -C $d branch -qD $b
+  done
+}
+
+reset_wt() { local d=$(astro_repo); teardown_repo $HERO_HOME $d; ok "wt: ${d:t} back on its base, no frames"; }
+
+reset_resume() {
+  (cd $DEMO_HOME/code/acme-api && fx $DEMO_HOME frame shell -d acme-api </dev/null >/dev/null 2>&1) || true
+  rm -rf $DEMO_HOME/.claude/projects
+  cp -Rp $DEMO_HOME/.claude/projects.pristine $DEMO_HOME/.claude/projects
+  # keep the picker's "yesterday" true: shift the four sessions to now
+  local f age newest=0 m
+  for f in $DEMO_HOME/.claude/projects/*/*.jsonl(N); do
+    m=$(stat -f %m $f); (( m > newest )) && newest=$m
+  done
+  zmodload zsh/datetime
+  age=$(( EPOCHSECONDS - 1200 - newest ))
+  for f in $DEMO_HOME/.claude/projects/*/*.jsonl(N); do
+    m=$(stat -f %m $f)
+    touch -t $(strftime '%Y%m%d%H%M.%S' $(( m + age ))) $f
+  done
+  git -C $DEMO_HOME/code/acme-api checkout -q .
+  ok "resume: sessions restored, newest one 20 minutes old"
+}
+
+reset_coordinate() {
+  local r
+  for r in acme-api acme-web; do teardown_repo $HOME $DEMO_HOME/code/$r; done
+  fx $HOME frame shell -d coordinator </dev/null >/dev/null 2>&1 || true
+  ok "coordinate: acme-api/acme-web clean, no worker frames"
+}
+
+reset_deliver() {
+  local d=$DEMO_HOME/code/acme-api
+  teardown_repo $DEMO_HOME $d
+  local wt=${d:h}/_acme-api-retry-backoff
+  git -C $d worktree add -q -b retry-backoff $wt
+  perl -0pi -e 's/    if \(res.status === 502\) continue;/    if (res.status === 502) {\n      await sleep(2 ** attempt * 250);\n      continue;\n    }/' $wt/src/webhooks.ts
+  git -C $wt -c user.name=claude -c user.email=demo@example.com commit -qam "webhooks: back off between 502 retries"
+  ok "deliver: retry-backoff has one commit, ready for frame merge"
+}
+
+# ── cue cards ────────────────────────────────────────────────────────────────
+# cmds_SCENE: shell commands, typed for you (Enter runs, Ctrl-N types the next)
+cmds_wt=("frame wt shorter-lead")
+cmds_resume=("frame shell --recent")
+cmds_coordinate=("frame shell coordinator" "frame ls")
+cmds_deliver=("git log --oneline -1 retry-backoff" "frame merge retry-backoff" "frame wt -d retry-backoff" "frame kv")
+
+card() {
+  case $1 in
+  wt) cat <<'EOF'
+SCENE 2+3 — ONE COMMAND, ONE FRAME / VIM RUNS THE CLAUDES   (HERO_HOME)
+  shell   frame wt shorter-lead                     [Enter]
+  say     "A branch, a worktree, its own ports, and Neovim with claude,
+           a shell and the dev server as buffers."
+  claude  the homepage lead paragraph runs long. give me two tighter
+          versions, no edits yet                      (cut the wait)
+  keys    Ctrl-\ Ctrl-n        leave claude's terminal
+          <space>b  vite       the live preview, then the astro log
+          <space>f  pages/index.astro
+          /class="lead"  Enter   j  V  j            select the lead
+          <space>l  use your first version here     Enter
+          (cut the wait) Ctrl-\ Ctrl-n  Ctrl-w h    the edit is in the file
+  marks   back in claude: Ctrl-\ Ctrl-n, k up to its answer, ma
+          i  "now give me a third version"  … then Ctrl-\ Ctrl-n  `a
+  say     "Every claude is a buffer, so the whole of Vim works on it."
+EOF
+  ;;
+  resume) cat <<'EOF'
+SCENE 4 — NEVER RE-EXPLAIN   (DEMO_HOME, ~/code/acme-api)
+  shell   frame shell --recent                      [Enter]
+  keys    ↓ ↓ to browse (preview shows what you typed), ↑ ↑ back to the
+          webhook session, Enter
+  say     "It resumes in the directory it ran in, with everything we
+           already worked out."
+  claude  processor team confirmed: a 502 can still capture the charge.
+          go ahead with the idempotency key           (cut the wait)
+  mention frame shell --find "double charging"   when you remember what
+          you said but not when
+EOF
+  ;;
+  coordinate) cat <<'EOF'
+SCENE 5 — ONE COORDINATOR, MANY WORKERS   (REAL HOME, /Users/Shared/frame-demo/code)
+  before  finish or close your other frames: `frame ls` and the
+          coordinator's own lookups show every live frame on camera.
+          macOS + Ghostty only (spawn opens real tabs).
+  shell   frame shell coordinator                   [Enter]
+  say     "A shell frame has no worktree. It doesn't write code, it plans."
+  claude  checkout is double-charging. In acme-api, add an idempotency key
+          to the webhook retry. In acme-web, show "payment pending" in the
+          cart while it retries. Spawn a worktree frame in each repo, frame
+          req them the work, and report back when both reply.
+  watch   two tabs open (acme-api/…, acme-web/…), each boots its own claude
+  shell   (in a spare tab) frame ls                 [Ctrl-N types it]
+  say     "Each worker has its own branch and ports. Replies land in the
+           coordinator's inbox."
+EOF
+  ;;
+  deliver) cat <<'EOF'
+SCENE 6 — DELIVER AND CLEAN UP   (DEMO_HOME, ~/code/acme-api)
+  shell   git log --oneline -1 retry-backoff        the worker's commit
+          frame merge retry-backoff                 [Ctrl-N, Enter]
+  say     "Merge refuses a dirty main, fast-forwards first, and aborts
+           cleanly on a conflict."
+          frame wt -d retry-backoff                 worktree, branch and
+                                                    its dev servers gone
+          frame kv                                  how far agents go alone
+  say     "autocommit, merge, push, deploy, spawn: per frame, per project,
+           or for everything."
+EOF
+  ;;
+  *) die "no scene '$1' (scenes: $SCENES)" ;;
+  esac
+}
+
+# ── the recording shell ──────────────────────────────────────────────────────
+record_shell() {  # record_shell SCENE HOME CWD
+  local scene=$1 h=$2 cwd=$3
+  local cf=$(mktemp -t demo-cues)
+  print -rl -- "${(@P)${:-cmds_$1}}" > $cf
+  card $scene
+  print "\n── recording shell: Enter runs the typed command, Ctrl-N types the next,"
+  print "   Ctrl-L clears this card, exit when done ──"
+  exec env -i HOME=$h USER=$USER LOGNAME=$USER SHELL=/bin/zsh \
+    TERM=${TERM:-xterm-256color} COLORTERM=${COLORTERM:-truecolor} LANG=${LANG:-en_US.UTF-8} \
+    ${TERM_PROGRAM:+TERM_PROGRAM=$TERM_PROGRAM} ${TERM_PROGRAM_VERSION:+TERM_PROGRAM_VERSION=$TERM_PROGRAM_VERSION} \
+    ${GHOSTTY_RESOURCES_DIR:+GHOSTTY_RESOURCES_DIR=$GHOSTTY_RESOURCES_DIR} \
+    ${GHOSTTY_BIN_DIR:+GHOSTTY_BIN_DIR=$GHOSTTY_BIN_DIR} \
+    PATH="$ROOT/bin:$(tool_path)" ZDOTDIR=$KIT/zdotdir DEMO_CUES=$cf DEMO_CWD=$cwd \
+    zsh -i
+}
+
+run_scene() {
+  case $1 in
+  wt)         reset_wt;         record_shell wt $HERO_HOME $(astro_repo) ;;
+  resume)     reset_resume;     record_shell resume $DEMO_HOME $DEMO_HOME/code/acme-api ;;
+  coordinate) reset_coordinate; record_shell coordinate $HOME $DEMO_HOME/code ;;
+  deliver)    reset_deliver;    record_shell deliver $DEMO_HOME $DEMO_HOME/code/acme-api ;;
+  *) die "no scene '$1' (scenes: $SCENES)" ;;
+  esac
+}
+
+case ${1:-} in
+  setup)  shift; setup "$@" ;;
+  reset)  shift; if (( $# )); then reset_$1; else for s in $SCENES; do reset_$s; done; fi ;;
+  cues)   shift; if (( $# )); then card $1; else for s in $SCENES; do card $s; print; done; fi ;;
+  scenes) print -l $SCENES ;;
+  ""|-h|--help) sed -n '2,24p' ${0:A} | sed 's/^# \{0,1\}//' ;;
+  *)      run_scene $1 ;;
+esac
