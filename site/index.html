@@ -113,6 +113,7 @@ ul.ticks li::before { content: "→"; position: absolute; left: 0; color: var(--
 
 .tip { margin-top: 56px; padding: 32px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; align-items: start; }
 .tip h3 { font-size: 22px; margin-bottom: 14px; }
+.tip p { color: var(--fg-dim); margin: 0 0 16px; max-width: 62ch; }
 @media (max-width: 560px) { .tip { padding: 20px; } }
 
 .cta { text-align: center; padding: 112px 0; background: radial-gradient(ellipse at 50% 0%, rgba(217,119,87,.12), transparent 65%); }
@@ -203,6 +204,24 @@ footer a:hover { color: var(--fg); }
       </video>
     </div>
     <p class="hero-caption">One frame on an Astro site: Claude, a shell and <code>astro dev</code> as buffers, and a selection carried from the code to Claude.</p>
+    <div class="tip split">
+      <div>
+        <p class="kicker">vim trick</p>
+        <h3>Bookmark the answer worth keeping.</h3>
+        <p>The Claude session is a buffer, so Vim marks work in it. When Claude gives you a table, a plan or a diff you'll want again, drop a mark on it. Then keep the conversation going as long as you like and jump straight back to that reference point.</p>
+        <p>Uppercase marks are global: set <code>mT</code> on the table and <code>`T</code> brings you back to it from any file in the frame.</p>
+      </div>
+      <div class="term">
+        <div class="term-bar"><i></i><i></i><i></i><b>nvim · claude</b></div>
+<pre><span class="dim"># in the claude buffer, normal mode (Ctrl-\ Ctrl-n)</span>
+<span class="hl">ma</span>        <span class="dim">mark the answer with the good table</span>
+<span class="hl">i</span>         <span class="dim">back to the prompt: keep talking</span>
+          <span class="dim">… twenty turns later …</span>
+<span class="hl">`a</span>        <span class="dim">jump straight back to the table</span>
+
+<span class="hl">mT</span> / <span class="hl">`T</span>   <span class="dim">uppercase: works from any buffer</span></pre>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -226,50 +245,6 @@ footer a:hover { color: var(--fg); }
         <source src="clips/resume.webm" type="video/webm">
         <source src="clips/resume.mp4" type="video/mp4">
       </video>
-    </div>
-  </div>
-</section>
-
-<section id="ask">
-  <div class="wrap">
-    <div class="intro">
-      <div>
-        <p class="kicker">ask</p>
-        <h2>Question anything on screen, from Neovim.</h2>
-        <p>Reviewing what Claude wrote? Select the lines, run <code>:'&lt;,'&gt;FrameClaude</code> with your question, and the selection (<code>file:line</code> plus the source) lands in this frame's Claude, already submitted. Then you talk it through.</p>
-      </div>
-      <div>
-        <p>Map it to a key once and it's two keystrokes:</p>
-        <div class="term">
-<pre><span class="dim">-- init.lua</span>
-vim.keymap.set(<span class="ok">'x'</span>, <span class="ok">'&lt;leader&gt;l'</span>, <span class="ok">':FrameClaude '</span>)</pre>
-        </div>
-      </div>
-    </div>
-    <div class="term clip">
-      <video autoplay muted loop playsinline preload="metadata" poster="clips/ask.jpg" width="1200" height="680" aria-label="Two lines selected in Neovim, leader-l, a question typed; the frame's Claude opens in a split and answers about the selection">
-        <source src="clips/ask.webm" type="video/webm">
-        <source src="clips/ask.mp4" type="video/mp4">
-      </video>
-    </div>
-
-    <div class="tip split">
-      <div>
-        <p class="kicker">vim trick</p>
-        <h3>Bookmark the answer worth keeping.</h3>
-        <p>The Claude session is a buffer, so Vim marks work in it. When Claude gives you a table, a plan or a diff you'll want again, drop a mark on it. Then keep the conversation going as long as you like and jump straight back to that reference point.</p>
-        <p>Uppercase marks are global: set <code>mT</code> on the table and <code>`T</code> brings you back to it from any file in the frame.</p>
-      </div>
-      <div class="term">
-        <div class="term-bar"><i></i><i></i><i></i><b>nvim · claude</b></div>
-<pre><span class="dim"># in the claude buffer, normal mode (Ctrl-\ Ctrl-n)</span>
-<span class="hl">ma</span>        <span class="dim">mark the answer with the good table</span>
-<span class="hl">i</span>         <span class="dim">back to the prompt: keep talking</span>
-          <span class="dim">… twenty turns later …</span>
-<span class="hl">`a</span>        <span class="dim">jump straight back to the table</span>
-
-<span class="hl">mT</span> / <span class="hl">`T</span>   <span class="dim">uppercase: works from any buffer</span></pre>
-      </div>
     </div>
   </div>
 </section>
