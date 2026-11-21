@@ -6,7 +6,10 @@
 # (~/git_repos/pdoomtracker there, origin removed, node_modules copied, no .env)
 # whose nvim config and plugins are symlinks to the real ones, so the editor is
 # the real setup while claude starts clean and paths print as ~/…, never your
-# username. From the frame repo root:
+# username. Also link ~/git_repos/frame there to the real frame checkout: an
+# init.lua that wires bin/buf-preview.sh by that path (docs/fzf-buffer-previews.md)
+# otherwise falls back to "File not found vite" in the <leader>b picker.
+# From the frame repo root:
 #   DEMO_HOME=/Users/Shared/frame-demo-hero assets/clips/record.sh assets/demo.tape
 # then tear the frame down:  frame wt -d shorter-lead  (same HOME).
 # Hide/Show cut out the waits (and frame's boot lines, which print paths).
