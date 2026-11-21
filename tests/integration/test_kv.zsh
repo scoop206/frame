@@ -186,4 +186,126 @@ test_swarm_block_carries_kv_values() {
   assert_contains "$OUT" "frame kv get KEY"
 }
 
+# ── custom keys ───────────────────────────────────────────────────────────────
+
+declare_keys() {
+  # Committed project declarations in the primary checkout.
+  mkdir -p "$REPO/.frame"
+  cat > "$REPO/.frame/kv.defaults" <<'EOF'
+# Language the agent writes review comments in.
+# Any ISO 639-1 code.
+review_lang=en
+
+# Run the e2e suite before each commit.
+run_e2e=false
+EOF
+}
+
+test_custom_keys_listed_with_origin() {
+  setup_frame
+  declare_keys
+  run_frame kv
+  assert_status 0
+  assert_contains "$OUT" "review_lang"
+  assert_contains "$OUT" "default (project)"
+}
+
+test_custom_string_key_round_trip() {
+  setup_frame
+  declare_keys
+  run_frame kv set review_lang "pt br"
+  assert_status 0
+  assert_contains "$OUT" "review_lang=pt br (frame)"
+  run_frame kv get review_lang
+  assert_eq "$OUT" "pt br"
+  run_frame kv unset review_lang
+  assert_contains "$OUT" "now review_lang=en from default (project)"
+}
+
+test_custom_bool_key_is_validated() {
+  setup_frame
+  declare_keys
+  run_frame kv set run_e2e yes
+  assert_status 2
+  assert_contains "$OUT" "takes true or false"
+}
+
+test_unknown_key_says_how_to_declare() {
+  setup_frame
+  run_frame kv get review_lang
+  assert_status 2
+  assert_contains "$OUT" ".frame/kv.defaults"
+}
+
+test_user_declared_key_works_outside_a_project() {
+  mkdir -p "$SANDBOX/nowhere" "$HOME/.config/frame"; cd "$SANDBOX/nowhere"
+  print -r -- "editor_theme=dark" > "$HOME/.config/frame/kv.defaults"
+  run_frame kv get editor_theme
+  assert_eq "$OUT" dark
+  run_frame kv set --user editor_theme light
+  assert_status 0
+  run_frame kv get editor_theme
+  assert_eq "$OUT" light
+}
+
+test_agent_guard_on_custom_keys() {
+  setup_frame
+  declare_keys
+  export CLAUDECODE=1
+  run_frame kv set review_lang de
+  assert_status 1
+  assert_contains "$OUT" "can't set a string key"
+  assert_contains "$OUT" "frame kv set review_lang de"
+  run_frame kv set run_e2e true
+  assert_status 1
+  run_frame kv set run_e2e false
+  assert_status 0
+  run_frame kv unset run_e2e
+  assert_status 1
+}
+
+test_describe_one_and_all() {
+  setup_frame
+  declare_keys
+  run_frame kv describe review_lang
+  assert_status 0
+  assert_contains "$OUT" "review_lang = en  from default (project)"
+  assert_contains "$OUT" "string, default en, declared project"
+  assert_contains "$OUT" "Any ISO 639-1 code."
+  run_frame kv describe
+  assert_status 0
+  assert_contains "$OUT" "autocommit = false  from default"
+  assert_contains "$OUT" "boolean, default false, declared built-in"
+  assert_contains "$OUT" "run_e2e = false"
+  run_frame kv describe nope
+  assert_status 2
+}
+
+test_redeclared_builtin_warns_in_list() {
+  setup_frame
+  mkdir -p "$REPO/.frame"
+  print -r -- "autocommit=true" > "$REPO/.frame/kv.defaults"
+  run_frame kv
+  assert_status 0
+  assert_contains "$OUT" "autocommit is a built-in key"
+  run_frame kv get autocommit
+  assert_eq "$OUT" false
+}
+
+test_swarm_block_lists_custom_keys() {
+  setup_frame
+  run_frame swarm 1
+  export FRAME_NAME=$TNAME FRAME_TOPIC=feature
+  run_frame swarm --context
+  assert_not_contains "$OUT" "Custom keys"
+  assert_not_contains "$OUT" "@KV_CUSTOM@"
+  declare_keys
+  run_frame swarm --context
+  assert_status 0
+  assert_contains "$OUT" "review_lang=en"
+  assert_contains "$OUT" "Custom keys (frame kv describe KEY for more):"
+  assert_contains "$OUT" "review_lang → Language the agent writes review comments in."
+  assert_not_contains "$OUT" "Any ISO 639-1 code."
+}
+
 run_tests "$0"

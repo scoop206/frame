@@ -728,17 +728,20 @@ end, {
   desc = 'Silence frame notify banners (off to unsilence)',
 })
 
--- ── :FrameKv / :FrameKvGet / :FrameKvSet / :FrameKvUnset ──────────────────────
+-- ── :FrameKv / :FrameKvGet / :FrameKvSet / :FrameKvUnset / :FrameKvDescribe ──
 -- Thin passthroughs to `frame kv` (the layered autocommit / merge_on_commit /
--- push_on_merge / deploy_on_merge settings) — all layer logic lives in the CLI,
--- which agents use too. Run from this frame's worktree (or, for a shell frame,
--- nvim's cwd + the FRAME_NAME/FRAME_TOPIC env) so `frame kv` resolves THIS
--- frame. CLAUDECODE is cleared: an ex command is typed by the human, and kv
--- refuses to grant settings to anything that looks like a claude.
+-- push_on_merge / deploy_on_merge settings, plus any keys the project or user
+-- declared) — all layer logic lives in the CLI, which agents use too. Run from
+-- this frame's worktree (or, for a shell frame, nvim's cwd + the
+-- FRAME_NAME/FRAME_TOPIC env) so `frame kv` resolves THIS frame. CLAUDECODE is
+-- cleared: an ex command is typed by the human, and kv refuses to grant
+-- settings to anything that looks like a claude.
 --   :FrameKv                                   list values + source layer
 --   :FrameKvGet KEY
---   :FrameKvSet [--project|--user] KEY VALUE   (default: this frame)
+--   :FrameKvSet [--project|--user] KEY VALUE   (default: this frame; a string
+--                                               VALUE may contain spaces)
 --   :FrameKvUnset [--project|--user] KEY
+--   :FrameKvDescribe [KEY]                     meaning, type, default, origin
 local kv_frame_bin = (vim.env.FRAME_ROOT or '') .. '/bin/frame'
 local kv_cwd = (vim.env.FRAME_WT ~= nil and vim.env.FRAME_WT ~= '') and vim.env.FRAME_WT or nil
 
@@ -752,20 +755,35 @@ local function kv_run(args)
     end)
 end
 
--- Known keys come straight from the defaults file (no process per <Tab>).
-local function kv_keys()
-  local keys = {}
-  local path = (vim.env.FRAME_ROOT or '') .. '/kv.defaults'
-  if vim.fn.filereadable(path) == 1 then
-    for _, line in ipairs(vim.fn.readfile(path)) do
-      local k = line:match('^([a-z][a-z0-9_]*)=')
-      if k then table.insert(keys, k) end
+-- Declared keys come straight from the declaration files (no process per
+-- <Tab>), in the CLI's order: frame's built-ins, the project's (committed, in
+-- the primary checkout), the user's. Value maps key → declared default, so
+-- completion knows which keys are boolean.
+local function kv_decls()
+  local keys, defaults = {}, {}
+  local cfg = (vim.env.XDG_CONFIG_HOME ~= nil and vim.env.XDG_CONFIG_HOME ~= '')
+    and vim.env.XDG_CONFIG_HOME or (vim.env.HOME .. '/.config')
+  local paths = { (vim.env.FRAME_ROOT or '') .. '/kv.defaults' }
+  if (vim.env.FRAME_MAIN_WT or '') ~= '' then
+    table.insert(paths, vim.env.FRAME_MAIN_WT .. '/.frame/kv.defaults')
+  end
+  table.insert(paths, cfg .. '/frame/kv.defaults')
+  for _, path in ipairs(paths) do
+    if vim.fn.filereadable(path) == 1 then
+      for _, line in ipairs(vim.fn.readfile(path)) do
+        local k, v = line:match('^([a-z][a-z0-9_]*)=(.*)$')
+        if k and defaults[k] == nil then
+          table.insert(keys, k)
+          defaults[k] = v
+        end
+      end
     end
   end
-  return keys
+  return keys, defaults
 end
 
 -- Complete scope flag → key → value, by position (a leading flag shifts it).
+-- Values are offered only for boolean keys; a string's value is free text.
 local function kv_complete(with_scope, with_value)
   return function(arglead, cmdline)
     local words = vim.split(cmdline, '%s+', { trimempty = true })
@@ -773,12 +791,15 @@ local function kv_complete(with_scope, with_value)
     if arglead ~= '' then n = n - 1 end        -- …not counting the one in progress
     local flagged = words[2] and words[2]:match('^%-%-') ~= nil
     if flagged then n = n - 1 end
+    local keys, defaults = kv_decls()
     local items
     if n == 0 then
-      items = kv_keys()
+      items = keys
       if with_scope and not flagged then vim.list_extend(items, { '--project', '--user' }) end
     elseif n == 1 and with_value then
-      items = { 'true', 'false' }
+      local key = words[flagged and 3 or 2]
+      local d = defaults[key]
+      items = (d == 'true' or d == 'false') and { 'true', 'false' } or {}
     else
       items = {}
     end
@@ -793,13 +814,25 @@ vim.api.nvim_create_user_command('FrameKvGet', function(opts)
 end, { nargs = 1, complete = kv_complete(false, false),
   desc = 'Print one frame kv setting' })
 vim.api.nvim_create_user_command('FrameKvSet', function(opts)
-  kv_run({ 'set', unpack(opts.fargs) })
+  -- Re-join everything after KEY, so a string value may contain spaces.
+  local args = vim.deepcopy(opts.fargs)
+  local k = (args[1] and args[1]:match('^%-%-')) and 2 or 1
+  if #args > k + 1 then
+    local val = table.concat(vim.list_slice(args, k + 1), ' ')
+    args = vim.list_slice(args, 1, k)
+    table.insert(args, val)
+  end
+  kv_run(vim.list_extend({ 'set' }, args))
 end, { nargs = '+', complete = kv_complete(true, true),
   desc = 'Set a frame kv setting ([--project|--user] KEY VALUE; default: this frame)' })
 vim.api.nvim_create_user_command('FrameKvUnset', function(opts)
   kv_run({ 'unset', unpack(opts.fargs) })
 end, { nargs = '+', complete = kv_complete(true, false),
   desc = 'Unset a frame kv setting ([--project|--user] KEY)' })
+vim.api.nvim_create_user_command('FrameKvDescribe', function(opts)
+  kv_run({ 'describe', unpack(opts.fargs) })
+end, { nargs = '?', complete = kv_complete(false, false),
+  desc = 'What a frame kv setting means: type, default, where declared (all when bare)' })
 
 -- ── :[range]FrameClaude [question] ────────────────────────────────────────────
 -- Opens THIS frame's live claude terminal in a far-right vertical split and drops

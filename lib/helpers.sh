@@ -244,13 +244,14 @@ frame_kvfile_unset() {
 
 # ── frame kv: layered agent-behavior settings ─────────────────────────────────
 # Settings that tell a frame's claude how far to carry its work on its own
-# (autocommit, merge_on_commit, push_on_merge, deploy_on_merge, spawn_frames — the full list,
-# with meanings, is the defaults file). Four layers, first hit wins:
+# (autocommit, merge_on_commit, push_on_merge, deploy_on_merge, spawn_frames —
+# the full list, with meanings, is the defaults file), plus any keys a project or
+# user declares for itself (below). Four value layers, first hit wins:
 #
 #   frame    ~/.local/share/frame/kv/<NAME>/<TOPIC>   one frame; reaped by frame wt -d
 #   project  <primary checkout>/.frame/local/kv        every frame of one project
 #   user     ~/.config/frame/kv                        every project on this machine
-#   default  $FRAME_ROOT/kv.defaults                   shipped with frame
+#   default  the declared default (see declarations)
 #
 # Deliberately files, not environment variables: a process's env is frozen at
 # its start, so a value exported at boot (or set later in some other buffer)
@@ -260,28 +261,102 @@ frame_kvfile_unset() {
 # block frame merge's clean-tree guard). The frame layer is under $HOME rather
 # than $FRAME_RUNDIR because /tmp is reaped after a few idle days.
 #
+# Declarations — which keys exist, their default, and what they mean — come
+# from up to three files in kv.defaults format (a `key=default` line, its
+# meaning in the comment block right above it; first comment line = the
+# one-line description), read in this order:
+#
+#   builtin  $FRAME_ROOT/kv.defaults                   shipped with frame
+#   project  <primary checkout>/.frame/kv.defaults     committed; the team's keys
+#   user     ~/.config/frame/kv.defaults               this machine's own keys
+#
+# The first declaration of a key wins: a project or user file can't redefine a
+# built-in (warned and ignored — change its VALUE in a layer instead), and a
+# project declaration beats a user one. A default of true/false makes the key
+# boolean (true grants, false restrains); anything else makes it a string.
+# Frame itself only stores and advertises custom keys — agents, hooks, and
+# scripts read them with `frame kv get`.
+#
 # Callers first pick WHOSE settings to read with frame_kv_scope, then query.
 
 FRAME_KV_DEFAULTS="$FRAME_ROOT/kv.defaults"
 FRAME_KV_LAYERS=(frame project user default)
+FRAME_KV_DECL_SOURCES=(builtin project user)
 
 frame_kv_scope() {
   # frame_kv_scope NAME TOPIC MAIN_WT — point the kv lookups at one frame. Any
   # argument may be empty: no NAME/TOPIC drops the frame layer, no MAIN_WT the
-  # project layer (a shell frame has no primary checkout).
+  # project layer and project declarations (a shell frame has no primary
+  # checkout). Loads the declarations for that scope.
   local _name=$1 _topic=$2 _main=$3
-  typeset -gA FRAME_KV_FILE
+  local _cfg="${XDG_CONFIG_HOME:-$HOME/.config}/frame"
+  typeset -gA FRAME_KV_FILE FRAME_KV_DECL_FILE
   FRAME_KV_FILE=(
     frame   ""
     project ""
-    user    "${XDG_CONFIG_HOME:-$HOME/.config}/frame/kv"
-    default "$FRAME_KV_DEFAULTS"
+    user    "$_cfg/kv"
+    default ""
+  )
+  FRAME_KV_DECL_FILE=(
+    builtin "$FRAME_KV_DEFAULTS"
+    project ""
+    user    "$_cfg/kv.defaults"
   )
   if [[ -n "$_name" && -n "$_topic" ]]; then
     # A topic may contain '/' (feature/x) — flatten so it stays one file.
     FRAME_KV_FILE[frame]="$HOME/.local/share/frame/kv/$_name/${_topic//\//%}"
   fi
-  [[ -n "$_main" ]] && FRAME_KV_FILE[project]="$_main/.frame/local/kv"
+  if [[ -n "$_main" ]]; then
+    FRAME_KV_FILE[project]="$_main/.frame/local/kv"
+    FRAME_KV_DECL_FILE[project]="$_main/.frame/kv.defaults"
+  fi
+  _frame_kv_load_decls
+  return 0
+}
+
+_frame_kv_load_decls() {
+  # Parse FRAME_KV_DECL_FILE into globals:
+  #   FRAME_KV_KEYS          declared keys, in declaration order
+  #   FRAME_KV_DEF[k]        default value
+  #   FRAME_KV_DESC[k]       comment block, '#' stripped, newline-joined
+  #   FRAME_KV_FROM[k]       builtin | project | user
+  #   FRAME_KV_WARNINGS      clashes and malformed lines (shown by `frame kv`)
+  typeset -ga FRAME_KV_KEYS FRAME_KV_WARNINGS
+  typeset -gA FRAME_KV_DEF FRAME_KV_DESC FRAME_KV_FROM
+  FRAME_KV_KEYS=() FRAME_KV_WARNINGS=() FRAME_KV_DEF=() FRAME_KV_DESC=() FRAME_KV_FROM=()
+  local _src _file _line _k _v _n
+  local -a _block
+  for _src in $FRAME_KV_DECL_SOURCES; do
+    _file=${FRAME_KV_DECL_FILE[$_src]:-}
+    [[ -n "$_file" && -f "$_file" ]] || continue
+    _block=() _n=0
+    for _line in "${(@f)$(<$_file)}"; do
+      (( ++_n ))
+      if [[ "$_line" == \#* ]]; then
+        _line=${_line#\#}; _block+=("${_line# }")
+        continue
+      fi
+      if [[ -z "${_line//[[:space:]]/}" ]]; then
+        _block=(); continue
+      fi
+      _k=${_line%%=*} _v=${_line#*=}
+      if [[ "$_line" != *=* || "$_k" != [a-z]* || "$_k" == *[^a-z0-9_]* ]]; then
+        FRAME_KV_WARNINGS+=("$_file:$_n: not a declaration (want key=default, key like my_key) — skipped")
+      elif [[ -n "${FRAME_KV_FROM[$_k]:-}" ]]; then
+        if [[ "${FRAME_KV_FROM[$_k]}" == builtin ]]; then
+          FRAME_KV_WARNINGS+=("$_file:$_n: $_k is a built-in key — declaration ignored (set its value with frame kv set)")
+        elif [[ "${FRAME_KV_DEF[$_k]}" != "$_v" ]]; then
+          FRAME_KV_WARNINGS+=("$_file:$_n: $_k is already declared by the ${FRAME_KV_FROM[$_k]} (default ${FRAME_KV_DEF[$_k]}) — this one is ignored")
+        fi
+      else
+        FRAME_KV_KEYS+=("$_k")
+        FRAME_KV_DEF[$_k]=$_v
+        FRAME_KV_DESC[$_k]=${(pj:\n:)_block}
+        FRAME_KV_FROM[$_k]=$_src
+      fi
+      _block=()
+    done
+  done
   return 0
 }
 
@@ -298,12 +373,26 @@ frame_kv_scope_self() {
   fi
 }
 
+_frame_kv_ensure_scope() {
+  # Unscoped callers still see the built-in (and user) declarations.
+  (( ${+FRAME_KV_DECL_FILE} )) || frame_kv_scope "" "" ""
+}
+
 frame_kv_lookup() {
   # frame_kv_lookup KEY — set KV_VALUE to KEY's effective value and KV_LAYER to
-  # the layer it came from; return 1 (both empty) when no layer sets it. Sets
-  # globals rather than printing so the caller gets both without a subshell.
+  # the layer it came from; return 1 (both empty) when no layer sets it. A
+  # declared default reports as "default", or "default (project|user)" for a
+  # custom key. Sets globals rather than printing so the caller gets both
+  # without a subshell.
+  _frame_kv_ensure_scope
   local _layer _file _v
   for _layer in $FRAME_KV_LAYERS; do
+    if [[ "$_layer" == default ]]; then
+      (( ${+FRAME_KV_DEF[$1]} )) || continue
+      KV_VALUE=${FRAME_KV_DEF[$1]} KV_LAYER=default
+      [[ "${FRAME_KV_FROM[$1]}" == builtin ]] || KV_LAYER+=" (${FRAME_KV_FROM[$1]})"
+      return 0
+    fi
     _file=${FRAME_KV_FILE[$_layer]:-}
     [[ -n "$_file" ]] || continue
     if _v=$(frame_kvfile_get "$_file" "$1"); then
@@ -323,19 +412,22 @@ frame_kv_get() {
 
 frame_kv_is_true() {
   # frame_kv_is_true KEY — succeed iff KEY resolves to true (in the current
-  # scope). Anything else — false, unset, junk — is false: every setting
-  # grants autonomy, so the fail-safe reading is "no".
+  # scope). Anything else — false, unset, junk — is false: every boolean
+  # setting grants autonomy, so the fail-safe reading is "no".
   [[ "$(frame_kv_get "$1")" == true ]]
 }
 
 frame_kv_keys() {
-  # Print the known keys, one per line, in defaults-file order.
-  [[ -f "$FRAME_KV_DEFAULTS" ]] || return 0
-  local _line
-  for _line in "${(@f)$(<$FRAME_KV_DEFAULTS)}"; do
-    [[ "$_line" == [a-z]*=* ]] && print -r -- "${_line%%=*}"
-  done
+  # Print the declared keys, one per line: built-ins, then project, then user.
+  _frame_kv_ensure_scope
+  (( $#FRAME_KV_KEYS )) && print -rl -- "${FRAME_KV_KEYS[@]}"
   return 0
+}
+
+frame_kv_is_bool() {
+  # frame_kv_is_bool KEY — succeed iff KEY's declared default is true/false.
+  _frame_kv_ensure_scope
+  [[ "${FRAME_KV_DEF[$1]:-}" == (true|false) ]]
 }
 
 frame_export_claude_flags() {
