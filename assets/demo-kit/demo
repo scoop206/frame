@@ -341,10 +341,17 @@ SCENE 5 — ONE COORDINATOR, MANY WORKERS   (REAL HOME, /Users/Shared/frame-demo
           macOS + Ghostty only (spawn opens real tabs).
   shell   frame shell coordinator                   [Enter]
   say     "A shell frame has no worktree. It doesn't write code, it plans."
-  claude  checkout is double-charging. In acme-api, add an idempotency key
-          to the webhook retry. In acme-web, show "payment pending" in the
-          cart while it retries. Spawn a worktree frame in each repo, frame
-          req them the work, and report back when both reply.
+  claude  (paste as one message: one round, no merge, short summary)
+          Checkout can double-charge when the processor returns a 502. Fix
+          it across both repos using this contract: acme-api serves
+          GET /orders/:orderId/payment-status -> { "pending": boolean }.
+          - acme-api: make the webhook retry idempotent (one idempotency key
+            per order, reused on every retry) and add that route.
+          - acme-web: Cart takes a paymentPending prop; while it's true, show
+            "Payment pending" and disable checkout.
+          Spawn a worktree frame in each repo and frame req each its part.
+          Each worker: make the change, run npm test, commit, reply in two
+          lines. Don't merge. When both reply, give me a three-line summary.
   watch   two tabs open (acme-api/…, acme-web/…), each boots its own claude
   shell   (in a spare tab) frame ls                 [Ctrl-N types it]
   say     "Each worker has its own branch and ports. Replies land in the
