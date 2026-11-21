@@ -1,93 +1,100 @@
-# frame — demo tape for VHS (https://github.com/charmbracelet/vhs)
+# frame — the hero demo (assets/demo.gif for the README, site/clips/hero.* for
+# the landing page). One frame on a real Astro project: claude, a shell and the
+# dev server as neovim buffers, and a question carried from the code to claude.
 #
-# Record it:   vhs assets/demo.tape        # writes assets/demo.gif
-# Preview it:  vhs -o /tmp/demo.gif assets/demo.tape && open /tmp/demo.gif
-#
-# This records a real `frame wt` boot, so run it from a checkout of a project
-# that already has a .frame/config.sh (see the Getting Started section). Set
-# DEMO_DIR below to that project. The tape leaves the frame running at the end;
-# tear it down afterward with `frame wt -d demo`.
+# Recorded in a local clone of pdoomtracker inside a sandbox HOME
+# (~/git_repos/pdoomtracker there, origin removed, node_modules copied, no .env)
+# whose nvim config and plugins are symlinks to the real ones, so the editor is
+# the real setup while claude starts clean and paths print as ~/…, never your
+# username. From the frame repo root:
+#   DEMO_HOME=/Users/Shared/frame-demo-hero assets/clips/record.sh assets/demo.tape
+# then tear the frame down:  frame wt -d shorter-lead  (same HOME).
+# Hide/Show cut out the waits (and frame's boot lines, which print paths).
 
-# ── Output ────────────────────────────────────────────────────────────────
 Output assets/demo.gif
+Output site/clips/hero.mp4
+Output site/clips/hero.webm
 
-# ── Terminal look (tuned to feel like Ghostty) ──────────────────────────────
-Require frame                 # fail early if frame isn't on PATH
-Set Shell        zsh          # frame needs zsh
-Set FontSize     18
-Set Width        1200
-Set Height       700
-Set Padding      24
+Require frame
+Set Shell        zsh
+Set FontSize     17
+Set Width        1280
+Set Height       740
+Set Padding      20
 Set Theme        "Catppuccin Mocha"
-Set TypingSpeed  60ms
-Set WindowBar    Colorful     # rounded title-bar chrome, close to Ghostty
+Set TypingSpeed  50ms
+Set WindowBar    Colorful
 
-# ── Scene 1: land in a project ──────────────────────────────────────────────
-# Point this at any project that has a .frame/config.sh.
 Hide
-Type "cd ~/git_repos/your-project" Enter
-# Let `#` lines read as on-screen narration instead of erroring — interactive
-# zsh runs `#` as a command ("command not found: #") unless this is set.
-Type "setopt interactive_comments" Enter
-Type "clear" Enter
+Type "setopt interactive_comments; PROMPT='%F{208}❯%f '; cd ~/git_repos/pdoomtracker && clear" Enter
+Sleep 600ms
 Show
 
-Sleep 800ms
-Type "# one command per feature: branch + worktree + neovim + Claude"
-Sleep 1s
-Enter
+# ── one command: branch + worktree + neovim + claude + astro dev ────────────
+Sleep 600ms
+Type "# one frame per topic: a worktree, neovim, claude and the dev server"
 Sleep 500ms
+Enter
+Type "frame wt shorter-lead"
+Sleep 500ms
+Enter
+Hide
+Sleep 35s
+Show
 
-# ── Scene 2: boot a frame ───────────────────────────────────────────────────
-Type "frame wt demo"
+# ── talk to claude in its buffer ─────────────────────────────────────────────
+Sleep 1.5s
+Type "the homepage lead paragraph runs long. give me two tighter versions, no edits yet"
 Sleep 600ms
 Enter
+Sleep 4s
+Hide
+Sleep 35s
+Show
+Sleep 4s
 
-# Give frame time to create the worktree, run stack_up(), and open neovim
-# with the Claude buffer in the foreground. Bump this if your stack is slow.
-Sleep 6s
-
-# Let the Claude buffer sit in view for a beat.
-Sleep 2s
-
-# ── Scene 3: reveal the parallel buffers ────────────────────────────────────
-# The payoff: one frame is running several named buffers you can tell apart.
-# The claude buffer starts focused and in terminal-insert mode, so leave it
-# first — a bare Escape would go to Claude, not neovim:
-Ctrl+\
-Ctrl+n
-Sleep 600ms
-
-# Pop the buffer picker (space = leader, <leader>b):
-Space
-Type "b"
-Sleep 2s
-
-# Hop to the server buffer (cargo running) — filter by typing, then Enter.
-# Tune the filter text/Enter to match how your picker behaves:
-Type "server" Enter
-Sleep 2.5s
-
-# ...and over to vite, to show the buffers are live and independent. Re-assert
-# normal mode first: landing in the server terminal may have entered insert
-# mode (a startinsert autocmd), which would eat the leader. No-op otherwise:
+# ── the dev server is just another buffer ───────────────────────────────────
 Ctrl+\
 Ctrl+n
 Space
 Type "b"
 Sleep 1.5s
-Type "vite" Enter
-Sleep 2.5s
+Type "vite"
+Sleep 600ms
+Enter
+Sleep 3.5s
 
-# ── Alternative reveal: no picker, frame-only gestures ──────────────────────
-# If you ever want a version that leans on nothing but what frame injects:
-#   Ctrl+\
-#   Ctrl+n
-#   Type ":ls" Enter          # lists claude, vite, server, local
-#   Sleep 2.5s
-#   Type ":b server" Enter    # hop to one
-#   Sleep 2.5s
+# ── carry a selection from the code to claude ───────────────────────────────
+Ctrl+\
+Ctrl+n
+Space
+Type "f"
+Sleep 1.2s
+Type "pages/index.astro"
+Sleep 800ms
+Enter
+Sleep 1.2s
+Type `/class="lead"`
+Enter
+Sleep 800ms
+Type "jVj"
+Sleep 1s
+Space
+Type "l"
+Sleep 600ms
+Type "use your first version here"
+Sleep 700ms
+Enter
+Sleep 4s
+Hide
+Sleep 30s
+Show
+Sleep 3s
 
-# ── End ─────────────────────────────────────────────────────────────────────
-# Recording stops here with the frame still up. Tear it down after:
-#   frame wt -d demo
+# ── back in the file: the edit is there ─────────────────────────────────────
+Ctrl+\
+Ctrl+n
+Ctrl+w
+Type "h"
+Type ":e" Enter
+Sleep 4s
