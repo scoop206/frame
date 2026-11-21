@@ -636,22 +636,48 @@ frame_session_recent() {
   # where the last one was typed. Same filters as the search: headless
   # (sdk-cli) runs and sessions with nothing typed are dropped, and bridged
   # copies of one session collapse to the newest. Returns 1 when there are none.
+  # With --resumable, only sessions frame shell can resume are listed (see
+  # frame_session_dir_resumable) — checked from each transcript's tail BEFORE
+  # the full parse, so skipped worktree sessions cost next to nothing.
   emulate -L zsh
   setopt pipefail
+  local _resumable=0
+  [[ "${1:-}" == --resumable ]] && { _resumable=1; shift; }
   local _max=${1:-100}
   zmodload -F zsh/stat b:zstat
   # Newest transcripts first, one per session id; read a few extra since some
   # turn out to be headless or empty.
   local -a _all _files _st
   local -A _seen
-  local _f _id
+  local _f _id _lcwd
   _all=( "$HOME/.claude/projects"/*/*.jsonl(N.om) )
-  for _f in "${_all[@]}"; do
-    _id=${_f:t:r}
-    [[ -n "${_seen[$_id]:-}" ]] && continue
-    _seen[$_id]=1
-    _files+=("$_f")
-    (( $#_files >= _max * 2 )) && break
+  local -A _okdir _lastcwd
+  local _chunk=$(( _max * 4 )) _i=1
+  # In chunks, so --resumable reads only as many tails as it needs.
+  while (( _i <= $#_all && $#_files < _max * 2 )); do
+    local -a _batch=( "${(@)_all[_i,_i+_chunk-1]}" )
+    (( _i += _chunk ))
+    local -A _lc=()
+    if (( _resumable )); then
+      while IFS=$'\t' read -r _f _lcwd; do _lc[$_f]=$_lcwd; done \
+        < <(frame_session_last_cwds "${_batch[@]}")
+    fi
+    for _f in "${_batch[@]}"; do
+      _id=${_f:t:r}
+      [[ -n "${_seen[$_id]:-}" ]] && continue
+      _seen[$_id]=1
+      if (( _resumable )); then
+        _lcwd=${_lc[$_f]:-}
+        [[ -n "$_lcwd" ]] || continue
+        if [[ -z "${_okdir[$_lcwd]:-}" ]]; then
+          frame_session_dir_resumable "$_lcwd" && _okdir[$_lcwd]=1 || _okdir[$_lcwd]=0
+        fi
+        (( _okdir[$_lcwd] )) || continue
+        _lastcwd[$_f]=$_lcwd
+      fi
+      _files+=("$_f")
+      (( $#_files >= _max * 2 )) && break
+    done
   done
   (( $#_files )) || return 1
 
@@ -687,9 +713,84 @@ frame_session_recent() {
   for _f in "${_files[@]}"; do      # already newest first
     [[ -n "${_first[$_f]:-}" ]] || continue
     zstat -A _st +mtime -- "$_f" 2>/dev/null || continue
-    print -r -- "$_st[1]"$'\t'"${_f:t:r}"$'\t'"${_cwd[$_f]}"$'\t'"$_f"$'\t'"${_first[$_f]}"
+    print -r -- "$_st[1]"$'\t'"${_f:t:r}"$'\t'"${_lastcwd[$_f]:-${_cwd[$_f]}}"$'\t'"$_f"$'\t'"${_first[$_f]}"
     (( ++_n >= _max )) && break
   done
+  (( _n ))
+}
+
+frame_session_last_cwds() {
+  # frame_session_last_cwds TRANSCRIPT… — print "TRANSCRIPT<tab>CWD" for each,
+  # CWD the dir the session last ran in (frame_session_cwd's answer), from one
+  # perl pass over each file's tail — no jq per transcript.
+  emulate -L zsh
+  (( $# )) || return 0
+  perl -e '
+      for my $f (@ARGV) {
+        open(my $fh, "<", $f) or next;
+        my $size = -s $fh; my $off = $size > 262144 ? $size - 262144 : 0;
+        seek($fh, $off, 0); local $/; my $buf = <$fh>; close $fh;
+        my $cwd;
+        while ($buf =~ /"cwd":"((?:[^"\\]|\\.)*)"/g) { $cwd = $1 }
+        next unless defined $cwd;
+        $cwd =~ s/\\(.)/$1/g;
+        print "$f\t$cwd\n";
+      }' -- "$@"
+}
+
+frame_session_dir_resumable() {
+  # frame_session_dir_resumable DIR — can `frame shell` resume a session that
+  # last ran in DIR? Not when DIR:
+  #   - is gone (a torn-down worktree — resuming would just error), or
+  #   - is your home dir (frame shell won't boot there), or
+  #   - sits in a git linked worktree (a `frame wt` frame, `_REPO-TOPIC`):
+  #     those belong to their worktree frame — `frame wt --from` hands them on.
+  emulate -L zsh
+  local _d=$1
+  [[ "$_d" == /* && -d "$_d" ]] || return 1
+  _d=${_d:A}
+  [[ "$_d" != "${HOME:A}" ]] || return 1
+  # Walk up to the nearest .git: a FILE pointing into some repo's
+  # .git/worktrees/ marks a linked worktree (a submodule's points into
+  # .git/modules/, and a plain checkout has a .git dir).
+  while :; do
+    [[ -d "$_d/.git" ]] && return 0
+    if [[ -f "$_d/.git" ]]; then
+      [[ "$(<"$_d/.git")" == *"/worktrees/"* ]] && return 1
+      return 0
+    fi
+    [[ "$_d" == / ]] && return 0
+    _d=${_d:h}
+  done
+}
+
+frame_session_resumable() {
+  # frame_session_resumable [N] — filter frame_session_search / _recent rows
+  # (stdin) down to the sessions `frame shell` can actually resume (see
+  # frame_session_dir_resumable), at most N (default all). The CWD column is
+  # rewritten to the dir the session LAST ran in — the one --resume boots in.
+  emulate -L zsh
+  local _max=${1:-0} _rows
+  _rows=$(cat)
+  [[ -n "$_rows" ]] || return 1
+  local -a _files
+  local _mt _id _cwd _f _snip
+  while IFS=$'\t' read -r _mt _id _cwd _f _snip; do
+    [[ -n "$_f" ]] && _files+=("$_f")
+  done <<< "$_rows"
+  local -A _last
+  while IFS=$'\t' read -r _f _cwd; do
+    _last[$_f]=$_cwd
+  done < <(frame_session_last_cwds "${_files[@]}")
+
+  local _n=0
+  while IFS=$'\t' read -r _mt _id _cwd _f _snip; do
+    [[ -n "$_id" ]] || continue
+    _cwd=${_last[$_f]:-$_cwd}
+    frame_session_dir_resumable "$_cwd" || continue
+    print -r -- "$_mt"$'\t'"$_id"$'\t'"$_cwd"$'\t'"$_f"$'\t'"$_snip"
+    (( ++_n == _max )) && break
+  done <<< "$_rows"
   (( _n ))
 }
 

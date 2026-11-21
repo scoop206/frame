@@ -36,6 +36,11 @@
 #                            same picker as --find, to browse and resume one.
 #                            In fzf, typing filters the list.
 #
+#                            Both lists show only sessions you can resume here:
+#                            ones that last ran in a git worktree (a `frame wt`
+#                            frame's — `frame wt --from` hands those on), in a
+#                            dir that's gone, or in ~ are left out.
+#
 #   frame shell -d [TOPIC]   tear down: just quit the session. A shell has no
 #                            branch or worktree to reap, so teardown collapses
 #                            to a quit (the dir is kept). TOPIC defaults to the
@@ -168,8 +173,9 @@ if [[ -n "$FIND" ]]; then
   (( $#_words )) || { echo "$X_MARK frame shell: --find needs search words" >&2; exit 2; }
   frame_require jq perl
   echo "$RUN_MARK searching your past claude sessions for: ${_words[*]}…" >&2
-  if ! _rows=$(frame_session_search "${_words[@]}"); then
-    echo "$X_MARK no past session has a message of yours matching: ${_words[*]}" >&2
+  if ! _rows=$(frame_session_search "${_words[@]}" | frame_session_resumable); then
+    echo "$X_MARK no resumable past session has a message of yours matching: ${_words[*]}" >&2
+    echo "  (sessions in worktrees, gone dirs or ~ are left out)" >&2
     exit 1
   fi
   RESUME_ID=$(frame_session_pick "$_rows") || exit 1
@@ -178,8 +184,9 @@ fi
 # --recent: the newest past sessions, same picker, no search words.
 if (( RECENT )); then
   frame_require jq perl
-  if ! _rows=$(frame_session_recent 100); then
-    echo "$X_MARK no past claude sessions under ~/.claude/projects" >&2
+  if ! _rows=$(frame_session_recent --resumable 100); then
+    echo "$X_MARK no resumable past claude sessions under ~/.claude/projects" >&2
+    echo "  (sessions in worktrees, gone dirs or ~ are left out)" >&2
     exit 1
   fi
   RESUME_ID=$(frame_session_pick "$_rows") || exit 1

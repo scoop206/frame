@@ -38,6 +38,8 @@ Usage:
                                       it in the dir it ran in
     frame shell TOPIC --recent        browse your most recent sessions (first
                                       message of each) and resume the one you pick
+                                      (both lists leave out sessions that ran in
+                                      a worktree, a gone dir or ~)
     frame shell TOPIC --resume ID     …resume a known session id the same way
                                       (-C DIR resumes it in DIR instead)
     frame shell -d [TOPIC]            tear down a shell frame (default: current)
