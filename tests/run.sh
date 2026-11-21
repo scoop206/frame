@@ -46,7 +46,10 @@ fi
 
 ran=0
 for f in $files; do
-  zsh "$f"
+  # Empty stdin: hook targets (e.g. `frame swarm --context`) read stdin when it
+  # isn't a tty, so a never-closing pipe (an agent's or a background shell's)
+  # would hang the suite silently. No test reads typed input.
+  zsh "$f" </dev/null
   rc=$?
   ran=$((ran + 1))
   if (( rc != 0 )); then
