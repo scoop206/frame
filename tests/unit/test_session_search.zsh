@@ -123,4 +123,48 @@ test_recent_respects_limit() {
   assert_eq "$(frame_session_recent 2 | wc -l | tr -d ' ')" "2"
 }
 
+_repo_dirs() {  # a plain checkout and one linked worktree of it, under $HOME/r
+  mkdir -p "$HOME/r/repo/.git" "$HOME/r/repo/sub" "$HOME/r/_repo-topic/sub" "$HOME/r/plain"
+  print -r -- "gitdir: $HOME/r/repo/.git/worktrees/_repo-topic" > "$HOME/r/_repo-topic/.git"
+}
+
+test_dir_resumable() {
+  _repo_dirs
+  frame_session_dir_resumable "$HOME/r/repo/sub" || fail "checkout subdir should be resumable"
+  frame_session_dir_resumable "$HOME/r/plain"    || fail "plain dir should be resumable"
+  frame_session_dir_resumable "$HOME/r/_repo-topic"     && fail "worktree should not be resumable"
+  frame_session_dir_resumable "$HOME/r/_repo-topic/sub" && fail "worktree subdir should not be resumable"
+  frame_session_dir_resumable "$HOME/r/gone"            && fail "gone dir should not be resumable"
+  frame_session_dir_resumable "$HOME"                   && fail "home should not be resumable"
+  return 0
+}
+
+test_resumable_filters_rows_by_last_cwd() {
+  _repo_dirs
+  local a=$(_t k-repo x) b=$(_t k-wt x) c=$(_t k-gone x) d=$(_t k-moved x)
+  _typed "$a" "$HOME/r/repo" "tax in repo"
+  _typed "$b" "$HOME/r/_repo-topic" "tax in worktree"
+  _typed "$c" "$HOME/r/gone" "tax in gone"
+  _typed "$d" "$HOME/r/_repo-topic" "tax first"
+  _typed "$d" "$HOME/r/plain" "moved out"
+  local out=$(frame_session_search tax | frame_session_resumable)
+  assert_contains "$out" "k-repo"
+  assert_contains "$out" "k-moved"
+  assert_not_contains "$out" "k-wt"
+  assert_not_contains "$out" "k-gone"
+  # CWD column is where the session last ran, the dir --resume boots in
+  assert_contains "$(print -r -- "$out" | grep k-moved | cut -f3)" "$HOME/r/plain"
+}
+
+test_recent_resumable_skips_worktrees() {
+  _repo_dirs
+  local i f
+  for i in 1 2 3; do f=$(_t w-$i x); _typed "$f" "$HOME/r/_repo-topic" "wt $i"; done
+  f=$(_t p-1 x); _typed "$f" "$HOME/r/plain" "plain one"; touch -t 202001010000 "$f"
+  f=$(_t p-2 x); _typed "$f" "$HOME/r/repo" "repo one";   touch -t 202001010000 "$f"
+  local -a ids=( ${(f)"$(frame_session_recent --resumable 2 | cut -f2)"} )
+  assert_eq "${(o)ids[*]}" "p-1 p-2"
+  assert_eq "$(frame_session_recent 10 | wc -l | tr -d ' ')" "5"
+}
+
 run_tests "$0"
