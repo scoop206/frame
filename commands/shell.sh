@@ -223,7 +223,12 @@ if [[ -n "$RESUME_ID" ]]; then
   # Already open? A second `claude --resume` wouldn't join it — it'd be a
   # second claude appending to the same transcript, the two diverging. So
   # switch to the frame it's open in instead, or say where it is.
-  _pid=$(frame_session_running | awk -F'\t' -v id="$RESUME_ID" '$1 == id { print $2; exit }')
+  # No `| awk '…{exit}'` here: an early exit SIGPIPEs the writer, and under
+  # pipefail + errexit that kills this script silently (exit 141).
+  _pid=""
+  while IFS=$'\t' read -r _k _v; do
+    [[ "$_k" == "$RESUME_ID" ]] && _pid=$_v
+  done < <(frame_session_running)
   if [[ -n "$_pid" ]]; then
     _rname=$(frame_proc_env "$_pid" FRAME_NAME) || _rname=""
     _rtopic=$(frame_proc_env "$_pid" FRAME_TOPIC) || _rtopic=""
