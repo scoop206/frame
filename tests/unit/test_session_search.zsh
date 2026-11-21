@@ -190,4 +190,14 @@ test_proc_env_reads_a_running_process() {
   assert_eq "$got" "cowpoke"
 }
 
+test_preview_abbreviates_home_and_uses_local_time() {
+  local f=$(_t s-prev "$HOME/code/app")
+  _typed "$f" "$HOME/code/app" "why does the cache miss?"
+  local out=$(TZ=America/Los_Angeles frame_session_preview "$f")
+  assert_contains "$out" "cwd     ~/code/app"
+  assert_not_contains "$out" "$HOME/code/app"
+  # 2026-11-03T10:00:00Z is 02:00 in Los Angeles — the list's local time
+  assert_contains "$out" "2026-11-03 02:00  why does the cache miss?"
+}
+
 run_tests "$0"
