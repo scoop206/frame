@@ -6,6 +6,11 @@
 # the human drives commits, merges, and pushes; spawn_frames defaults to true.
 #
 # Override per frame / project / user:  frame kv set [--project|--user] KEY VALUE
+#
+# A project or user can declare its own keys in this same format, in
+# <primary checkout>/.frame/kv.defaults or ~/.config/frame/kv.defaults: a
+# key=default line, its meaning in the comment block right above it (the first
+# line is the one-line description agents see). Built-in keys can't be redeclared.
 
 # Commit finished, working steps without asking first.
 autocommit=false

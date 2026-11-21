@@ -137,7 +137,9 @@ What only you can know (not discoverable by grep):
                            has none, `frame spawn wt TOPIC --cwd
                            REPO --req …` without asking first
                            (false → ask the human before spawning)
-  Never `frame kv set` a key to true — that's the human's to grant.
+@KV_CUSTOM@
+  Never `frame kv set` a key to true or change a string key —
+  that's the human's to grant.
 • To reach a sibling frame, that's the broker — `frame req` (see
   `frame --help`), NOT the SendMessage tool. SendMessage only
   continues a subagent you spawned; a sibling is a separate session
@@ -160,11 +162,23 @@ EOF
 )
   # Current kv values, so the common case needs no lookup (the block tells the
   # agent to re-check, since they can change after this prints).
-  local _kv="" _k
+  # Keys a project or user declared for itself get their one-line meaning here
+  # (the built-ins' meanings are the hand-written lines above); the slot
+  # vanishes when there are none.
+  local _kv="" _custom="" _k _desc
   frame_kv_scope_self
-  for _k in ${(f)"$(frame_kv_keys)"}; do
+  for _k in $FRAME_KV_KEYS; do
     _kv+="${_kv:+  }$_k=$(frame_kv_get "$_k" || true)"
+    [[ "${FRAME_KV_FROM[$_k]}" == builtin ]] && continue
+    _desc=${${(f)FRAME_KV_DESC[$_k]}[1]:-}
+    _custom+=$'\n'"    $_k${_desc:+ → $_desc}"
   done
+  if [[ -n "$_custom" ]]; then
+    _custom="  Custom keys (frame kv describe KEY for more):$_custom"
+    _core=${_core//@KV_CUSTOM@/$_custom}
+  else
+    _core=${_core//$'\n'@KV_CUSTOM@/}
+  fi
   _core=${_core//@VERIFY@/$_verify}
   print -r -- "${_core//@KV@/$_kv}"
 

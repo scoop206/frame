@@ -106,4 +106,95 @@ test_global_config_wrappers_still_work() {
   assert_eq "$(frame_global_get notify)" off
 }
 
+# ── declarations: custom keys ─────────────────────────────────────────────────
+
+_decl() {
+  # _decl FILE LINES… — write a declaration file.
+  mkdir -p "${1:h}"; local f=$1; shift
+  print -rl -- "$@" > "$f"
+}
+
+test_project_and_user_keys_follow_builtins_in_order() {
+  _decl "$SANDBOX/main/.frame/kv.defaults" "# Review language." "review_lang=en"
+  _decl "$HOME/.config/frame/kv.defaults" "# Run e2e before commit." "run_e2e=false"
+  frame_kv_scope proj topic "$SANDBOX/main"
+  assert_eq "${(j:,:)${(f)"$(frame_kv_keys)"}}" \
+    "autocommit,merge_on_commit,push_on_merge,deploy_on_merge,spawn_frames,review_lang,run_e2e"
+  assert_eq "$FRAME_KV_FROM[review_lang]" project
+  assert_eq "$FRAME_KV_FROM[run_e2e]" user
+}
+
+test_custom_default_answers_with_its_origin() {
+  _decl "$SANDBOX/main/.frame/kv.defaults" "review_lang=en"
+  frame_kv_scope proj topic "$SANDBOX/main"
+  frame_kv_lookup review_lang
+  assert_eq "$KV_VALUE" en
+  assert_eq "$KV_LAYER" "default (project)"
+  frame_kvfile_set "$FRAME_KV_FILE[frame]" review_lang de
+  frame_kv_lookup review_lang
+  assert_eq "$KV_VALUE/$KV_LAYER" de/frame
+}
+
+test_description_is_the_comment_block_above() {
+  _decl "$SANDBOX/main/.frame/kv.defaults" \
+    "# header, separated by a blank line" "" \
+    "# Language for review comments." "# Any ISO code." "review_lang=en"
+  frame_kv_scope proj topic "$SANDBOX/main"
+  assert_eq "$FRAME_KV_DESC[review_lang]" $'Language for review comments.\nAny ISO code.'
+}
+
+test_type_comes_from_the_default() {
+  _decl "$SANDBOX/main/.frame/kv.defaults" "run_e2e=false" "review_lang=en"
+  frame_kv_scope proj topic "$SANDBOX/main"
+  frame_kv_is_bool run_e2e || fail "false default should be boolean"
+  frame_kv_is_bool autocommit || fail "built-in should be boolean"
+  frame_kv_is_bool review_lang && fail "en default should be a string"
+  return 0
+}
+
+test_no_main_wt_means_no_project_declarations() {
+  _decl "$SANDBOX/main/.frame/kv.defaults" "review_lang=en"
+  frame_kv_scope proj topic ""
+  (( ${FRAME_KV_KEYS[(Ie)review_lang]} )) && fail "project key leaked without MAIN_WT"
+  return 0
+}
+
+test_builtin_cannot_be_redeclared() {
+  _decl "$SANDBOX/main/.frame/kv.defaults" "autocommit=true"
+  frame_kv_scope proj topic "$SANDBOX/main"
+  frame_kv_lookup autocommit
+  assert_eq "$KV_VALUE/$KV_LAYER" false/default
+  assert_contains "$FRAME_KV_WARNINGS" "autocommit is a built-in key"
+}
+
+test_project_declaration_beats_user() {
+  _decl "$SANDBOX/main/.frame/kv.defaults" "review_lang=en"
+  _decl "$HOME/.config/frame/kv.defaults" "review_lang=fr"
+  frame_kv_scope proj topic "$SANDBOX/main"
+  assert_eq "$(frame_kv_get review_lang)" en
+  assert_contains "$FRAME_KV_WARNINGS" "already declared by the project"
+}
+
+test_same_default_redeclared_is_quiet() {
+  _decl "$SANDBOX/main/.frame/kv.defaults" "review_lang=en"
+  _decl "$HOME/.config/frame/kv.defaults" "review_lang=en"
+  frame_kv_scope proj topic "$SANDBOX/main"
+  assert_eq "$#FRAME_KV_WARNINGS" 0
+}
+
+test_malformed_lines_are_skipped_with_a_warning() {
+  _decl "$SANDBOX/main/.frame/kv.defaults" "Bad-Key=1" "no equals" "ok_key=1"
+  frame_kv_scope proj topic "$SANDBOX/main"
+  assert_eq "${(j:,:)FRAME_KV_KEYS[6,-1]}" ok_key
+  assert_eq "$#FRAME_KV_WARNINGS" 2
+  assert_contains "$FRAME_KV_WARNINGS" "kv.defaults:1: not a declaration"
+}
+
+test_undeclared_key_has_no_value_even_if_set_in_a_layer() {
+  frame_kv_scope proj topic ""
+  local rc=0
+  frame_kv_lookup nope || rc=$?
+  assert_eq "$rc" 1
+}
+
 run_tests "$0"

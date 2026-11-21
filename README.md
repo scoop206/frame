@@ -75,7 +75,7 @@
 | `frame focus [TOPIC]`               | raise a frame's window                                                                                                             |
 | `frame yolo on\|off`                | toggle `--dangerously-skip-permissions` everywhere                                                                                 |
 | `frame swarm [off\|1\|2]`           | how much frame context each frame's claude gets — 0 off · 1 aware · 2 ask (starts off)                                             |
-| `frame kv [get\|set\|unset …]`      | how far each frame's claude goes on its own — autocommit, merge/push/deploy on merge (per frame, project, or user)                 |
+| `frame kv [get\|set\|unset …]`      | how far each frame's claude goes on its own (autocommit, merge/push/deploy on merge) plus your own keys; per frame, project, user  |
 
 `worktree` is a synonym for `wt`; `list` for `ls`.  
 Not shown here: `spawn`,
@@ -274,6 +274,7 @@ When frame instantiates the nvim instance it injects these user commands
 | `:FrameKvGet KEY`                           | print one setting                                                                                                      |
 | `:FrameKvSet [--project\|--user] KEY VALUE` | set a setting (default: this frame only); tab-completes keys and values                                                |
 | `:FrameKvUnset [--project\|--user] KEY`     | drop a setting from that layer so the next one down shows through                                                      |
+| `:FrameKvDescribe [KEY]`                    | what a setting means: type, default, where it's declared (all of them when bare)                                       |
 | `:[range]FrameClaude [Q]`                   | open this frame's claude terminal; with a `[range]` paste the line/selection as context; with a question `Q` submit it |
 
 ### Asking claude from the editor — `:FrameClaude`
@@ -480,9 +481,10 @@ frame kv set push_on_merge true            # this frame only
 frame kv set --project autocommit true     # every frame of this project
 frame kv set --user merge_on_commit true   # every project on this machine
 frame kv unset push_on_merge               # fall back to the next layer
+frame kv describe push_on_merge            # what it means, its type, default, and origin
 ```
 
-In nvim: `:FrameKv`, `:FrameKvGet`, `:FrameKvSet`, `:FrameKvUnset`.
+In nvim: `:FrameKv`, `:FrameKvGet`, `:FrameKvSet`, `:FrameKvUnset`, `:FrameKvDescribe`.
 
 Layers, first hit wins:
 
@@ -491,7 +493,7 @@ Layers, first hit wins:
 | frame   | `~/.local/share/frame/kv/<NAME>/<TOPIC>` (removed by `frame wt -d`)                 |
 | project | `<primary checkout>/.frame/local/kv` (gitignored, so it never blocks `frame merge`) |
 | user    | `~/.config/frame/kv`                                                                |
-| default | [`kv.defaults`](kv.defaults) in the frame repo                                      |
+| default | the key's declared default (see [Your own keys](#your-own-keys))                    |
 
 These are files rather than environment variables on purpose. A process's
 environment is fixed when it starts, so an `export` never reaches a claude
@@ -502,17 +504,62 @@ commits or merges.
 
 The settings are yours, not the agent's. From inside claude, `frame kv set` only
 accepts `false` and `unset` is refused, so an agent can hold itself back but
-can't give itself more room. This guards against well-meaning drift; it isn't a
-security boundary.
+can't give itself more room. String keys (below) can't be set by an agent at all,
+since there's no "safer" direction for a string. This guards against well-meaning
+drift; it isn't a security boundary.
+
+### Your own keys
+
+Beyond the built-ins, you can declare keys for your own workflow boundaries or
+your project's own attributes. Frame stores them and tells the agent about them;
+what they mean is up to you, your agents, and your hooks, which read them with
+`frame kv get KEY`. Declarations live in files in the same format as
+[`kv.defaults`](kv.defaults):
+
+| declared in                             | committed? | applies to                    |
+| --------------------------------------- | ---------- | ----------------------------- |
+| `<primary checkout>/.frame/kv.defaults` | yes        | every frame of the project    |
+| `~/.config/frame/kv.defaults`           | n/a        | every project on this machine |
+
+Each declaration is a `key=default` line with its meaning in the comment block
+right above it. The first comment line is the one-line description the agent
+sees at session start; any further lines show up in `frame kv describe`:
+
+```sh
+# .frame/kv.defaults
+# Run the e2e suite before each commit.
+# It takes ~4 minutes; skip it for docs-only changes.
+run_e2e=false
+
+# Language the agent writes review comments in.
+review_lang=en
+```
+
+- **Type** comes from the default: `true`/`false` makes the key boolean (only
+  `true`/`false` accepted), anything else makes it a string. Name boolean keys
+  so that `true` grants the agent something and `false` holds it back, because
+  that's the direction the agent guard allows.
+- **Values** go in the same layers as the built-ins (`frame kv set
+  [--project|--user] KEY VALUE`). The declared default is the bottom layer.
+- **Clashes**: a declaration of a built-in key is ignored with a warning (change
+  its value with `frame kv set` instead). If the project and the user declare
+  the same key, the project's declaration wins.
+- **Keys** are lowercase letters, digits and `_`, starting with a letter. A line
+  that isn't a declaration is skipped with a warning in `frame kv`.
+- Project declarations are read from the primary checkout, so a key added on a
+  topic branch takes effect once it's merged.
+- The swarm block lists each custom key's value and one-line description, so the
+  agent knows it exists and what it means.
 
 ## How a project plugs in
 
 Everything project-side lives under one `.frame/` directory:
 
-| path               | committed?         | contents                                              |
-| ------------------ | ------------------ | ----------------------------------------------------- |
-| `.frame/config.sh` | yes                | the project's config — keys and hooks, detailed below |
-| `.frame/local/`    | never (gitignored) | personal overrides — a `config.sh` here wins          |
+| path                 | committed?         | contents                                                            |
+| -------------------- | ------------------ | ------------------------------------------------------------------- |
+| `.frame/config.sh`   | yes                | the project's config — keys and hooks, detailed below               |
+| `.frame/kv.defaults` | yes                | the project's own `frame kv` keys ([Your own keys](#your-own-keys)) |
+| `.frame/local/`      | never (gitignored) | personal overrides — a `config.sh` here wins                        |
 
 ### Claude hooks
 

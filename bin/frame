@@ -121,6 +121,10 @@
 #                                       frame of the project, or every project
 #     frame kv unset [--project|--user] KEY
 #                                       drop KEY from that layer
+#     frame kv describe [KEY]           what KEY means: type, default, where
+#                                       declared. Declare your own keys in
+#                                       .frame/kv.defaults (project, committed)
+#                                       or ~/.config/frame/kv.defaults (user)
 #
 #     frame swarm [off|1|2]             how much each frame's claude is told
 #                                       at session start about being a frame:
