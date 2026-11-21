@@ -105,6 +105,11 @@ ul.ticks { list-style: none; padding: 0; margin: 20px 0 0; }
 ul.ticks li { position: relative; padding-left: 24px; margin-bottom: 10px; color: var(--fg-dim); }
 ul.ticks li::before { content: "→"; position: absolute; left: 0; color: var(--accent); font-family: var(--mono); }
 
+.intro { display: grid; grid-template-columns: 1.2fr 1fr; gap: 48px; align-items: end; margin-bottom: 36px; }
+.intro > * { min-width: 0; }
+.intro .ticks { margin: 0; }
+.clip video { display: block; width: 100%; height: auto; background: #1e1e2e; }
+
 /* coordinator diagram */
 .diagram { margin-top: 40px; }
 .diagram svg { width: 100%; height: auto; display: block; }
@@ -136,7 +141,7 @@ footer a { color: var(--fg-dim); text-decoration: none; margin-right: 18px; }
 footer a:hover { color: var(--fg); }
 
 @media (max-width: 860px) {
-  .split, .grid3 { grid-template-columns: 1fr; gap: 28px; }
+  .split, .grid3, .intro { grid-template-columns: 1fr; gap: 28px; }
   .split.flip > :first-child { order: 0; }
   section { padding: 64px 0; }
   .hero { padding: 48px 0 40px; }
@@ -182,58 +187,50 @@ footer a:hover { color: var(--fg); }
 </header>
 
 <section id="resume">
-  <div class="wrap split">
-    <div>
-      <p class="kicker">resume</p>
-      <h2>Pick up the conversation, not just the code.</h2>
-      <p>If most of your work with Claude happens in Claude Code sessions, the expensive part isn't the code. It's the context: the decisions, the dead ends, the "we tried that, it broke X".</p>
-      <p><code>frame shell --recent</code> lists your latest sessions by their first message. Pick one and it resumes in the directory it ran in. Give Claude the latest update and decide where to go next.</p>
+  <div class="wrap">
+    <div class="intro">
+      <div>
+        <p class="kicker">resume</p>
+        <h2>Pick up the conversation, not just the code.</h2>
+        <p>If most of your work with Claude happens in Claude Code sessions, the expensive part isn't the code. It's the context: the decisions, the dead ends, the "we tried that, it broke X".</p>
+        <p><code>frame shell --recent</code> lists your latest sessions by their first message. Pick one and it resumes in the directory it ran in. Give Claude the latest update and decide where to go next.</p>
+      </div>
       <ul class="ticks">
         <li><code>--find "WORDS"</code> searches what <em>you</em> typed, for when you remember what you said but not when.</li>
         <li><code>●</code> marks a session that's already open. Picking it switches to that window instead of forking it.</li>
         <li><code>--resume ID</code> when you already know the session.</li>
       </ul>
     </div>
-    <div class="term">
-      <div class="term-bar"><i></i><i></i><i></i><b>zsh</b></div>
-<pre><span class="p">❯</span> frame shell --find "pages workflow"
-<span class="dim">  3 sessions match</span>
-<span class="sel"><span class="hl">▸</span> 2d  ~/git_repos/frame     add a pages workflow…</span>
-  5d  ~/g/searchupside       pages build skips /r…
-  3w  ~/git_repos/flipnem    move docs to pages…
-
-<span class="p">❯</span> <span class="dim"># ↵ resumes it in ~/git_repos/frame</span>
-<span class="ok">✓</span> frame shell <span class="bl">frame</span> · claude --resume 4f1c…
-<span class="dim">  context restored. no re-explaining.</span></pre>
+    <div class="term clip">
+      <video autoplay muted loop playsinline preload="metadata" poster="clips/resume.jpg" width="1200" height="680" aria-label="frame shell --recent lists past sessions; picking one resumes it in Neovim, and Claude continues from the latest update">
+        <source src="clips/resume.webm" type="video/webm">
+        <source src="clips/resume.mp4" type="video/mp4">
+      </video>
     </div>
   </div>
 </section>
 
 <section id="ask">
-  <div class="wrap split flip">
-    <div>
-      <p class="kicker">ask</p>
-      <h2>Question anything on screen, from Neovim.</h2>
-      <p>Reviewing what Claude wrote, or what it said? Select the lines, run <code>:'&lt;,'&gt;FrameClaude</code> with your question, and the selection (<code>file:line</code> plus the fenced source) lands in this frame's Claude, already submitted. Then you talk it through.</p>
-      <p>Map it to a key once and it's two keystrokes:</p>
-      <div class="term">
+  <div class="wrap">
+    <div class="intro">
+      <div>
+        <p class="kicker">ask</p>
+        <h2>Question anything on screen, from Neovim.</h2>
+        <p>Reviewing what Claude wrote? Select the lines, run <code>:'&lt;,'&gt;FrameClaude</code> with your question, and the selection (<code>file:line</code> plus the source) lands in this frame's Claude, already submitted. Then you talk it through.</p>
+      </div>
+      <div>
+        <p>Map it to a key once and it's two keystrokes:</p>
+        <div class="term">
 <pre><span class="dim">-- init.lua</span>
 vim.keymap.set(<span class="ok">'v'</span>, <span class="ok">'&lt;leader&gt;L'</span>, <span class="ok">':FrameClaude '</span>)</pre>
+        </div>
       </div>
     </div>
-    <div class="term">
-      <div class="term-bar"><i></i><i></i><i></i><b>nvim · lib/merge.zsh</b></div>
-<pre><span class="dim"> 41 </span>  # refuse unless the primary checkout is clean
-<span class="sel"><span class="dim"> 42 </span>  if ! git -C "$primary" diff --quiet; then</span>
-<span class="sel"><span class="dim"> 43 </span>    die "primary has uncommitted changes"</span>
-<span class="sel"><span class="dim"> 44 </span>  fi</span>
-<span class="dim"> 45 </span>  git -C "$primary" merge --ff-only "$topic"
-<span class="dim">~</span>
-<span class="dim">~</span>
-<span class="hl">:'&lt;,'&gt;FrameClaude</span> Why are we doing it this way?
-
-<span class="p">●</span> <span class="dim">claude ·</span> Because a dirty primary means the merge
-  could fold someone's uncommitted edits into main…</pre>
+    <div class="term clip">
+      <video autoplay muted loop playsinline preload="metadata" poster="clips/ask.jpg" width="1200" height="680" aria-label="Two lines selected in Neovim, leader-L, a question typed; the frame's Claude opens in a split and answers about the selection">
+        <source src="clips/ask.webm" type="video/webm">
+        <source src="clips/ask.mp4" type="video/mp4">
+      </video>
     </div>
   </div>
 </section>
