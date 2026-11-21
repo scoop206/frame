@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>frame</title>
+<meta name="description" content="Stop re-explaining your project to Claude. frame resumes past Claude Code sessions in place, lets you question them from Neovim, and coordinates isolated worktree agents across your repos.">
+<meta property="og:title" content="frame: stop re-explaining your project to Claude">
+<meta property="og:description" content="Resume any past Claude Code session in place, ask about any selection from Neovim, and coordinate worktree agents across repos. Built on zsh, Ghostty, Neovim and Claude Code.">
+<meta property="og:image" content="https://scoop206.github.io/frame/assets/frame_social.png">
+<meta property="og:url" content="https://scoop206.github.io/frame/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="assets/frame-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #171613;
+  --bg-2: #1f1d19;
+  --bg-3: #2a2722;
+  --line: #3a362f;
+  --fg: #f3ead8;
+  --fg-dim: #b5ab98;
+  --fg-mute: #857c6c;
+  --accent: #d97757;
+  --accent-deep: #a94f33;
+  --gold: #ffd43b;
+  --green: #9ccc65;
+  --blue: #7fb4d9;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --max: 1080px;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 17px/1.6 var(--sans);
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { color: var(--gold); }
+code, kbd, pre { font-family: var(--mono); }
+code { font-size: .9em; color: var(--gold); background: var(--bg-3); padding: .1em .35em; border-radius: 4px; }
+.wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+
+/* nav */
+nav { border-bottom: 1px solid var(--line); }
+nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+.brand { display: flex; align-items: center; gap: 10px; font: 800 20px var(--mono); color: var(--fg); text-decoration: none; }
+.brand img { width: 26px; height: 26px; }
+.brand span { color: var(--accent); }
+nav ul { list-style: none; display: flex; gap: 22px; margin: 0; padding: 0; font: 14px var(--mono); }
+nav ul a { color: var(--fg-dim); text-decoration: none; }
+nav ul a:hover { color: var(--fg); }
+
+/* hero */
+.hero { padding: 72px 0 56px; }
+.eyebrow { font: 600 13px var(--mono); color: var(--accent); letter-spacing: .08em; text-transform: uppercase; margin: 0 0 18px; }
+h1 { font: 800 clamp(34px, 6vw, 60px)/1.08 var(--mono); letter-spacing: -.02em; margin: 0 0 22px; max-width: 20ch; }
+h1 .cursor { display: inline-block; width: .5em; height: .9em; background: var(--accent); vertical-align: -.08em; margin-left: .1em; animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { h1 .cursor { animation: none; } }
+.lede { font-size: 20px; color: var(--fg-dim); max-width: 60ch; margin: 0 0 32px; }
+.lede code { font-size: .85em; }
+.ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 52px; }
+.btn { font: 600 15px var(--mono); padding: 12px 20px; border-radius: 6px; text-decoration: none; border: 1px solid var(--line); color: var(--fg); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.btn.primary:hover { background: var(--gold); border-color: var(--gold); color: var(--bg); }
+.btn:hover { border-color: var(--fg-dim); color: var(--fg); }
+
+/* terminal chrome */
+.term { background: #0f0e0c; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: 0 24px 60px -30px rgba(0,0,0,.8); }
+.term-bar { display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: var(--bg-2); border-bottom: 1px solid var(--line); font: 12px var(--mono); color: var(--fg-mute); }
+.term-bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--bg-3); display: inline-block; }
+.term-bar i:nth-child(1) { background: #e0695a; }
+.term-bar i:nth-child(2) { background: #e3b341; }
+.term-bar i:nth-child(3) { background: #6fbf5f; }
+.term-bar b { font-weight: 400; margin-left: 8px; }
+.term img { display: block; width: 100%; height: auto; }
+.term pre { margin: 0; padding: 18px 20px; font-size: 13.5px; line-height: 1.65; color: var(--fg); overflow-x: auto; }
+.hero-caption { font: 13px var(--mono); color: var(--fg-mute); margin-top: 12px; text-align: center; }
+.p { color: var(--accent); }
+.dim { color: var(--fg-mute); }
+.ok { color: var(--green); }
+.hl { color: var(--gold); }
+.bl { color: var(--blue); }
+.sel { background: #3d3424; display: inline-block; width: 100%; }
+
+/* sections */
+section { padding: 88px 0; border-top: 1px solid var(--line); }
+.kicker { font: 600 13px var(--mono); color: var(--accent); margin: 0 0 12px; }
+.kicker::before { content: "## "; color: var(--fg-mute); }
+h2 { font: 800 clamp(26px, 4vw, 38px)/1.15 var(--mono); letter-spacing: -.015em; margin: 0 0 18px; }
+h3 { font: 600 17px var(--mono); margin: 0 0 8px; color: var(--fg); }
+section p { color: var(--fg-dim); margin: 0 0 16px; max-width: 62ch; }
+.split { display: grid; grid-template-columns: 1fr 1.15fr; gap: 48px; align-items: center; }
+.split.flip > :first-child { order: 2; }
+.split > *, .grid3 > * { min-width: 0; }
+p code, li code { overflow-wrap: anywhere; }
+.tag { display: inline-block; font: 600 11px var(--mono); color: var(--bg); background: var(--fg-mute); padding: 2px 7px; border-radius: 4px; vertical-align: 2px; margin-left: 6px; letter-spacing: .04em; }
+ul.ticks { list-style: none; padding: 0; margin: 20px 0 0; }
+ul.ticks li { position: relative; padding-left: 24px; margin-bottom: 10px; color: var(--fg-dim); }
+ul.ticks li::before { content: "→"; position: absolute; left: 0; color: var(--accent); font-family: var(--mono); }
+
+/* coordinator diagram */
+.diagram { margin-top: 40px; }
+.diagram svg { width: 100%; height: auto; display: block; }
+.diagram text { font-family: var(--mono); }
+
+/* safety grid */
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 36px; }
+.card { background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 22px; }
+.card p { font-size: 15.5px; margin: 0; }
+.card .cmd { font: 600 13px var(--mono); color: var(--gold); margin-bottom: 10px; display: block; }
+
+/* kv table */
+table.kv { border-collapse: collapse; width: 100%; font-size: 15px; margin-top: 24px; }
+table.kv td { padding: 10px 12px; border-top: 1px solid var(--line); color: var(--fg-dim); vertical-align: top; }
+table.kv td:first-child { font-family: var(--mono); color: var(--gold); white-space: nowrap; width: 1%; }
+
+/* install */
+.install pre { position: relative; }
+.copy { position: absolute; top: 10px; right: 10px; font: 600 12px var(--mono); background: var(--bg-3); color: var(--fg-dim); border: 1px solid var(--line); border-radius: 5px; padding: 5px 10px; cursor: pointer; }
+.copy:hover { color: var(--fg); }
+.prereqs { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0; padding: 0; list-style: none; }
+.prereqs li { font: 14px var(--mono); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; color: var(--fg); }
+.badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.badges img { height: 20px; }
+
+footer { border-top: 1px solid var(--line); padding: 36px 0 56px; font: 14px var(--mono); color: var(--fg-mute); }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+footer a { color: var(--fg-dim); text-decoration: none; margin-right: 18px; }
+footer a:hover { color: var(--fg); }
+
+@media (max-width: 860px) {
+  .split, .grid3 { grid-template-columns: 1fr; gap: 28px; }
+  .split.flip > :first-child { order: 0; }
+  section { padding: 64px 0; }
+  .hero { padding: 48px 0 40px; }
+}
+@media (max-width: 560px) {
+  .wrap { padding: 0 16px; }
+  nav ul li.hide-sm { display: none; }
+  nav ul { gap: 16px; }
+  .lede { font-size: 18px; }
+  .term pre { font-size: 12px; padding: 14px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="assets/frame-icon.png" alt="">frame<span>_</span></a>
+    <ul>
+      <li class="hide-sm"><a href="#resume">resume</a></li>
+      <li class="hide-sm"><a href="#coordinate">coordinate</a></li>
+      <li><a href="#install">install</a></li>
+      <li><a href="https://github.com/scoop206/frame">github</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">an AI harness on zsh · ghostty · neovim · claude code</p>
+    <h1>Stop re-explaining your project to Claude.<span class="cursor" aria-hidden="true"></span></h1>
+    <p class="lede">Find any past session by what you said in it, resume it in place, and keep the context you already built. Then let it coordinate isolated worktree agents across your repos.</p>
+    <div class="ctas">
+      <a class="btn primary" href="#install">Install frame</a>
+      <a class="btn" href="https://github.com/scoop206/frame">View on GitHub</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=Z2tggjBM5w4">Watch the demo</a>
+    </div>
+    <div class="term">
+      <img src="assets/demo.gif" alt="frame wt booting a git worktree into Neovim with a Claude buffer and service buffers" width="1200" height="700">
+    </div>
+    <p class="hero-caption"><code>frame wt TOPIC</code> boots a worktree, a Neovim, its ports and services, and a Claude that knows where it is.</p>
+  </div>
+</header>
+
+<section id="resume">
+  <div class="wrap split">
+    <div>
+      <p class="kicker">resume</p>
+      <h2>Pick up the conversation, not just the code.</h2>
+      <p>If most of your work with Claude happens in Claude Code sessions, the expensive part isn't the code. It's the context: the decisions, the dead ends, the "we tried that, it broke X".</p>
+      <p><code>frame shell --recent</code> lists your latest sessions by their first message. Pick one and it resumes in the directory it ran in. Give Claude the latest update and decide where to go next.</p>
+      <ul class="ticks">
+        <li><code>--find "WORDS"</code> searches what <em>you</em> typed, for when you remember what you said but not when.</li>
+        <li><code>●</code> marks a session that's already open. Picking it switches to that window instead of forking it.</li>
+        <li><code>--resume ID</code> when you already know the session.</li>
+      </ul>
+    </div>
+    <div class="term">
+      <div class="term-bar"><i></i><i></i><i></i><b>zsh</b></div>
+<pre><span class="p">❯</span> frame shell --find "pages workflow"
+<span class="dim">  3 sessions match</span>
+<span class="sel"><span class="hl">▸</span> 2d  ~/git_repos/frame     add a pages workflow…</span>
+  5d  ~/g/searchupside       pages build skips /r…
+  3w  ~/git_repos/flipnem    move docs to pages…
+
+<span class="p">❯</span> <span class="dim"># ↵ resumes it in ~/git_repos/frame</span>
+<span class="ok">✓</span> frame shell <span class="bl">frame</span> · claude --resume 4f1c…
+<span class="dim">  context restored. no re-explaining.</span></pre>
+    </div>
+  </div>
+</section>
+
+<section id="ask">
+  <div class="wrap split flip">
+    <div>
+      <p class="kicker">ask</p>
+      <h2>Question anything on screen, from Neovim.</h2>
+      <p>Reviewing what Claude wrote, or what it said? Select the lines, run <code>:'&lt;,'&gt;FrameClaude</code> with your question, and the selection (<code>file:line</code> plus the fenced source) lands in this frame's Claude, already submitted. Then you talk it through.</p>
+      <p>Map it to a key once and it's two keystrokes:</p>
+      <div class="term">
+<pre><span class="dim">-- init.lua</span>
+vim.keymap.set(<span class="ok">'v'</span>, <span class="ok">'&lt;leader&gt;L'</span>, <span class="ok">':FrameClaude '</span>)</pre>
+      </div>
+    </div>
+    <div class="term">
+      <div class="term-bar"><i></i><i></i><i></i><b>nvim · lib/merge.zsh</b></div>
+<pre><span class="dim"> 41 </span>  # refuse unless the primary checkout is clean
+<span class="sel"><span class="dim"> 42 </span>  if ! git -C "$primary" diff --quiet; then</span>
+<span class="sel"><span class="dim"> 43 </span>    die "primary has uncommitted changes"</span>
+<span class="sel"><span class="dim"> 44 </span>  fi</span>
+<span class="dim"> 45 </span>  git -C "$primary" merge --ff-only "$topic"
+<span class="dim">~</span>
+<span class="dim">~</span>
+<span class="hl">:'&lt;,'&gt;FrameClaude</span> Why are we doing it this way?
+
+<span class="p">●</span> <span class="dim">claude ·</span> Because a dirty primary means the merge
+  could fold someone's uncommitted edits into main…</pre>
+    </div>
+  </div>
+</section>
+
+<section id="coordinate">
+  <div class="wrap">
+    <p class="kicker">coordinate</p>
+    <h2>One coordinator, many workers.</h2>
+    <p>Start in a <strong>shell frame</strong>: a Claude in any directory, with no branch and no worktree, so by design it isn't writing code. It plans. When change needs to happen, it <code>frame spawn wt</code>s a worktree frame in whichever frame-enabled repo needs it, sends the work over <code>frame req</code>, and collects the replies in its inbox.</p>
+    <p>Each worker is fully isolated: its own branch, its own Neovim, its own ports and dev servers. The coordinator keeps the big picture; the workers keep their hands off each other.</p>
+    <div class="diagram" role="img" aria-label="A shell frame coordinator spawns worktree frames in three repositories and exchanges requests and replies with them.">
+      <svg viewBox="0 0 1000 340" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d97757"/></marker>
+          <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#857c6c"/></marker>
+        </defs>
+        <!-- coordinator -->
+        <rect x="20" y="105" width="260" height="130" rx="10" fill="#1f1d19" stroke="#d97757" stroke-width="2"/>
+        <text x="40" y="140" fill="#d97757" font-size="13" font-weight="600">SHELL FRAME</text>
+        <text x="40" y="170" fill="#f3ead8" font-size="20" font-weight="800">coordinator</text>
+        <text x="40" y="198" fill="#b5ab98" font-size="13">no worktree · plans</text>
+        <text x="40" y="218" fill="#b5ab98" font-size="13">frame inbox ← replies</text>
+        <!-- workers -->
+        <g>
+          <rect x="640" y="20" width="340" height="80" rx="10" fill="#1f1d19" stroke="#3a362f"/>
+          <text x="660" y="50" fill="#ffd43b" font-size="15" font-weight="600">api / fix-auth</text>
+          <text x="660" y="76" fill="#857c6c" font-size="13">worktree · nvim · claude · :5174</text>
+        </g>
+        <g>
+          <rect x="640" y="130" width="340" height="80" rx="10" fill="#1f1d19" stroke="#3a362f"/>
+          <text x="660" y="160" fill="#ffd43b" font-size="15" font-weight="600">web / login-page</text>
+          <text x="660" y="186" fill="#857c6c" font-size="13">worktree · nvim · claude · :5175</text>
+        </g>
+        <g>
+          <rect x="640" y="240" width="340" height="80" rx="10" fill="#1f1d19" stroke="#3a362f"/>
+          <text x="660" y="270" fill="#ffd43b" font-size="15" font-weight="600">infra / session-ttl</text>
+          <text x="660" y="296" fill="#857c6c" font-size="13">worktree · nvim · claude · :5176</text>
+        </g>
+        <!-- arrows -->
+        <path d="M280,145 C430,145 480,55 636,55" fill="none" stroke="#d97757" stroke-width="2" marker-end="url(#arr)"/>
+        <path d="M280,165 L636,165" fill="none" stroke="#d97757" stroke-width="2" marker-end="url(#arr)"/>
+        <path d="M280,185 C430,185 480,275 636,275" fill="none" stroke="#d97757" stroke-width="2" marker-end="url(#arr)"/>
+        <path d="M640,305 C470,305 420,222 284,222" fill="none" stroke="#857c6c" stroke-width="1.5" stroke-dasharray="5 5" marker-end="url(#arr2)"/>
+        <text x="400" y="157" fill="#d97757" font-size="13" text-anchor="middle">spawn wt · req</text>
+        <text x="470" y="318" fill="#857c6c" font-size="13" text-anchor="middle">reply → inbox</text>
+      </svg>
+    </div>
+    <ul class="ticks">
+      <li>Turned on with <code>spawn_frames=true</code> in <a href="#autonomy">frame kv</a>. With it off, the coordinator asks before spawning. <span class="tag">macOS</span></li>
+      <li>If a repo already has a live frame, the coordinator finds it in <code>frame ls</code> and sends the work there instead.</li>
+      <li><code>frame wt TOPIC --from SRC</code> hands a whole conversation forward to a new frame when the work changes shape.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="safety">
+  <div class="wrap">
+    <p class="kicker">isolate</p>
+    <h2>Several agents at once, nothing colliding.</h2>
+    <p>Running more than one Claude Code session on a repo usually means two dev servers fighting over a port, an agent editing main, and worktrees nobody remembers to clean up. A frame is self-contained and disposable, and delivery back to main goes through guarded steps.</p>
+    <div class="grid3">
+      <div class="card"><span class="cmd">frame wt TOPIC</span><p>A branch, a worktree, and assigned ports for its services. Agents work on their topic branch, never in the primary checkout.</p></div>
+      <div class="card"><span class="cmd">frame merge</span><p>Refuses on a dirty primary, fast-forwards to origin first, and aborts cleanly on conflict instead of leaving a half-merge.</p></div>
+      <div class="card"><span class="cmd">frame wt -d</span><p>Removes the worktree and branch, stops the dev servers it started, and reaps frame state. Nothing left running.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="autonomy">
+  <div class="wrap split">
+    <div>
+      <p class="kicker">autonomy</p>
+      <h2>You decide how far it goes on its own.</h2>
+      <p><code>frame kv</code> tells each frame's Claude what it may do without asking. Set it per frame, per project, or for every project. Settings can change mid-session, and agents re-check before they act.</p>
+    </div>
+    <table class="kv">
+      <tr><td>autocommit</td><td>commit each finished, working step</td></tr>
+      <tr><td>merge_on_commit</td><td>then <code>frame merge</code> it into main</td></tr>
+      <tr><td>push_on_merge</td><td>push main to origin after merging</td></tr>
+      <tr><td>deploy_on_merge</td><td>and deploy when the project knows how</td></tr>
+      <tr><td>spawn_frames</td><td>spawn worker frames in other repos without asking</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="install" class="install">
+  <div class="wrap">
+    <p class="kicker">install</p>
+    <h2>Four lines to a first frame.</h2>
+    <ul class="prereqs">
+      <li>zsh</li><li>git ≥ 2.5</li><li>Neovim</li><li>Claude Code</li><li>Ghostty (recommended)</li><li>docker (shared services only)</li>
+    </ul>
+    <div class="term">
+      <div class="term-bar"><i></i><i></i><i></i><b>zsh</b></div>
+<pre id="install-cmd"><button class="copy" type="button" data-copy="install-cmd">copy</button>git clone https://github.com/scoop206/frame.git
+cd frame
+echo "export PATH=\"$PWD/bin:\$PATH\"" &gt;&gt; ~/.zshrc &amp;&amp; source ~/.zshrc
+frame --help</pre>
+    </div>
+    <p style="margin-top:24px">Then <code>cd</code> into a project, run <code>frame init</code>, and <code>frame wt my-topic</code>. The <a href="https://github.com/scoop206/frame#onboarding-a-project">onboarding guide</a> covers project types, buffers and ports.</p>
+    <p>macOS is the primary target. The core workflow (worktrees, the Neovim layout, the Claude broker, merge and teardown, ports, shared services) runs on Linux too and is tested there in CI. Window focus and <code>frame spawn</code> are macOS-only.</p>
+    <div class="badges">
+      <a href="https://github.com/scoop206/frame/actions/workflows/test-macos.yml"><img src="https://github.com/scoop206/frame/actions/workflows/test-macos.yml/badge.svg?branch=main" alt="macOS tests"></a>
+      <a href="https://github.com/scoop206/frame/actions/workflows/test-linux.yml"><img src="https://github.com/scoop206/frame/actions/workflows/test-linux.yml/badge.svg?branch=main" alt="Linux tests"></a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <a href="https://github.com/scoop206/frame">GitHub</a>
+      <a href="https://github.com/scoop206/frame#readme">Docs</a>
+      <a href="https://www.youtube.com/watch?v=Z2tggjBM5w4">Demo video</a>
+      <a href="https://github.com/scoop206/frame/blob/main/LICENSE">License</a>
+    </div>
+    <div>frame<span style="color:var(--accent)">_</span></div>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll('.copy').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var pre = document.getElementById(b.dataset.copy);
+    var text = pre.innerText.replace(/^copy\s*/, '').trim();
+    navigator.clipboard.writeText(text).then(function () {
+      b.textContent = 'copied';
+      setTimeout(function () { b.textContent = 'copy'; }, 1500);
+    });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,3 +1,6 @@
 
 # frame — personal/local harness overrides, never committed
 .frame/local/
+
+# landing page build copies (see make site-assets)
+site/assets/
