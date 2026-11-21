@@ -1,6 +1,9 @@
 # frame shell TOPIC — a casual frame in the current dir: no branch, no
-# worktree. TOPIC is required — it's the frame's handle (window title, focus,
-# req) and must be unique across live frames.
+# worktree. TOPIC is the frame's handle (window title, focus, req) and must be
+# unique across live frames. It's required, except when resuming a past session
+# (--resume / --find / --recent): left out there, the frame is named after the
+# dir the session reopens in (a spawned shell's scratch dir is named after its
+# topic, so it gets that back), with -2, -3… if a live frame already has it.
 #
 # Boots the usual session in the cwd with just the claude + local buffers — or,
 # if the dir carries a frame project config (.frame/local/config.sh, else
@@ -17,20 +20,20 @@
 #                            uses this for its scratch dirs under
 #                            frame_shell_home (~/.local/share/frame/shells).
 #
-#   frame shell TOPIC --resume ID
+#   frame shell [TOPIC] --resume ID
 #                            resume past claude session ID. Boots in the dir the
 #                            session last ran in (`claude --resume` only finds a
 #                            session from its own dir), unless -C says
 #                            otherwise; then the transcript is bridged there.
 #
-#   frame shell TOPIC --find "WORDS"
+#   frame shell [TOPIC] --find "WORDS"
 #                            search past sessions for WORDS (every word, at a
 #                            word start, case-insensitive) in what YOU typed:
 #                            tool output and claude's replies don't count. Pick
 #                            one (fzf when installed, else a numbered list) and
 #                            it's resumed as with --resume.
 #
-#   frame shell TOPIC --recent
+#   frame shell [TOPIC] --recent
 #                            list your most recent past sessions (newest first,
 #                            each with the first thing you typed in it) in the
 #                            same picker as --find, to browse and resume one.
@@ -116,8 +119,10 @@ if [[ "${1:-}" == "-d" ]]; then
 fi
 
 _usage() {
-  echo "Usage: frame shell [-C DIR] TOPIC [--resume ID | --find \"WORDS\" | --recent]" >&2
-  echo "       (boots in DIR, default the current dir — or the session's own dir)" >&2
+  echo "Usage: frame shell [-C DIR] TOPIC" >&2
+  echo "       frame shell [-C DIR] [TOPIC] --resume ID | --find \"WORDS\" | --recent" >&2
+  echo "       (boots in DIR, default the current dir — or the session's own dir;" >&2
+  echo "        a resumed session's TOPIC defaults to that dir's name)" >&2
   exit 2
 }
 
@@ -149,12 +154,17 @@ while (( $# )); do
   esac
   shift
 done
-(( ${#_pos} == 1 )) || _usage
-TOPIC=$_pos[1]
+(( ${#_pos} <= 1 )) || _usage
+TOPIC=${_pos[1]:-}
 if (( (${#RESUME_ID} > 0) + (${#FIND} > 0) + RECENT > 1 )); then
   echo "$X_MARK frame shell: --resume, --find and --recent are mutually exclusive" >&2; exit 2
 fi
-if [[ -z "$TOPIC" || "$TOPIC" == */* ]]; then
+# TOPIC may be left out only when resuming — then it's named after the dir the
+# session reopens in, once that's known (see below).
+if [[ -z "$TOPIC" ]] && (( ! ${#RESUME_ID} && ! ${#FIND} && ! RECENT )); then
+  _usage
+fi
+if [[ "$TOPIC" == */* ]]; then
   echo "$X_MARK frame shell: TOPIC must be a plain name — no slashes" >&2
   exit 2
 fi
@@ -165,7 +175,9 @@ NAME=shell
 # focus can't disambiguate. Refuse before booting — and before --find asks you
 # to pick a session. (Re-entering this same shell frame is exempt — see
 # frame_assert_topic_free.)
-frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
+if [[ -n "$TOPIC" ]]; then
+  frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
+fi
 
 # --find WORDS: search past sessions, let the user pick one, resume it.
 if [[ -n "$FIND" ]]; then
@@ -230,6 +242,20 @@ DIR=${DIR:A}
 if [[ "$DIR" == "${HOME:A}" ]]; then
   echo "$X_MARK frame shell: refusing to boot in your home dir (~) — cd somewhere, or pass -C DIR" >&2
   exit 1
+fi
+
+# No TOPIC (resuming): name the frame after the dir it boots in, made a plain
+# name, with -2, -3… when a live frame — any kind, shell ones included — already
+# carries it, so this never collides with (or re-enters) a running frame.
+if [[ -z "$TOPIC" ]]; then
+  _base=${${DIR:t}//[^A-Za-z0-9._-]/-}
+  _base=${_base##[.-]#}
+  [[ -n "$_base" ]] || _base=session
+  typeset -A _live
+  while IFS=$'\t' read -r _ _t _; do _live[$_t]=1; done < <(frame_live_frames)
+  TOPIC=$_base _n=1
+  while [[ -n "${_live[$TOPIC]:-}" ]]; do TOPIC="$_base-$(( ++_n ))"; done
+  echo "$OK_MARK topic: $TOPIC (from the session's dir — pass a TOPIC to name it yourself)"
 fi
 
 # Ask before any side effect — a nested boot aborted here leaves nothing behind.

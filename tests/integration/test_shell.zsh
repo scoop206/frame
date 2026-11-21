@@ -82,7 +82,8 @@ test_shell_rejects_extra_args_and_flags() {
 }
 
 test_shell_requires_topic() {
-  # No minting, no guessing from the dir name: the topic is the frame's handle.
+  # Booting fresh, no minting, no guessing from the dir name: the topic is the
+  # frame's handle. (Only a resume names itself after its dir — see below.)
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
   run_frame shell
   assert_status 2
@@ -466,7 +467,7 @@ test_shell_find_no_match() {
   _session tax-1 "$SANDBOX/w/docs" "my 2023 tax return"
   run_frame shell taxes --find zebra < /dev/null
   assert_status 1
-  assert_contains "$OUT" "no past session"
+  assert_contains "$OUT" "no resumable past session"
 }
 
 test_shell_recent_without_tty_lists_sessions() {
@@ -481,6 +482,44 @@ test_shell_recent_without_tty_lists_sessions() {
   assert_contains "$OUT" "syn-2"
   assert_contains "$OUT" "fix this syntax error"
   assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_shell_resume_without_topic_names_it_after_the_dir() {
+  # Resuming, TOPIC is optional: the frame takes the session dir's name.
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  local docs="${${:-$SANDBOX/w/my docs}:A}"
+  mkdir -p "$docs" "$SANDBOX/w/elsewhere" && cd "$SANDBOX/w/elsewhere"
+  _session abc-123 "$docs" "my 2023 tax return"
+  run_frame shell --resume abc-123
+  assert_status 0
+  local log=$(<$FAKE_NVIM_LOG)
+  assert_contains "$log" "FRAME_TOPIC=my-docs"$'\n'
+  assert_contains "$log" "cwd: $docs"
+  assert_contains "$OUT" "topic: my-docs"
+}
+
+test_shell_resume_without_topic_skips_a_live_topic() {
+  # The dir's name is taken by a live frame → -2, never a collision.
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  local docs="${${:-$SANDBOX/w/docs}:A}"
+  mkdir -p "$docs"
+  _session abc-123 "$docs" "my 2023 tax return"
+  local sock="$FRAME_RUNDIR/$TNAME-other.nvim"
+  python3 -c 'import socket,sys
+s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$sock"
+  printf '%s\t%s\t%s\t%s\n' shell docs '' '' > "$sock.info"
+  run_frame shell --resume abc-123
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_TOPIC=docs-2"$'\n'
+}
+
+test_shell_recent_without_topic_lists_sessions() {
+  _session tax-1 "${${:-$SANDBOX/w/docs}:A}" "my 2023 tax return"
+  mkdir -p "$SANDBOX/w/docs"
+  run_frame shell --recent < /dev/null
+  assert_status 1
+  assert_contains "$OUT" "tax-1"
+  assert_not_contains "$OUT" "Usage:"
 }
 
 test_shell_recent_is_exclusive_with_find() {
