@@ -163,7 +163,8 @@ test_recent_resumable_skips_worktrees() {
   f=$(_t p-1 x); _typed "$f" "$HOME/r/plain" "plain one"; touch -t 202001010000 "$f"
   f=$(_t p-2 x); _typed "$f" "$HOME/r/repo" "repo one";   touch -t 202001010000 "$f"
   local -a ids=( ${(f)"$(frame_session_recent --resumable 2 | cut -f2)"} )
-  assert_eq "${(o)ids[*]}" "p-1 p-2"
+  local -a sorted=( ${(o)ids} )
+  assert_eq "${sorted[*]}" "p-1 p-2"
   assert_eq "$(frame_session_recent 10 | wc -l | tr -d ' ')" "5"
 }
 
