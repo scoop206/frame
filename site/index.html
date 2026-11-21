@@ -111,6 +111,10 @@ ul.ticks li::before { content: "→"; position: absolute; left: 0; color: var(--
 .intro .ticks { margin: 0; }
 .clip video { display: block; width: 100%; height: auto; background: #1e1e2e; }
 
+.tip { margin-top: 56px; padding: 32px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; align-items: start; }
+.tip h3 { font-size: 22px; margin-bottom: 14px; }
+@media (max-width: 560px) { .tip { padding: 20px; } }
+
 /* coordinator diagram */
 .diagram { margin-top: 40px; }
 .diagram svg { width: 100%; height: auto; display: block; }
@@ -174,7 +178,7 @@ footer a:hover { color: var(--fg); }
   <div class="wrap">
     <p class="eyebrow">an AI harness on zsh · ghostty · neovim · claude code</p>
     <h1>Let Vim run all your claudes.<br><span class="h1-accent">Use frame to coordinate them all.</span><span class="cursor" aria-hidden="true"></span></h1>
-    <p class="lede">Every Claude session lives in a Neovim buffer, next to your shell and your dev server. Jump between them with the keys you already use, send any selection to Claude as a question, and give each topic its own worktree, ports and branch.</p>
+    <p class="lede">Every Claude session lives in a Neovim buffer, next to your shell and your dev server. Jump between them with the key combos you already use, and send any selection, from a buffer, a text file, or further up the Claude session itself, straight to the frame's local Claude.</p>
     <div class="ctas">
       <a class="btn primary" href="#install">Install frame</a>
       <a class="btn" href="https://github.com/scoop206/frame">View on GitHub</a>
@@ -231,10 +235,29 @@ vim.keymap.set(<span class="ok">'x'</span>, <span class="ok">'&lt;leader&gt;l'</
       </div>
     </div>
     <div class="term clip">
-      <video autoplay muted loop playsinline preload="metadata" poster="clips/ask.jpg" width="1200" height="680" aria-label="Two lines selected in Neovim, leader-L, a question typed; the frame's Claude opens in a split and answers about the selection">
+      <video autoplay muted loop playsinline preload="metadata" poster="clips/ask.jpg" width="1200" height="680" aria-label="Two lines selected in Neovim, leader-l, a question typed; the frame's Claude opens in a split and answers about the selection">
         <source src="clips/ask.webm" type="video/webm">
         <source src="clips/ask.mp4" type="video/mp4">
       </video>
+    </div>
+
+    <div class="tip split">
+      <div>
+        <p class="kicker">vim trick</p>
+        <h3>Bookmark the answer worth keeping.</h3>
+        <p>The Claude session is a buffer, so Vim marks work in it. When Claude gives you a table, a plan or a diff you'll want again, drop a mark on it. Then keep the conversation going as long as you like and jump straight back to that reference point.</p>
+        <p>Uppercase marks are global: set <code>mT</code> on the table and <code>`T</code> brings you back to it from any file in the frame.</p>
+      </div>
+      <div class="term">
+        <div class="term-bar"><i></i><i></i><i></i><b>nvim · claude</b></div>
+<pre><span class="dim"># in the claude buffer, normal mode (Ctrl-\ Ctrl-n)</span>
+<span class="hl">ma</span>        <span class="dim">mark the answer with the good table</span>
+<span class="hl">i</span>         <span class="dim">back to the prompt: keep talking</span>
+          <span class="dim">… twenty turns later …</span>
+<span class="hl">`a</span>        <span class="dim">jump straight back to the table</span>
+
+<span class="hl">mT</span> / <span class="hl">`T</span>   <span class="dim">uppercase: works from any buffer</span></pre>
+      </div>
     </div>
   </div>
 </section>
