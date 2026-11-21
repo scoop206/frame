@@ -146,6 +146,53 @@ test_conflict_stops_with_abort_hint() {
     || fail "expected an in-progress merge (MERGE_HEAD)"
 }
 
+test_non_conflict_failure_does_not_claim_conflicts() {
+  # A merge that fails for a reason other than a conflict (here: no git
+  # identity, so the merge commit can't be written) leaves nothing in
+  # progress. frame must say the merge failed, show git's reason, and NOT
+  # suggest `merge --abort` (it would fail: "There is no merge to abort").
+  setup_topic
+  local before=$(git -C "$REPO" rev-parse main)
+  git config --global --unset user.name
+  git config --global --unset user.email
+  git config --global user.useConfigOnly true   # no hostname auto-detect
+  run_frame merge feature
+  assert_status 1
+  assert_contains "$OUT" "merge of 'feature' into main failed"
+  assert_contains "$OUT" "git: fatal:"
+  assert_not_contains "$OUT" "merge hit conflicts"
+  assert_not_contains "$OUT" "merge --abort"
+  assert_not_contains "$OUT" "merged 'feature' into main"
+  assert_eq "$(git -C "$REPO" rev-parse main)" "$before" "main moved on a failed merge"
+  git -C "$REPO" rev-parse -q --verify MERGE_HEAD >/dev/null \
+    && fail "expected no in-progress merge"
+  return 0
+}
+
+test_ff_failure_reports_cleanly() {
+  # --ff path: an untracked file in the primary worktree that the topic would
+  # overwrite makes git refuse; frame reports the failure, not a conflict.
+  setup_topic
+  print -r -- "untracked in the way" > "$REPO/feature.txt"
+  run_frame merge feature --ff
+  assert_status 1
+  assert_contains "$OUT" "merge of 'feature' into main failed"
+  assert_contains "$OUT" "untracked working tree files would be overwritten"
+  assert_not_contains "$OUT" "merge --abort"
+  assert_not_contains "$OUT" "merged 'feature' into main"
+}
+
+test_ff_conflict_keeps_abort_hint() {
+  # --ff that can't fast-forward falls back to a real merge; a conflict there
+  # gets the same conflict message as the --no-ff path.
+  setup_topic
+  commit_file "$REPO" feature.txt "conflicting content on main"
+  run_frame merge feature --ff
+  assert_status 1
+  assert_contains "$OUT" "merge hit conflicts"
+  assert_contains "$OUT" "merge --abort"
+}
+
 test_unknown_flag_exits_2() {
   setup_topic
   run_frame merge feature -x

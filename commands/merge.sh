@@ -124,15 +124,43 @@ else
   echo "→ no 'origin' remote — skipping origin sync (local-only project)"
 fi
 
-# 4. Merge the topic branch.
-if $FF; then
-  run git -C "$MAIN_WT" merge --ff "$TOPIC"
-else
-  if ! run git -C "$MAIN_WT" merge --no-ff -m "Merge branch '$TOPIC'" "$TOPIC"; then
-    echo "$X_MARK merge hit conflicts. Resolve in $MAIN_WT, or back out with:" >&2
+# 4. Merge the topic branch. A failed `git merge` isn't always a conflict: a
+#    missing git identity, untracked files in the way, or a refusing hook all
+#    fail it too, often with nothing left in progress — so tell the cases apart
+#    from the repo state instead of assuming, and only suggest --abort when
+#    there is a merge to abort.
+merge_failed() {
+  local git_out=$1
+  if git -C "$MAIN_WT" rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    if [[ -n $(git -C "$MAIN_WT" ls-files -u) ]]; then
+      echo "$X_MARK merge hit conflicts. Resolve in $MAIN_WT, or back out with:" >&2
+    else
+      # In progress but nothing unmerged: git stopped before committing.
+      echo "$X_MARK merge stopped before committing. Finish it in $MAIN_WT with 'git commit', or back out with:" >&2
+    fi
     echo "    git -C $MAIN_WT merge --abort" >&2
-    exit 1
+  else
+    echo "$X_MARK merge of '$TOPIC' into $MAIN_BRANCH failed — nothing was merged, $MAIN_BRANCH is unchanged." >&2
+    # Repeat git's own error (its fatal:/error: lines; else its last line) so
+    # the cause sits next to frame's verdict instead of scrolled above it.
+    local -a why=( ${(M)${(f)git_out}:#(fatal|error):*} )
+    (( $#why )) || why=( "${${(f)git_out}[-1]}" )
+    [[ -n ${why[1]} ]] && printf '    git: %s\n' "${why[@]}" >&2
   fi
+  exit 1
+}
+
+if $FF; then
+  merge_args=( --ff "$TOPIC" )
+else
+  merge_args=( --no-ff -m "Merge branch '$TOPIC'" "$TOPIC" )
+fi
+echo "  \$ git -C $MAIN_WT merge ${merge_args[*]}"
+if ! $DRY; then
+  # Capture (for merge_failed) while still showing git's output as usual.
+  merge_out=$(git -C "$MAIN_WT" merge "${merge_args[@]}" 2>&1) && merge_rc=0 || merge_rc=$?
+  [[ -n $merge_out ]] && print -r -- "$merge_out"
+  (( merge_rc == 0 )) || merge_failed "$merge_out"
 fi
 echo "$OK_MARK merged '$TOPIC' into $MAIN_BRANCH"
 
