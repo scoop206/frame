@@ -42,7 +42,11 @@
 #                            Both lists show only sessions you can resume here:
 #                            ones that last ran in a git worktree (a `frame wt`
 #                            frame's — `frame wt --from` hands those on), in a
-#                            dir that's gone, or in ~ are left out.
+#                            dir that's gone, or in ~ are left out. A session
+#                            that's open right now is marked ●: picking it (or
+#                            --resume'ing it) switches to the frame it's open in
+#                            — a second claude can't join it — or, if it's open
+#                            outside any frame, says so and stops.
 #
 #   frame shell -d [TOPIC]   tear down: just quit the session. A shell has no
 #                            branch or worktree to reap, so teardown collapses
@@ -214,6 +218,25 @@ if [[ -n "$RESUME_ID" ]]; then
   fi
   if ! _transcript=$(frame_session_transcript "$RESUME_ID"); then
     echo "$X_MARK no transcript for session $RESUME_ID under ~/.claude/projects" >&2
+    exit 1
+  fi
+  # Already open? A second `claude --resume` wouldn't join it — it'd be a
+  # second claude appending to the same transcript, the two diverging. So
+  # switch to the frame it's open in instead, or say where it is.
+  _pid=$(frame_session_running | awk -F'\t' -v id="$RESUME_ID" '$1 == id { print $2; exit }')
+  if [[ -n "$_pid" ]]; then
+    _rname=$(frame_proc_env "$_pid" FRAME_NAME) || _rname=""
+    _rtopic=$(frame_proc_env "$_pid" FRAME_TOPIC) || _rtopic=""
+    if [[ -n "$_rname" && -n "$_rtopic" ]] \
+        && frame_live_frames | awk -F'\t' -v n="$_rname" -v t="$_rtopic" \
+             '$1 == n && $2 == t { f = 1 } END { exit !f }'; then
+      echo "$OK_MARK session $RESUME_ID is already open in frame $_rname/$_rtopic — switching to it"
+      exec "$FRAME_ROOT/bin/frame" focus "$_rname/$_rtopic"
+    fi
+    _rdir=$(frame_session_cwd "$_transcript" 2>/dev/null) || _rdir="?"
+    echo "$X_MARK session $RESUME_ID is already open (claude pid $_pid, in ${_rdir/#$HOME/~}) —" >&2
+    echo "  it's not in a frame, so switch to its terminal; resuming it again would" >&2
+    echo "  start a second claude writing to the same conversation" >&2
     exit 1
   fi
   if (( ! DIR_GIVEN )); then

@@ -522,6 +522,65 @@ test_shell_recent_without_topic_lists_sessions() {
   assert_not_contains "$OUT" "Usage:"
 }
 
+_open_session() {  # _open_session ID [ENV…] — a live stand-in claude for session ID; echoes its pid
+  # jq waiting on a fifo it holds open (<>), not sleep: macOS hides an
+  # Apple-signed binary's env, and the in-a-frame case reads FRAME_NAME/TOPIC.
+  mkdir -p "$HOME/.claude/sessions"
+  local hold="$HOME/hold-$1"
+  [[ -p "$hold" ]] || mkfifo "$hold"
+  env "${@:2}" jq -R . <>"$hold" >/dev/null 2>&1 &
+  print -r -- "{\"sessionId\":\"$1\"}" > "$HOME/.claude/sessions/$!.json"
+  print -r -- $!
+}
+
+test_shell_recent_marks_open_sessions() {
+  local docs="${${:-$SANDBOX/w/docs}:A}"
+  mkdir -p "$docs"
+  _session open-1 "$docs" "the open one"
+  _session shut-2 "$docs" "the closed one"
+  local pid=$(_open_session open-1)
+  run_frame shell --recent < /dev/null
+  kill $pid 2>/dev/null
+  assert_contains "$OUT" "open-1  ● "
+  assert_not_contains "$OUT" "shut-2  ● "
+}
+
+test_shell_resume_open_session_outside_a_frame_refuses() {
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  local docs="${${:-$SANDBOX/w/docs}:A}"
+  mkdir -p "$docs"
+  _session open-1 "$docs" "the open one"
+  local pid=$(_open_session open-1)
+  run_frame shell --resume open-1
+  kill $pid 2>/dev/null
+  assert_status 1
+  assert_contains "$OUT" "already open (claude pid $pid"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
+test_shell_resume_open_session_in_a_frame_switches_to_it() {
+  [[ $OSTYPE == darwin* ]] || { skip "focus rides AppleScript — macOS-only"; return }
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  local docs="${${:-$SANDBOX/w/docs}:A}"
+  mkdir -p "$docs"
+  _session open-1 "$docs" "the open one"
+  local sock="$FRAME_RUNDIR/$TNAME-cow.nvim"
+  python3 -c 'import socket,sys
+s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$sock"
+  printf '%s\t%s\t%s\t%s\n' shell cowpoke '' '' > "$sock.info"
+  local pid=$(_open_session open-1 FRAME_NAME=shell FRAME_TOPIC=cowpoke)
+  # the osascript stub stands in for AppleScript's answer (see test_focus.zsh)
+  export FAKE_OSASCRIPT_LOG="$SANDBOX/osascript.log" FAKE_OSASCRIPT_RESULT=raised
+  sleep 0.2
+  run_frame shell --resume open-1
+  kill $pid 2>/dev/null
+  assert_status 0
+  assert_contains "$OUT" "already open in frame shell/cowpoke — switching to it"
+  assert_contains "$OUT" "focused shell/cowpoke"
+  assert_contains "$(<$FAKE_OSASCRIPT_LOG)" "argv: - shell cowpoke"
+  assert_file_absent "$FAKE_NVIM_LOG"
+}
+
 test_shell_recent_is_exclusive_with_find() {
   run_frame shell taxes --recent --find tax
   assert_status 2

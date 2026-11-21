@@ -167,4 +167,26 @@ test_recent_resumable_skips_worktrees() {
   assert_eq "$(frame_session_recent 10 | wc -l | tr -d ' ')" "5"
 }
 
+test_session_running_lists_live_pids_only() {
+  mkdir -p "$HOME/.claude/sessions"
+  sleep 60 & local live=$!
+  print -r -- '{"sessionId":"s-live"}' > "$HOME/.claude/sessions/$live.json"
+  print -r -- '{"sessionId":"s-dead"}' > "$HOME/.claude/sessions/999999.json"
+  local out=$(frame_session_running)
+  kill $live 2>/dev/null
+  assert_eq "$out" "s-live"$'\t'"$live"
+}
+
+test_proc_env_reads_a_running_process() {
+  # jq, not sleep: macOS hides an Apple-signed binary's env (see frame_proc_env).
+  # It waits on a fifo it holds open itself (<>), so no feeder to clean up.
+  mkfifo "$HOME/hold"
+  env FRAME_TOPIC=cowpoke jq -R . <>"$HOME/hold" >/dev/null 2>&1 & local pid=$!
+  sleep 0.2
+  local got=$(frame_proc_env $pid FRAME_TOPIC)
+  frame_proc_env $pid NOT_THERE_X >/dev/null && fail "unset var should return 1"
+  kill $pid 2>/dev/null
+  assert_eq "$got" "cowpoke"
+}
+
 run_tests "$0"
