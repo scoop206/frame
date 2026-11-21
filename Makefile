@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration lint usage check-usage
+.PHONY: test test-unit test-integration lint usage check-usage site-assets site
 
 test:
 	zsh tests/run.sh
@@ -20,3 +20,13 @@ test-integration:
 
 lint:
 	zsh tests/run.sh --lint
+
+# landing page (site/) — shared images live in assets/, copied in at build time
+SITE_ASSETS = demo.gif frame-icon.png frame_social.png
+
+site-assets:
+	@mkdir -p site/assets
+	@for f in $(SITE_ASSETS); do cp assets/$$f site/assets/$$f; done
+
+site: site-assets
+	python3 -m http.server -d site 8080
