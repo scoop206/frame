@@ -134,6 +134,26 @@ ul.ticks li::before { content: "→"; position: absolute; left: 0; color: var(--
 .vc .bar i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); border-radius: 2px; }
 .vc .t { min-width: 76px; text-align: right; font-variant-numeric: tabular-nums; }
 
+/* on this page */
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+[id] { scroll-margin-top: 24px; }
+.onpage { margin: -16px 0 44px; border-bottom: 0; }
+.onpage .kicker { margin-bottom: 14px; }
+.onpage ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.onpage a { display: grid; align-content: start; grid-template-columns: auto 1fr; column-gap: 10px; row-gap: 2px; padding: 12px 14px; height: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2); text-decoration: none; transition: border-color .15s, background .15s; }
+.onpage a:hover, .onpage a:focus-visible { border-color: var(--accent); background: var(--bg-3); }
+.onpage .n { grid-row: span 2; font: 600 12px var(--mono); color: var(--accent); padding-top: 2px; }
+.onpage b { font: 600 14px var(--mono); color: var(--fg); }
+.onpage a span:last-child { font-size: 13.5px; color: var(--fg-mute); line-height: 1.4; }
+@media (max-width: 560px) {
+  .onpage ol { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .onpage a { padding: 10px 12px; column-gap: 8px; }
+  .onpage b { font-size: 13px; }
+  .onpage a span:last-child { display: none; }
+  .onpage .n { grid-row: auto; }
+}
+
 /* coordinator diagram */
 .diagram { margin-top: 40px; }
 .diagram svg { width: 100%; height: auto; display: block; }
@@ -197,14 +217,26 @@ footer a:hover { color: var(--fg); }
       <a class="btn" href="https://github.com/scoop206/frame">View on GitHub</a>
       <a class="btn" href="https://www.youtube.com/watch?v=Z2tggjBM5w4">Watch the demo</a>
     </div>
-    <div class="term clip">
+    <nav class="onpage" aria-label="On this page">
+      <p class="kicker">on this page</p>
+      <ol>
+      <li><a href="#demo"><span class="n">01</span><b>Vim runs the claudes</b><span>Claude, shell and dev server as buffers</span></a></li>
+      <li><a href="#marks"><span class="n">02</span><b>Bookmark an answer</b><span>Vim marks inside the Claude session</span></a></li>
+      <li><a href="#resume"><span class="n">03</span><b>Resume any session</b><span>Pick up a past conversation in place</span></a></li>
+      <li><a href="#coordinate"><span class="n">04</span><b>One coordinator, many workers</b><span>Spawn worktree frames across repos</span></a></li>
+      <li><a href="#safety"><span class="n">05</span><b>Nothing collides</b><span>Own ports, guarded merge, clean teardown</span></a></li>
+      <li><a href="#autonomy"><span class="n">06</span><b>You set the leash</b><span>How far agents go on their own</span></a></li>
+      <li><a href="#start"><span class="n">07</span><b>Get started</b><span>Install guide on GitHub</span></a></li>
+      </ol>
+    </nav>
+    <div class="term clip" id="demo">
       <video autoplay muted loop playsinline preload="metadata" poster="clips/hero.jpg" width="1280" height="740" aria-label="frame wt boots an Astro project into Neovim; Claude drafts two shorter versions of the homepage lead, the astro dev server is another buffer, and a selection sent with leader-l has Claude edit the file">
         <source src="clips/hero.webm" type="video/webm">
         <source src="clips/hero.mp4" type="video/mp4">
       </video>
     </div>
     <p class="hero-caption">One frame on an Astro site: Claude, a shell and <code>astro dev</code> as buffers, and a selection carried from the code to Claude.</p>
-    <div class="tip split">
+    <div class="tip split" id="marks">
       <div>
         <p class="kicker">vim trick</p>
         <h3>Bookmark the answer worth keeping.</h3>
