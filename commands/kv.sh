@@ -17,11 +17,14 @@
 # of lib/helpers.sh for where each lives). Files, not env vars, so a change
 # reaches a running claude — it reads `frame kv get` when it acts.
 #
-# Settings are the human's. From inside claude (CLAUDECODE set) `set` is
-# refused except a boolean key to false — an agent may rein itself in, never
-# grant itself more — string keys can't be set at all (no "safer" direction),
-# and `unset` is refused outright (it could expose a looser layer). That's a
-# guard against well-meaning drift, not a security boundary.
+# Settings are the human's. From inside claude (CLAUDECODE set) an agent writes
+# only its own frame's layer — never --project/--user — and for a DECLARED key
+# only to set a boolean to false: it may rein itself in, never grant itself
+# more; string keys can't be set at all (no "safer" direction), and `unset` is
+# refused (it could expose a looser layer). Keys nobody declared are the
+# agent's own notes (ticket=ENG-412): it may set and unset those freely, on its
+# frame only, kept apart from the settings (see lib/helpers.sh). That's a guard
+# against well-meaning drift, not a security boundary.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
 _kv_usage() {
@@ -29,13 +32,41 @@ _kv_usage() {
   exit 2
 }
 
+_kv_is_note() {
+  # An agent note: undeclared, and present in this frame's agent file.
+  ! frame_kv_is_declared "$1" && (( ${${(f)"$(frame_kv_agent_keys)"}[(Ie)$1]} ))
+}
+
 _kv_check_key() {
-  if [[ -z "$1" ]] || ! (( ${FRAME_KV_KEYS[(Ie)$1]} )); then
-    print -r -- "$X_MARK unknown key '$1' — known: ${(j:, :)FRAME_KV_KEYS}" >&2
+  # Declared keys and existing agent notes pass; anything else is a typo or a
+  # key that needs declaring.
+  [[ -n "$1" ]] && { frame_kv_is_declared "$1" || _kv_is_note "$1"; } && return 0
+  print -r -- "$X_MARK unknown key '$1' — known: ${(j:, :)FRAME_KV_KEYS}" >&2
+  if [[ -n "${CLAUDECODE:-}" ]]; then
+    print -r -- "  No note by that name on this frame. To keep one: frame kv set $1 VALUE" >&2
+  else
     print -r -- "  To add your own, declare it in .frame/kv.defaults (project, committed) or" >&2
     print -r -- "  ~/.config/frame/kv.defaults (user) — same format as frame's kv.defaults." >&2
-    exit 2
   fi
+  exit 2
+}
+
+_kv_agent_frame_only() {
+  # An agent writes only its own frame.
+  [[ -n "${CLAUDECODE:-}" && "$layer" != frame ]] || return 0
+  print -r -- "$X_MARK an agent can only write its own frame's kv, not the $layer layer —" >&2
+  print -r -- "  that would reach every frame${${layer:#user}:+ of this project}${${layer:#project}:+ on this machine}." >&2
+  print -r -- "  Ask the human to run:  frame kv ${sub} --$layer ${(j: :)${(q-)@}}" >&2
+  exit 1
+}
+
+_kv_note_file() {
+  # The agent-note file for this frame, or exit with why there's none.
+  if [[ -z "$FRAME_KV_AGENT_FILE" ]]; then
+    print -r -- "$X_MARK not inside a frame — agent notes live on a frame" >&2
+    exit 1
+  fi
+  print -r -- "$FRAME_KV_AGENT_FILE"
 }
 
 _kv_warn_decls() {
@@ -48,6 +79,12 @@ _kv_warn_decls() {
 }
 
 _kv_describe_one() {
+  if ! frame_kv_is_declared "$1"; then
+    frame_kv_lookup "$1" || true
+    print -r -- "$1 = $KV_VALUE  from $KV_LAYER"
+    print -r -- "  agent note: undeclared, kept by this frame's claude; gone at frame wt -d"
+    return 0
+  fi
   local _k=$1 _type=string _from=${FRAME_KV_FROM[$1]}
   frame_kv_is_bool "$_k" && _type=boolean
   case "$_from" in
@@ -98,9 +135,14 @@ case "$sub" in
     _kv_warn_decls
     # Columns fit the longest key/value; a long string value is clipped (see
     # `frame kv get` / `describe` for the whole thing).
+    for k in ${(f)"$(frame_kv_agent_keys --shadowed)"}; do
+      print -r -- "$WARN_MARK agent note '$k' is ignored — $k is now a declared key" >&2
+    done
     typeset -A _vals _from
+    typeset -a _all
+    _all=($FRAME_KV_KEYS ${(f)"$(frame_kv_agent_keys)"})
     integer _kw=17 _vw=7
-    for k in $FRAME_KV_KEYS; do
+    for k in $_all; do
       frame_kv_lookup "$k" || true
       _v=$KV_VALUE
       (( $#_v > 30 )) && _v="${_v[1,29]}…"
@@ -109,7 +151,7 @@ case "$sub" in
       (( $#_v > _vw )) && _vw=$#_v
     done
     printf "%-${_kw}s %-${_vw}s %s\n" KEY VALUE FROM
-    for k in $FRAME_KV_KEYS; do
+    for k in $_all; do
       printf "%-${_kw}s %-${_vw}s %s\n" "$k" "$_vals[$k]" "$_from[$k]"
     done
     ;;
@@ -122,7 +164,7 @@ case "$sub" in
       _kv_describe_one "$1"
     else
       _first=1
-      for k in $FRAME_KV_KEYS; do
+      for k in $FRAME_KV_KEYS ${(f)"$(frame_kv_agent_keys)"}; do
         (( _first )) || print
         _first=0
         _kv_describe_one "$k"
@@ -139,7 +181,29 @@ case "$sub" in
   set)
     (( $# == 2 )) || _kv_usage
     key=$1 val=$2
+    _kv_agent_frame_only "$key" "$val"
+    if [[ "$val" == *$'\n'* ]]; then
+      print -r -- "$X_MARK $key takes a single-line value" >&2
+      exit 2
+    fi
+    # Undeclared key: an agent note. The agent may create one; a human may only
+    # edit one that exists (anything else is likelier a typo of a setting).
+    if ! frame_kv_is_declared "$key" && [[ "$layer" == frame ]] \
+        && { [[ -n "${CLAUDECODE:-}" ]] || _kv_is_note "$key"; }; then
+      if ! frame_kv_valid_key "$key"; then
+        print -r -- "$X_MARK '$key' isn't a key name — lowercase letters, digits, _; starting with a letter" >&2
+        exit 2
+      fi
+      file=$(_kv_note_file)
+      frame_kvfile_set "$file" "$key" "$val" "# frame kv — agent notes for this frame (undeclared keys; see \`frame kv\`)."
+      print -r -- "$OK_MARK $key=$val (frame, agent note)"
+      exit 0
+    fi
     _kv_check_key "$key"
+    if ! frame_kv_is_declared "$key"; then
+      print -r -- "$X_MARK $key is an agent note — notes live on the frame layer only" >&2
+      exit 2
+    fi
     _kv_warn_decls
     # Boolean keys take only true/false — a "yes" would read as false. A string
     # takes anything that fits on one line of a key=value file.
@@ -148,9 +212,6 @@ case "$sub" in
         print -r -- "$X_MARK $key takes true or false, not '$val'" >&2
         exit 2
       fi
-    elif [[ "$val" == *$'\n'* ]]; then
-      print -r -- "$X_MARK $key takes a single-line value" >&2
-      exit 2
     fi
     if [[ -n "${CLAUDECODE:-}" ]] && { ! frame_kv_is_bool "$key" || [[ "$val" != false ]]; }; then
       if frame_kv_is_bool "$key"; then
@@ -173,7 +234,17 @@ case "$sub" in
   unset)
     (( $# == 1 )) || _kv_usage
     key=$1
+    _kv_agent_frame_only "$key"
     _kv_check_key "$key"
+    if _kv_is_note "$key"; then
+      if [[ "$layer" != frame ]]; then
+        print -r -- "$key is an agent note on this frame, not set in the $layer layer — nothing to unset"
+        exit 0
+      fi
+      frame_kvfile_unset "$(_kv_note_file)" "$key"
+      print -r -- "$OK_MARK unset $key (frame, agent note)"
+      exit 0
+    fi
     if [[ -n "${CLAUDECODE:-}" ]]; then
       print -r -- "$X_MARK frame kv settings are the human's — an agent can't unset them" >&2
       print -r -- "  (that could expose a looser layer). Set it to false instead." >&2

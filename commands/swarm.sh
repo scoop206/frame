@@ -139,7 +139,9 @@ What only you can know (not discoverable by grep):
                            (false → ask the human before spawning)
 @KV_CUSTOM@
   Never `frame kv set` a key to true or change a string key —
-  that's the human's to grant.
+  that's the human's to grant. Keys nobody declared are yours:
+  keep notes on this frame with `frame kv set KEY VALUE` (e.g.
+  ticket=ENG-412); they're gone at teardown.
 • To reach a sibling frame, that's the broker — `frame req` (see
   `frame --help`), NOT the SendMessage tool. SendMessage only
   continues a subagent you spawned; a sibling is a separate session
@@ -173,8 +175,14 @@ EOF
     _desc=${${(f)FRAME_KV_DESC[$_k]}[1]:-}
     _custom+=$'\n'"    $_k${_desc:+ → $_desc}"
   done
+  [[ -n "$_custom" ]] && _custom="  Custom keys (frame kv describe KEY for more):$_custom"
+  # This frame's agent notes, so a resumed session picks its state back up.
+  local _notes=""
+  for _k in ${(f)"$(frame_kv_agent_keys)"}; do
+    _notes+="${_notes:+  }$_k=$(frame_kv_get "$_k" || true)"
+  done
+  [[ -n "$_notes" ]] && _custom+="${_custom:+$'\n'}  Your notes on this frame: $_notes"
   if [[ -n "$_custom" ]]; then
-    _custom="  Custom keys (frame kv describe KEY for more):$_custom"
     _core=${_core//@KV_CUSTOM@/$_custom}
   else
     _core=${_core//$'\n'@KV_CUSTOM@/}

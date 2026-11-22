@@ -277,6 +277,13 @@ frame_kvfile_unset() {
 # Frame itself only stores and advertises custom keys — agents, hooks, and
 # scripts read them with `frame kv get`.
 #
+# Agent notes: any key NOT declared anywhere is the agent's own to set, on its
+# own frame only (ticket=ENG-412, blocked_on=…). They live in a file of their
+# own beside the frame layer (<TOPIC>.agent, reaped with it by frame wt -d) and
+# are only ever consulted for undeclared keys — so a note can never shadow a
+# setting, even one declared after the note was written. Lookups report them
+# as "frame (agent)".
+#
 # Callers first pick WHOSE settings to read with frame_kv_scope, then query.
 
 FRAME_KV_DEFAULTS="$FRAME_ROOT/kv.defaults"
@@ -302,9 +309,11 @@ frame_kv_scope() {
     project ""
     user    "$_cfg/kv.defaults"
   )
+  typeset -g FRAME_KV_AGENT_FILE=""
   if [[ -n "$_name" && -n "$_topic" ]]; then
     # A topic may contain '/' (feature/x) — flatten so it stays one file.
     FRAME_KV_FILE[frame]="$HOME/.local/share/frame/kv/$_name/${_topic//\//%}"
+    FRAME_KV_AGENT_FILE="${FRAME_KV_FILE[frame]}.agent"
   fi
   if [[ -n "$_main" ]]; then
     FRAME_KV_FILE[project]="$_main/.frame/local/kv"
@@ -340,7 +349,7 @@ _frame_kv_load_decls() {
         _block=(); continue
       fi
       _k=${_line%%=*} _v=${_line#*=}
-      if [[ "$_line" != *=* || "$_k" != [a-z]* || "$_k" == *[^a-z0-9_]* ]]; then
+      if [[ "$_line" != *=* ]] || ! frame_kv_valid_key "$_k"; then
         FRAME_KV_WARNINGS+=("$_file:$_n: not a declaration (want key=default, key like my_key) — skipped")
       elif [[ -n "${FRAME_KV_FROM[$_k]:-}" ]]; then
         if [[ "${FRAME_KV_FROM[$_k]}" == builtin ]]; then
@@ -382,10 +391,18 @@ frame_kv_lookup() {
   # frame_kv_lookup KEY — set KV_VALUE to KEY's effective value and KV_LAYER to
   # the layer it came from; return 1 (both empty) when no layer sets it. A
   # declared default reports as "default", or "default (project|user)" for a
-  # custom key. Sets globals rather than printing so the caller gets both
-  # without a subshell.
+  # custom key; an agent note (undeclared key) as "frame (agent)". Sets
+  # globals rather than printing so the caller gets both without a subshell.
   _frame_kv_ensure_scope
   local _layer _file _v
+  if ! frame_kv_is_declared "$1"; then
+    if [[ -n "$FRAME_KV_AGENT_FILE" ]] && _v=$(frame_kvfile_get "$FRAME_KV_AGENT_FILE" "$1"); then
+      KV_VALUE=$_v KV_LAYER="frame (agent)"
+      return 0
+    fi
+    KV_VALUE="" KV_LAYER=""
+    return 1
+  fi
   for _layer in $FRAME_KV_LAYERS; do
     if [[ "$_layer" == default ]]; then
       (( ${+FRAME_KV_DEF[$1]} )) || continue
@@ -421,6 +438,36 @@ frame_kv_keys() {
   # Print the declared keys, one per line: built-ins, then project, then user.
   _frame_kv_ensure_scope
   (( $#FRAME_KV_KEYS )) && print -rl -- "${FRAME_KV_KEYS[@]}"
+  return 0
+}
+
+frame_kv_is_declared() {
+  # frame_kv_is_declared KEY — succeed iff some declaration file declares KEY.
+  _frame_kv_ensure_scope
+  (( ${+FRAME_KV_DEF[$1]} ))
+}
+
+frame_kv_valid_key() {
+  # frame_kv_valid_key KEY — lowercase letters, digits, _; starts with a letter.
+  [[ "$1" == [a-z]* && "$1" != *[^a-z0-9_]* ]]
+}
+
+frame_kv_agent_keys() {
+  # Print this frame's agent notes, one key per line, in file order. With
+  # --shadowed, print instead the notes a declaration now hides (ignored).
+  _frame_kv_ensure_scope
+  [[ -n "$FRAME_KV_AGENT_FILE" && -f "$FRAME_KV_AGENT_FILE" ]] || return 0
+  local _line _k
+  for _line in "${(@f)$(<$FRAME_KV_AGENT_FILE)}"; do
+    [[ "$_line" == *=* ]] || continue
+    _k=${_line%%=*}
+    frame_kv_valid_key "$_k" || continue
+    if frame_kv_is_declared "$_k"; then
+      [[ "${1:-}" == --shadowed ]] && print -r -- "$_k"
+    else
+      [[ "${1:-}" == --shadowed ]] || print -r -- "$_k"
+    fi
+  done
   return 0
 }
 

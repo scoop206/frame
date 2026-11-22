@@ -200,7 +200,7 @@ if [[ "${1:-}" == "-d" ]]; then
   # …and its frame-layer kv settings: a reused topic name starts from the
   # project/user defaults, not whatever the last frame by that name was told.
   frame_kv_scope "$NAME" "$TOPIC" ""
-  rm -f "$FRAME_KV_FILE[frame]"
+  rm -f "$FRAME_KV_FILE[frame]" "$FRAME_KV_AGENT_FILE"
   # The worktree is gone but its claude transcript isn't: name the way back.
   # frame shell maps the removed worktree to the primary checkout on its own
   # (frame_gone_worktree_main), and --find/--recent list it too.
