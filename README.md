@@ -11,7 +11,7 @@
 <p align="center">
   <img src="assets/demo.gif" alt="frame wt booting a worktree into neovim with a Claude buffer" width="900">
   <br>
-  <sub><a href="https://www.youtube.com/watch?v=Z2tggjBM5w4">youtube demo</a></sub>
+  <sub><a href="https://scoop206.github.io/frame/">website</a> · <a href="https://www.youtube.com/watch?v=Z2tggjBM5w4">youtube demo</a></sub>
 </p>
 
 ## Table of Contents
