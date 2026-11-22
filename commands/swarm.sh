@@ -139,9 +139,14 @@ What only you can know (not discoverable by grep):
                            (false → ask the human before spawning)
 @KV_CUSTOM@
   Never `frame kv set` a key to true or change a string key —
-  that's the human's to grant. Keys nobody declared are yours:
-  keep notes on this frame with `frame kv set KEY VALUE` (e.g.
-  ticket=ENG-412); they're gone at teardown.
+  that's the human's to grant.
+• This frame has a scratchpad: any key nobody declared is yours
+  to set and unset with `frame kv set KEY VALUE`. Use it for
+  state worth keeping across a restart or resume, or that the
+  human or a sibling might want to see: the ticket you're on
+  (ticket=ENG-412), what you're blocked on, the current step.
+  Siblings read it with `frame kv --of TOPIC`, and you can read
+  theirs the same way. It's gone at teardown.
 • To reach a sibling frame, that's the broker — `frame req` (see
   `frame --help`), NOT the SendMessage tool. SendMessage only
   continues a subagent you spawned; a sibling is a separate session

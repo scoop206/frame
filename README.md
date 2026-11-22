@@ -482,6 +482,7 @@ frame kv set --project autocommit true     # every frame of this project
 frame kv set --user merge_on_commit true   # every project on this machine
 frame kv unset push_on_merge               # fall back to the next layer
 frame kv describe push_on_merge            # what it means, its type, default, and origin
+frame kv --of comms2                       # another live frame's kv (read-only)
 ```
 
 In nvim: `:FrameKv`, `:FrameKvGet`, `:FrameKvSet`, `:FrameKvUnset`, `:FrameKvDescribe`.
@@ -573,6 +574,10 @@ frame kv get ticket              # anyone, from that frame
   an undeclared key from you is still treated as a typo.
 - The swarm block tells the agent it may keep notes, and shows the current ones
   at session start, so a resumed session picks its state back up.
+- Any frame can read another live frame's kv, notes included, with
+  `frame kv --of TOPIC` (or `NAME/TOPIC`; resolved like `frame req`). It works
+  with `get KEY` and `describe` too, and it's read-only: `set` and `unset` are
+  refused.
 
 ## How a project plugs in
 

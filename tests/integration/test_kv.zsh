@@ -412,11 +412,82 @@ test_swarm_block_carries_agent_notes() {
   run_frame swarm 1
   export FRAME_NAME=$TNAME FRAME_TOPIC=feature
   run_frame swarm --context
-  assert_contains "$OUT" "Keys nobody declared are yours"
+  assert_contains "$OUT" "This frame has a scratchpad"
   assert_not_contains "$OUT" "Your notes on this frame"
   CLAUDECODE=1 run_frame kv set ticket ENG-412
   run_frame swarm --context
   assert_contains "$OUT" "Your notes on this frame: ticket=ENG-412"
+}
+
+# ── reading another frame: frame kv --of ──────────────────────────────────────
+
+_mksock() { python3 -c 'import socket,sys
+s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$1"; }
+
+plant_sibling() {
+  # A live "other" frame of this project: socket + FrameDebug answer naming the
+  # primary checkout. Its agent writes a note from inside it.
+  make_topic other
+  local sock="$FRAME_RUNDIR/$TNAME-other.nvim"
+  _mksock "$sock"
+  print -r -- "main_wt	$REPO" > "$sock.debug"
+  ( cd "$SANDBOX/_$TNAME-other" && CLAUDECODE=1 "$FRAME_BIN" kv set ticket ENG-9 >/dev/null )
+}
+
+test_read_a_siblings_notes_and_settings() {
+  setup_frame
+  declare_keys
+  plant_sibling
+  ( cd "$SANDBOX/_$TNAME-other" && "$FRAME_BIN" kv set merge_on_commit true >/dev/null )
+  run_frame kv --of other get ticket
+  assert_status 0
+  assert_eq "$OUT" ENG-9
+  run_frame kv --of "$TNAME/other"
+  assert_status 0
+  assert_contains "$OUT" "ticket"
+  assert_contains "$OUT" "frame (agent)"
+  assert_contains "$OUT" "review_lang"        # project declarations come along
+  run_frame kv --of other get merge_on_commit
+  assert_eq "$OUT" true
+  run_frame kv get merge_on_commit             # ours is untouched
+  assert_eq "$OUT" false
+}
+
+test_of_is_read_only() {
+  setup_frame
+  plant_sibling
+  run_frame kv --of other set ticket X
+  assert_status 2
+  assert_contains "$OUT" "read-only"
+  CLAUDECODE=1 run_frame kv --of other unset ticket
+  assert_status 2
+  run_frame kv --of other get ticket
+  assert_eq "$OUT" ENG-9
+}
+
+test_of_needs_a_live_frame() {
+  setup_frame
+  run_frame kv --of nobody
+  assert_status 1
+  assert_contains "$OUT" "no live frame"
+}
+
+test_of_unknown_key_names_the_frame() {
+  setup_frame
+  plant_sibling
+  run_frame kv --of other get nope
+  assert_status 2
+  assert_contains "$OUT" "$TNAME/other has no setting or agent note"
+}
+
+test_of_without_debug_still_reads_frame_layers() {
+  setup_frame
+  plant_sibling
+  rm "$FRAME_RUNDIR/$TNAME-other.nvim.debug"
+  run_frame kv --of other get ticket
+  assert_status 0
+  assert_contains "$OUT" "ENG-9"
+  assert_contains "$OUT" "project layer isn't shown"
 }
 
 run_tests "$0"

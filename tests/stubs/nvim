@@ -27,6 +27,11 @@ if [[ "${1:-}" == "--server" ]]; then
     # and a FAKE_NVIM_EXPR_LOG expr trace (ordering vs the buffer-stop RPC) still
     # capture the call exactly as before.
     *qa!*) rm -f "$_sock" ;;
+    # `frame kv --of` asks a session for its primary checkout. A <sock>.debug
+    # companion holds the FrameDebug answer (key<TAB>value lines); without one
+    # the RPC fails, as an old layout's would.
+    *FrameDebug*)
+      [[ -f "$_sock.debug" ]] && { cat "$_sock.debug"; exit 0; }; exit 1 ;;
     *FrameInfo*)
       # A <sock>.hang companion stands in for an alive-but-unresponsive nvim:
       # the socket exists but the session never answers the RPC. Sleep well
