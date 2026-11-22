@@ -193,6 +193,32 @@ test_context_resume_source_adds_reorientation() {
   assert_contains "$OUT" "run FOREGROUND"           # core banner still present
 }
 
+test_context_shell_frame_resume_reorients_to_the_shell() {
+  # A torn-down worktree frame's session resumed as a shell frame: the note
+  # says it's a shell in that dir now, not a worktree, and the worktree rules
+  # (topic branch, never touch the primary checkout) give way to shell ones.
+  run_frame swarm 1
+  mkdir -p "$SANDBOX/main"
+  export FRAME_NAME=shell FRAME_TOPIC=cgf FRAME_SHELL_DIR="$SANDBOX/main" FRAME_WT=""
+  run_context_hook '{"session_id":"sid-1","source":"resume"}'
+  assert_status 0
+  assert_contains "$OUT" "RESUMED into a shell frame"
+  assert_contains "$OUT" "shell frame shell/cgf"
+  assert_contains "$OUT" "frame shell -d"
+  assert_not_contains "$OUT" "trust this worktree"
+  assert_not_contains "$OUT" "Never cd into the primary checkout"
+  assert_contains "$OUT" "run FOREGROUND"
+}
+
+test_context_worktree_frame_keeps_worktree_rules() {
+  run_frame swarm 1
+  export FRAME_NAME=flipnem FRAME_TOPIC=x FRAME_WT=/somewhere
+  run_frame swarm --context
+  assert_contains "$OUT" "worktree-isolated"
+  assert_contains "$OUT" "Never cd into the primary checkout"
+  assert_not_contains "$OUT" "shell frame"
+}
+
 test_context_startup_source_omits_reorientation() {
   run_frame swarm 1
   export FRAME_NAME=flipnem FRAME_TOPIC=inspect FRAME_VITE_PORT=5173
