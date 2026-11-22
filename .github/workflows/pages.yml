@@ -15,12 +15,14 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+# Build and deploy are separate jobs (GitHub's own pattern): deploy-pages
+# looks the artifact up through the API, and right after an upload in the
+# same job that lookup sometimes misses it ("No artifacts named
+# github-pages"). The job boundary gives it time to register, and a failed
+# deploy gets one retry after a pause.
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - name: Copy shared assets into the site
@@ -29,5 +31,20 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.retry.outputs.page_url || steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Wait before retrying
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+      - id: retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
