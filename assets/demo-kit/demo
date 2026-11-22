@@ -48,6 +48,113 @@ tool_path() {
 astro_repo() { cat $HERO_HOME/.demo-repo 2>/dev/null || die "no HERO_HOME — run: demo setup --astro REPO"; }
 
 # ── setup ────────────────────────────────────────────────────────────────────
+# type_stubs REPO DIR — the modules and types the demo files reference, so
+# `npm run typecheck` starts clean and a worker doesn't stop to stub them.
+type_stubs() {
+  local r=$1 d=$2
+  if [[ $r == acme-web ]]; then
+    cat > $d/src/types.d.ts <<'TS'
+type CartItem = { sku: string; name: string; priceCents: number; qty: number };
+type CartProps = { items: CartItem[]; onCheckout: () => void };
+declare function formatCents(cents: number): string;
+TS
+  else
+    cat > $d/src/types.d.ts <<'TS'
+type CheckoutEvent = { orderId: string; customerId: string; amountCents: number };
+TS
+    cat > $d/src/db.ts <<'TS'
+export const db = {
+  orders: {
+    async markPaid(orderId: string): Promise<void> {},
+  },
+};
+TS
+    cat > $d/src/payments.ts <<'TS'
+export type ChargeResult = { ok: boolean; status: number };
+
+export async function charge(customerId: string, amountCents: number): Promise<ChargeResult> {
+  return { ok: true, status: 200 };
+}
+TS
+  fi
+}
+
+# test_setup REPO DIR — package.json, tsconfig, vitest config and one passing
+# test; npm install in the primary, and stack_up clones node_modules into each
+# worktree (frame_clone_node_modules).
+test_setup() {
+  local r=$1 d=$2 web=0
+  [[ $r == acme-web ]] && web=1
+  if (( web )); then
+    cat > $d/package.json <<'JSON'
+{
+  "name": "acme-web",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "vitest run", "typecheck": "tsc --noEmit" },
+  "devDependencies": {
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "jsdom": "^25.0.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
+JSON
+    cat > $d/vitest.config.ts <<'TS'
+import { defineConfig } from "vitest/config";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({ plugins: [react()], test: { environment: "jsdom", globals: true } });
+TS
+    cat > $d/src/checkout/Cart.test.tsx <<'TS'
+import { render, screen } from "@testing-library/react";
+import { Cart } from "./Cart";
+
+(globalThis as any).formatCents = (c: number) => `$${(c / 100).toFixed(2)}`;
+
+it("shows the subtotal", () => {
+  render(<Cart items={[{ sku: "a", name: "Mug", priceCents: 1200, qty: 2 }]} onCheckout={() => {}} />);
+  expect(screen.getByText(/Subtotal/)).toBeTruthy();
+});
+TS
+  else
+    cat > $d/package.json <<'JSON'
+{
+  "name": "acme-api",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "vitest run", "typecheck": "tsc --noEmit" },
+  "devDependencies": { "typescript": "^5.6.0", "vitest": "^2.1.0" }
+}
+JSON
+    cat > $d/src/rate_limit.test.ts <<'TS'
+import { expect, it } from "vitest";
+import { allow } from "./rate_limit";
+
+it("allows the first request", () => {
+  expect(allow("token", 0)).toBe(true);
+});
+TS
+  fi
+  cat > $d/tsconfig.json <<'JSON'
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "Bundler",
+    "jsx": "react-jsx", "strict": false, "noEmit": true, "skipLibCheck": true,
+    "types": ["vitest/globals"]
+  },
+  "include": ["src"]
+}
+JSON
+  print -r -- 'node_modules/' >> $d/.gitignore
+  print -l 'BUFFERS=(claude local)' 'stack_up() { frame_clone_node_modules; }' > $d/.frame/config.sh
+  (cd $d && npm install --silent --no-audit --no-fund >/dev/null)
+}
 link_real_nvim() {  # link_real_nvim HOME (also gives HOME a demo git identity)
   local h=$1
   [[ -f $h/.gitconfig ]] || print -l '[user]' '	name = demo' '	email = demo@example.com' > $h/.gitconfig
@@ -75,6 +182,18 @@ setup() {
       print -r -- '.frame/local/' >> $d/.gitignore
       git -C $d add -A
       git -C $d -c user.name=demo -c user.email=demo@example.com commit -qm "frame config"
+    fi
+    # a ready test setup, so a worker runs the tests instead of scaffolding
+    # vitest/tsconfig itself (slow, and a permission prompt on camera)
+    if [[ ! -f $d/package.json ]]; then
+      test_setup $r $d
+      git -C $d add -A
+      git -C $d -c user.name=demo -c user.email=demo@example.com commit -qm "test setup: vitest + tsc"
+    fi
+    if [[ ! -f $d/src/types.d.ts ]]; then
+      type_stubs $r $d
+      git -C $d add -A
+      git -C $d -c user.name=demo -c user.email=demo@example.com commit -qm "stubs so tsc is clean"
     fi
     # workers commit their step but never merge or push on their own
     print -l autocommit=true merge_on_commit=false push_on_merge=false deploy_on_merge=false \
@@ -222,10 +341,17 @@ SCENE 5 — ONE COORDINATOR, MANY WORKERS   (REAL HOME, /Users/Shared/frame-demo
           macOS + Ghostty only (spawn opens real tabs).
   shell   frame shell coordinator                   [Enter]
   say     "A shell frame has no worktree. It doesn't write code, it plans."
-  claude  checkout is double-charging. In acme-api, add an idempotency key
-          to the webhook retry. In acme-web, show "payment pending" in the
-          cart while it retries. Spawn a worktree frame in each repo, frame
-          req them the work, and report back when both reply.
+  claude  (paste as one message: one round, no merge, short summary)
+          Checkout can double-charge when the processor returns a 502. Fix
+          it across both repos using this contract: acme-api serves
+          GET /orders/:orderId/payment-status -> { "pending": boolean }.
+          - acme-api: make the webhook retry idempotent (one idempotency key
+            per order, reused on every retry) and add that route.
+          - acme-web: Cart takes a paymentPending prop; while it's true, show
+            "Payment pending" and disable checkout.
+          Spawn a worktree frame in each repo and frame req each its part.
+          Each worker: make the change, run npm test, commit, reply in two
+          lines. Don't merge. When both reply, give me a three-line summary.
   watch   two tabs open (acme-api/…, acme-web/…), each boots its own claude
   shell   (in a spare tab) frame ls                 [Ctrl-N types it]
   say     "Each worker has its own branch and ports. Replies land in the

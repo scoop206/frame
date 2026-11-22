@@ -423,6 +423,21 @@ test_shell_resume_with_C_bridges_the_transcript() {
   assert_file_exists "$HOME/.claude/projects/${other//[^A-Za-z0-9]/-}/abc-123.jsonl"
 }
 
+test_shell_resume_torn_down_worktree_boots_in_main_checkout() {
+  # A `frame wt` frame's worktree is removed at teardown, its transcript isn't:
+  # --resume (no -C) reopens it in the repo's primary checkout, bridged there.
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  local main="${${:-$SANDBOX/w/cgf}:A}"
+  mkdir -p "$main/.git"
+  _session wt-done "$SANDBOX/w/_cgf-dns" "plan the dns switchover email"
+  run_frame shell --resume wt-done
+  assert_status 0
+  assert_contains "$OUT" "since torn down"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "cwd: $main"
+  assert_contains "$(<$FAKE_NVIM_LOG)" "--resume wt-done"
+  assert_file_exists "$HOME/.claude/projects/${main//[^A-Za-z0-9]/-}/wt-done.jsonl"
+}
+
 test_shell_resume_refuses_unknown_bad_or_gone() {
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
   run_frame shell taxes --resume nope-000

@@ -33,8 +33,11 @@
 #     frame shell [TOPIC] --recent      browse your most recent sessions (first
 #                                       message of each) and resume the one you pick
 #                                       (both lists leave out sessions that ran in
-#                                       a worktree, a gone dir or ~; ● marks one
-#                                       open now — picking it switches to it)
+#                                       a live worktree, a gone dir or ~ — but a
+#                                       torn-down frame wt frame's session IS
+#                                       listed, and resumes in the main checkout;
+#                                       ● marks one open now — picking it
+#                                       switches to it)
 #     frame shell [TOPIC] --resume ID   …resume a known session id the same way
 #                                       (-C DIR resumes it in DIR instead).
 #                                       Resuming, TOPIC defaults to the dir's
