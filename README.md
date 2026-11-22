@@ -502,11 +502,12 @@ takes effect mid-session. The swarm block (level 1 and up) shows the agent the
 values at session start and tells it to re-check `frame kv get` before it
 commits or merges.
 
-The settings are yours, not the agent's. From inside claude, `frame kv set` only
-accepts `false` and `unset` is refused, so an agent can hold itself back but
-can't give itself more room. String keys (below) can't be set by an agent at all,
-since there's no "safer" direction for a string. This guards against well-meaning
-drift; it isn't a security boundary.
+The settings are yours, not the agent's. From inside claude, `frame kv` writes
+only the agent's own frame layer (`--project` and `--user` are refused), `set`
+only accepts `false`, and `unset` is refused, so an agent can hold itself back
+but can't give itself more room. String keys (below) can't be set by an agent at
+all, since there's no "safer" direction for a string. This guards against
+well-meaning drift; it isn't a security boundary.
 
 ### Your own keys
 
@@ -550,6 +551,28 @@ review_lang=en
   topic branch takes effect once it's merged.
 - The swarm block lists each custom key's value and one-line description, so the
   agent knows it exists and what it means.
+
+### Agent notes
+
+Any key that isn't declared belongs to the agent. It can set and unset such keys
+freely, on its own frame only, to keep state about its work:
+
+```bash
+frame kv set ticket ENG-412      # from inside claude
+frame kv get ticket              # anyone, from that frame
+```
+
+- Notes are kept in their own file beside the frame layer
+  (`~/.local/share/frame/kv/<NAME>/<TOPIC>.agent`), and `frame wt -d` removes
+  them with the frame.
+- `frame kv` lists them with FROM `frame (agent)`.
+- They're only looked up for undeclared keys, so a note can never override a
+  setting. If you later declare a key an agent had used as a note, the
+  declaration wins and `frame kv` warns that the note is ignored.
+- You can edit or unset an existing note from your side. You can't create one:
+  an undeclared key from you is still treated as a typo.
+- The swarm block tells the agent it may keep notes, and shows the current ones
+  at session start, so a resumed session picks its state back up.
 
 ## How a project plugs in
 

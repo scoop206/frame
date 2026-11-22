@@ -124,7 +124,9 @@
 #     frame kv describe [KEY]           what KEY means: type, default, where
 #                                       declared. Declare your own keys in
 #                                       .frame/kv.defaults (project, committed)
-#                                       or ~/.config/frame/kv.defaults (user)
+#                                       or ~/.config/frame/kv.defaults (user).
+#                                       Undeclared keys are the agent's own
+#                                       notes, on its frame only
 #
 #     frame swarm [off|1|2]             how much each frame's claude is told
 #                                       at session start about being a frame:

@@ -200,7 +200,7 @@ if [[ "${1:-}" == "-d" ]]; then
   # …and its frame-layer kv settings: a reused topic name starts from the
   # project/user defaults, not whatever the last frame by that name was told.
   frame_kv_scope "$NAME" "$TOPIC" ""
-  rm -f "$FRAME_KV_FILE[frame]"
+  rm -f "$FRAME_KV_FILE[frame]" "$FRAME_KV_AGENT_FILE"
   # :FrameDown's watcher matches this line to know teardown finished without
   # reaching the session — keep the wording in sync with layouts/session.lua.
   echo "$OK_MARK removed worktree and branch $TOPIC"

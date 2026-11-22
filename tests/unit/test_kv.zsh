@@ -197,4 +197,22 @@ test_undeclared_key_has_no_value_even_if_set_in_a_layer() {
   assert_eq "$rc" 1
 }
 
+test_agent_note_answers_only_for_undeclared_keys() {
+  frame_kv_scope proj topic "$SANDBOX/main"
+  frame_kvfile_set "$FRAME_KV_AGENT_FILE" ticket ENG-1
+  frame_kvfile_set "$FRAME_KV_AGENT_FILE" autocommit true
+  frame_kv_lookup ticket
+  assert_eq "$KV_VALUE/$KV_LAYER" "ENG-1/frame (agent)"
+  frame_kv_lookup autocommit
+  assert_eq "$KV_VALUE/$KV_LAYER" false/default
+  assert_eq "$(frame_kv_agent_keys)" ticket
+  assert_eq "$(frame_kv_agent_keys --shadowed)" autocommit
+}
+
+test_no_frame_means_no_agent_notes() {
+  frame_kv_scope "" "" ""
+  assert_eq "$FRAME_KV_AGENT_FILE" ""
+  assert_eq "$(frame_kv_agent_keys)" ""
+}
+
 run_tests "$0"

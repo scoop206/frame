@@ -308,4 +308,115 @@ test_swarm_block_lists_custom_keys() {
   assert_not_contains "$OUT" "Any ISO 639-1 code."
 }
 
+# ── agent notes: undeclared keys, the agent's own, frame layer only ─────────────
+
+test_agent_keeps_notes_on_its_frame() {
+  setup_frame
+  export CLAUDECODE=1
+  run_frame kv set ticket ENG-412
+  assert_status 0
+  assert_contains "$OUT" "ticket=ENG-412 (frame, agent note)"
+  assert_file_exists "$HOME/.local/share/frame/kv/$TNAME/feature.agent"
+  run_frame kv get ticket
+  assert_eq "$OUT" ENG-412
+  run_frame kv
+  assert_contains "$OUT" "frame (agent)"
+  run_frame kv describe ticket
+  assert_contains "$OUT" "agent note"
+  run_frame kv unset ticket
+  assert_status 0
+  run_frame kv get ticket
+  assert_status 2
+  assert_contains "$OUT" "frame kv set ticket VALUE"
+}
+
+test_agent_notes_do_not_leak_to_siblings() {
+  setup_frame
+  CLAUDECODE=1 run_frame kv set ticket ENG-412
+  make_topic other
+  cd "$SANDBOX/_$TNAME-other"
+  run_frame kv get ticket
+  assert_status 2
+}
+
+test_agent_cannot_write_project_or_user_layers() {
+  setup_frame
+  export CLAUDECODE=1
+  run_frame kv set --project autocommit false
+  assert_status 1
+  assert_contains "$OUT" "only write its own frame"
+  run_frame kv set --user ticket X
+  assert_status 1
+  run_frame kv unset --project autocommit
+  assert_status 1
+  assert_file_absent "$REPO/.frame/local/kv"
+}
+
+test_agent_notes_cannot_touch_declared_keys() {
+  setup_frame
+  declare_keys
+  export CLAUDECODE=1
+  run_frame kv set autocommit true
+  assert_status 1
+  run_frame kv set review_lang de
+  assert_status 1
+  assert_file_absent "$HOME/.local/share/frame/kv/$TNAME/feature.agent"
+}
+
+test_agent_note_key_must_be_a_name() {
+  setup_frame
+  CLAUDECODE=1 run_frame kv set Bad-Key x
+  assert_status 2
+  assert_contains "$OUT" "isn't a key name"
+}
+
+test_declared_key_shadows_an_older_note() {
+  setup_frame
+  CLAUDECODE=1 run_frame kv set review_lang de
+  assert_status 0
+  declare_keys
+  run_frame kv get review_lang
+  assert_eq "$OUT" en
+  run_frame kv
+  assert_contains "$OUT" "agent note 'review_lang' is ignored"
+}
+
+test_human_can_edit_and_drop_notes_but_not_invent_them() {
+  setup_frame
+  run_frame kv set ticket ENG-1
+  assert_status 2
+  assert_contains "$OUT" "unknown key 'ticket'"
+  CLAUDECODE=1 run_frame kv set ticket ENG-1
+  run_frame kv set ticket ENG-2
+  assert_status 0
+  run_frame kv get ticket
+  assert_eq "$OUT" ENG-2
+  run_frame kv set --project ticket ENG-3
+  assert_status 2
+  run_frame kv unset ticket
+  assert_status 0
+}
+
+test_teardown_reaps_agent_notes() {
+  setup_frame
+  CLAUDECODE=1 run_frame kv set ticket ENG-412
+  cd "$REPO"
+  git -C "$REPO" merge -q feature
+  run_frame wt -d feature
+  assert_status 0
+  assert_file_absent "$HOME/.local/share/frame/kv/$TNAME/feature.agent"
+}
+
+test_swarm_block_carries_agent_notes() {
+  setup_frame
+  run_frame swarm 1
+  export FRAME_NAME=$TNAME FRAME_TOPIC=feature
+  run_frame swarm --context
+  assert_contains "$OUT" "Keys nobody declared are yours"
+  assert_not_contains "$OUT" "Your notes on this frame"
+  CLAUDECODE=1 run_frame kv set ticket ENG-412
+  run_frame swarm --context
+  assert_contains "$OUT" "Your notes on this frame: ticket=ENG-412"
+}
+
 run_tests "$0"
