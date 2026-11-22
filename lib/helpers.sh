@@ -1687,9 +1687,19 @@ ensure_pg_db() {
 
 ensure_minio_bucket() {
   # ensure_minio_bucket BUCKET — idempotent bucket on the shared minio.
-  local _b=$1
-  docker compose -f "$FRAME_SERVICES_COMPOSE" run --rm mc \
-    mb --ignore-existing "local/$_b" >/dev/null 2>&1
+  # Runs the mc that ships inside the running minio container (exec, not a
+  # separate minio/mc tools image — that image is gone from Docker Hub). The
+  # alias uses the container's own MINIO_ROOT_* env, so it always matches the
+  # credentials minio was started with (FRAME_MINIO_* overrides included).
+  local _b=$1 _out
+  if ! _out=$(docker compose -f "$FRAME_SERVICES_COMPOSE" exec -T minio sh -c '
+        mc alias set local http://localhost:9000 \
+          "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null &&
+        mc mb --ignore-existing "local/$1"' sh "$_b" 2>&1); then
+    echo "$X_MARK couldn't create minio bucket $_b:" >&2
+    print -r -- "$_out" | sed 's/^/  /' >&2
+    return 1
+  fi
   echo "$OK_MARK bucket $_b"
 }
 
