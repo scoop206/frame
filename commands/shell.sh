@@ -25,6 +25,8 @@
 #                            session last ran in (`claude --resume` only finds a
 #                            session from its own dir), unless -C says
 #                            otherwise; then the transcript is bridged there.
+#                            If that dir was a since-removed `frame wt`
+#                            worktree, it boots in the repo's primary checkout.
 #
 #   frame shell [TOPIC] --find "WORDS"
 #                            search past sessions for WORDS (every word, at a
@@ -40,9 +42,12 @@
 #                            In fzf, typing filters the list.
 #
 #                            Both lists show only sessions you can resume here:
-#                            ones that last ran in a git worktree (a `frame wt`
-#                            frame's — `frame wt --from` hands those on), in a
-#                            dir that's gone, or in ~ are left out. A session
+#                            ones that last ran in a live git worktree (a
+#                            `frame wt` frame's — reboot it, or `frame wt --from`
+#                            hands it on), in a gone dir, or in ~ are left out.
+#                            A torn-down `frame wt` frame's session IS listed:
+#                            its worktree is gone, so it resumes in the repo's
+#                            primary checkout (as a shell frame). A session
 #                            that's open right now is marked ●: picking it (or
 #                            --resume'ing it) switches to the frame it's open in
 #                            — a second claude can't join it — or, if it's open
@@ -191,7 +196,7 @@ if [[ -n "$FIND" ]]; then
   echo "$RUN_MARK searching your past claude sessions for: ${_words[*]}…" >&2
   if ! _rows=$(frame_session_search "${_words[@]}" | frame_session_resumable); then
     echo "$X_MARK no resumable past session has a message of yours matching: ${_words[*]}" >&2
-    echo "  (sessions in worktrees, gone dirs or ~ are left out)" >&2
+    echo "  (sessions in live worktrees, gone non-worktree dirs or ~ are left out)" >&2
     exit 1
   fi
   RESUME_ID=$(frame_session_pick "$_rows") || exit 1
@@ -202,7 +207,7 @@ if (( RECENT )); then
   frame_require jq perl
   if ! _rows=$(frame_session_recent --resumable 100); then
     echo "$X_MARK no resumable past claude sessions under ~/.claude/projects" >&2
-    echo "  (sessions in worktrees, gone dirs or ~ are left out)" >&2
+    echo "  (sessions in live worktrees, gone non-worktree dirs or ~ are left out)" >&2
     exit 1
   fi
   RESUME_ID=$(frame_session_pick "$_rows") || exit 1
@@ -259,9 +264,17 @@ if [[ -n "$RESUME_ID" ]]; then
       exit 1
     fi
     if [[ ! -d "$DIR" ]]; then
-      echo "$X_MARK session $RESUME_ID ran in $DIR, which is gone —" >&2
-      echo "  pass -C DIR to resume it somewhere else" >&2
-      exit 1
+      # A torn-down `frame wt` frame: its worktree is gone but the transcript
+      # isn't — reopen it in the repo's primary checkout (bridged below).
+      if _main=$(frame_gone_worktree_main "$DIR"); then
+        echo "$OK_MARK session $RESUME_ID ran in worktree ${DIR/#$HOME/~}, since torn down —"
+        echo "  reopening it in the primary checkout, ${_main/#$HOME/~}"
+        DIR=$_main
+      else
+        echo "$X_MARK session $RESUME_ID ran in $DIR, which is gone —" >&2
+        echo "  pass -C DIR to resume it somewhere else" >&2
+        exit 1
+      fi
     fi
     if [[ "${DIR:A}" == "${HOME:A}" ]]; then
       echo "$X_MARK session $RESUME_ID ran in your home dir (~), where frame shell won't boot —" >&2
