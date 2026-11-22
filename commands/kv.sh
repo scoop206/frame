@@ -12,6 +12,10 @@
 #   frame kv describe [KEY]                    what KEY means, its type, default,
 #                                              and where it's declared (all keys
 #                                              when bare)
+#   frame kv --of TOPIC|NAME/TOPIC [get KEY | describe [KEY]]
+#                                              read ANOTHER live frame's kv —
+#                                              its settings and agent notes, as
+#                                              that frame sees them. Read-only.
 #
 # Layers, first hit wins: frame → project → user → default (see the kv section
 # of lib/helpers.sh for where each lives). Files, not env vars, so a change
@@ -29,6 +33,7 @@
 
 _kv_usage() {
   print -r -- "Usage: frame kv [get KEY | set [--project|--user] KEY VALUE | unset [--project|--user] KEY | describe [KEY]]" >&2
+  print -r -- "       frame kv --of TOPIC|NAME/TOPIC [get KEY | describe [KEY]]" >&2
   exit 2
 }
 
@@ -42,7 +47,9 @@ _kv_check_key() {
   # key that needs declaring.
   [[ -n "$1" ]] && { frame_kv_is_declared "$1" || _kv_is_note "$1"; } && return 0
   print -r -- "$X_MARK unknown key '$1' — known: ${(j:, :)FRAME_KV_KEYS}" >&2
-  if [[ -n "${CLAUDECODE:-}" ]]; then
+  if [[ -n "${KV_OF:-}" ]]; then
+    print -r -- "  $KV_OF has no setting or agent note by that name." >&2
+  elif [[ -n "${CLAUDECODE:-}" ]]; then
     print -r -- "  No note by that name on this frame. To keep one: frame kv set $1 VALUE" >&2
   else
     print -r -- "  To add your own, declare it in .frame/kv.defaults (project, committed) or" >&2
@@ -113,7 +120,32 @@ _kv_where() {
   print -r -- "$_file"
 }
 
-frame_kv_scope_self
+_kv_scope_other() {
+  # _kv_scope_other SPEC — scope the lookups to another live frame, resolved
+  # like `frame req` (same-project sibling first, then the unique live frame
+  # with that topic). Its primary checkout — for the project layer and project
+  # declarations — comes from the session itself (FrameDebug), since a sibling
+  # may belong to another project; a shell frame reports none.
+  frame_self_identity 2>/dev/null || true
+  frame_resolve_target "$1" || exit 1
+  local _name=$NAME _topic=$TOPIC _dump _main=""
+  if _dump=$(frame_rpc_expr "$SOCKET" 'v:lua.FrameDebug()' 2>/dev/null); then
+    _main=${${(M)${(f)_dump}:#main_wt$'\t'*}#main_wt$'\t'}
+  else
+    print -r -- "$WARN_MARK $_name/$_topic didn't report its checkout — its project layer isn't shown" >&2
+  fi
+  frame_kv_scope "$_name" "$_topic" "$_main"
+  KV_OF="$_name/$_topic"
+}
+
+KV_OF=""
+if [[ "${1:-}" == --of ]]; then
+  (( $# >= 2 )) || _kv_usage
+  _kv_scope_other "$2"
+  shift 2
+else
+  frame_kv_scope_self
+fi
 
 sub=${1:-}
 (( $# )) && shift
@@ -127,6 +159,11 @@ if [[ "$sub" == (set|unset) ]]; then
     --user)    layer=user;    shift ;;
     -*)        _kv_usage ;;
   esac
+fi
+
+if [[ -n "$KV_OF" && "$sub" == (set|unset) ]]; then
+  print -r -- "$X_MARK $KV_OF's kv is read-only from here — it's that frame's (or its human's) to change" >&2
+  exit 2
 fi
 
 case "$sub" in

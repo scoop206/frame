@@ -130,6 +130,8 @@
 #                                       or ~/.config/frame/kv.defaults (user).
 #                                       Undeclared keys are the agent's own
 #                                       notes, on its frame only
+#     frame kv --of TOPIC|NAME/TOPIC [get KEY | describe [KEY]]
+#                                       read another live frame's kv (read-only)
 #
 #     frame swarm [off|1|2]             how much each frame's claude is told
 #                                       at session start about being a frame:
