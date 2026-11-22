@@ -18,8 +18,9 @@
 #                                              that frame sees them. Read-only.
 #
 # Layers, first hit wins: frame → project → user → default (see the kv section
-# of lib/helpers.sh for where each lives). Files, not env vars, so a change
-# reaches a running claude — it reads `frame kv get` when it acts.
+# of lib/helpers.sh for where each lives). The frame layer is held by the
+# frame's own nvim session; the shared layers are files. Not env vars, so a
+# change reaches a running claude — it reads `frame kv get` when it acts.
 #
 # Settings are the human's. From inside claude (CLAUDECODE set) an agent writes
 # only its own frame's layer — never --project/--user — and for a DECLARED key
@@ -67,15 +68,6 @@ _kv_agent_frame_only() {
   exit 1
 }
 
-_kv_note_file() {
-  # The agent-note file for this frame, or exit with why there's none.
-  if [[ -z "$FRAME_KV_AGENT_FILE" ]]; then
-    print -r -- "$X_MARK not inside a frame — agent notes live on a frame" >&2
-    exit 1
-  fi
-  print -r -- "$FRAME_KV_AGENT_FILE"
-}
-
 _kv_warn_decls() {
   # Declaration clashes / malformed lines — shown where the human looks
   # (list, describe, set), not on every get.
@@ -89,7 +81,7 @@ _kv_describe_one() {
   if ! frame_kv_is_declared "$1"; then
     frame_kv_lookup "$1" || true
     print -r -- "$1 = $KV_VALUE  from $KV_LAYER"
-    print -r -- "  agent note: undeclared, kept by this frame's claude; gone at frame wt -d"
+    print -r -- "  agent note: undeclared, kept by this frame's claude; ends with the frame"
     return 0
   fi
   local _k=$1 _type=string _from=${FRAME_KV_FROM[$1]}
@@ -108,7 +100,8 @@ _kv_describe_one() {
 }
 
 _kv_where() {
-  # _kv_where LAYER — the file that layer writes to, or exit with why there's none.
+  # _kv_where LAYER — the file a shared layer (project|user) writes to, or exit
+  # with why there's none. The frame layer isn't a file — see frame_kv_frame_write.
   local _file=${FRAME_KV_FILE[$1]:-}
   if [[ -z "$_file" ]]; then
     case "$1" in
@@ -231,8 +224,7 @@ case "$sub" in
         print -r -- "$X_MARK '$key' isn't a key name — lowercase letters, digits, _; starting with a letter" >&2
         exit 2
       fi
-      file=$(_kv_note_file)
-      frame_kvfile_set "$file" "$key" "$val" "# frame kv — agent notes for this frame (undeclared keys; see \`frame kv\`)."
+      frame_kv_frame_write n "$key" "$val" || exit 1
       print -r -- "$OK_MARK $key=$val (frame, agent note)"
       exit 0
     fi
@@ -259,8 +251,12 @@ case "$sub" in
       print -r -- "  Ask them to run:  frame kv set${${layer:#frame}:+ --$layer} $key ${(q-)val}   (or :FrameKvSet in nvim)" >&2
       exit 1
     fi
-    file=$(_kv_where "$layer")
-    frame_kvfile_set "$file" "$key" "$val" "# frame kv — $layer layer (key=value; see \`frame kv\`)."
+    if [[ "$layer" == frame ]]; then
+      frame_kv_frame_write s "$key" "$val" || exit 1
+    else
+      file=$(_kv_where "$layer")
+      frame_kvfile_set "$file" "$key" "$val" "# frame kv — $layer layer (key=value; see \`frame kv\`)."
+    fi
     print -r -- "$OK_MARK $key=$val ($layer)"
     frame_kv_lookup "$key" || true
     if [[ "$KV_LAYER" != "$layer" ]]; then
@@ -278,7 +274,7 @@ case "$sub" in
         print -r -- "$key is an agent note on this frame, not set in the $layer layer — nothing to unset"
         exit 0
       fi
-      frame_kvfile_unset "$(_kv_note_file)" "$key"
+      frame_kv_frame_write n "$key" || (( $? == 2 )) || exit 1
       print -r -- "$OK_MARK unset $key (frame, agent note)"
       exit 0
     fi
@@ -287,8 +283,15 @@ case "$sub" in
       print -r -- "  (that could expose a looser layer). Set it to false instead." >&2
       exit 1
     fi
-    file=$(_kv_where "$layer")
-    if frame_kvfile_unset "$file" "$key"; then
+    if [[ "$layer" == frame ]]; then
+      _rc=0
+      frame_kv_frame_write s "$key" || _rc=$?
+      (( _rc == 1 )) && exit 1
+    else
+      _rc=0
+      frame_kvfile_unset "$(_kv_where "$layer")" "$key" || _rc=$?
+    fi
+    if (( _rc == 0 )); then
       frame_kv_lookup "$key" || true
       print -r -- "$OK_MARK unset $key ($layer) — now $key=${KV_VALUE:-<unset>}${KV_LAYER:+ from $KV_LAYER}"
     else

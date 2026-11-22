@@ -728,6 +728,55 @@ end, {
   desc = 'Silence frame notify banners (off to unsilence)',
 })
 
+-- ── frame kv: this frame's own layer, held in the session ─────────────────────
+-- The frame layer of `frame kv` (per-frame settings, s) and the agent's notes
+-- (undeclared keys, n) live here, in memory, so they end with the frame and are
+-- the same for worktree and shell frames. All rules (which keys, who may write
+-- what) live in the CLI; this is just the store, reached over RPC:
+--   FrameKvDump()               kind<TAB>key<TAB>value lines, sorted
+--   FrameKvSet(kind, key, hex)  value hex-encoded, so any text survives the
+--                               vimscript string it rides in → 'ok'
+--   FrameKvUnset(kind, key)     → 'ok', or 'absent' when it wasn't set
+-- `frame wt --from` hands the old frame's table over in FRAME_KV_SEED (a dump),
+-- so a moved session keeps its notes.
+local frame_kv = { s = {}, n = {} }
+do
+  local seed = vim.env.FRAME_KV_SEED
+  if seed and seed ~= '' then
+    for line in seed:gmatch('[^\n]+') do
+      local kind, key, val = line:match('^([sn])\t([a-z][a-z0-9_]*)\t(.*)$')
+      if kind then frame_kv[kind][key] = val end
+    end
+  end
+  vim.env.FRAME_KV_SEED = nil   -- not for the claude and shells spawned from here
+end
+
+_G.FrameKvDump = function()
+  local out = {}
+  for _, kind in ipairs({ 's', 'n' }) do
+    local keys = vim.tbl_keys(frame_kv[kind])
+    table.sort(keys)
+    for _, k in ipairs(keys) do
+      table.insert(out, kind .. '\t' .. k .. '\t' .. frame_kv[kind][k])
+    end
+  end
+  return table.concat(out, '\n')
+end
+
+_G.FrameKvSet = function(kind, key, hex)
+  if not frame_kv[kind] or not tostring(key):match('^[a-z][a-z0-9_]*$') then return 'bad' end
+  frame_kv[kind][key] = tostring(hex):gsub('%x%x', function(b)
+    return string.char(tonumber(b, 16))
+  end)
+  return 'ok'
+end
+
+_G.FrameKvUnset = function(kind, key)
+  if not frame_kv[kind] or frame_kv[kind][key] == nil then return 'absent' end
+  frame_kv[kind][key] = nil
+  return 'ok'
+end
+
 -- ── :FrameKv / :FrameKvGet / :FrameKvSet / :FrameKvUnset / :FrameKvDescribe ──
 -- Thin passthroughs to `frame kv` (the layered autocommit / merge_on_commit /
 -- push_on_merge / deploy_on_merge settings, plus any keys the project or user

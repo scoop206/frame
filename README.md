@@ -489,19 +489,31 @@ In nvim: `:FrameKv`, `:FrameKvGet`, `:FrameKvSet`, `:FrameKvUnset`, `:FrameKvDes
 
 Layers, first hit wins:
 
-| layer   | file                                                                                |
+| layer   | where it lives                                                                      |
 | ------- | ----------------------------------------------------------------------------------- |
-| frame   | `~/.local/share/frame/kv/<NAME>/<TOPIC>` (removed by `frame wt -d`)                 |
+| frame   | the frame's own nvim session, in memory (worktree and shell frames alike)           |
 | project | `<primary checkout>/.frame/local/kv` (gitignored, so it never blocks `frame merge`) |
 | user    | `~/.config/frame/kv`                                                                |
 | default | the key's declared default (see [Your own keys](#your-own-keys))                    |
 
-These are files rather than environment variables on purpose. A process's
-environment is fixed when it starts, so an `export` never reaches a claude
-that's already running. A file is read at the moment it's needed, so a change
-takes effect mid-session. The swarm block (level 1 and up) shows the agent the
-values at session start and tells it to re-check `frame kv get` before it
-commits or merges.
+The frame layer lives inside the frame, so it ends with the frame and never
+leaves stale files behind. The trade-off is that it only exists while the frame
+is running:
+
+- When a frame is down, its frame layer reads as empty (lookups fall through to
+  project, user and default) and setting it is refused.
+- Quitting or crashing a frame loses its frame-level settings and notes, and a
+  rebooted frame starts clean. `frame wt --from` carries them into the new frame.
+- `frame merge` of a frame that isn't running can't see its own settings. If
+  that leaves `push_on_merge` or `deploy_on_merge` on from a shared layer, the
+  merge says so.
+
+The shared layers are files rather than environment variables on purpose. A
+process's environment is fixed when it starts, so an `export` never reaches a
+claude that's already running. A file is read at the moment it's needed, so a
+change takes effect mid-session. The swarm block (level 1 and up) shows the
+agent the values at session start and tells it to re-check `frame kv get`
+before it commits or merges.
 
 The settings are yours, not the agent's. From inside claude, `frame kv` writes
 only the agent's own frame layer (`--project` and `--user` are refused), `set`
@@ -563,9 +575,8 @@ frame kv set ticket ENG-412      # from inside claude
 frame kv get ticket              # anyone, from that frame
 ```
 
-- Notes are kept in their own file beside the frame layer
-  (`~/.local/share/frame/kv/<NAME>/<TOPIC>.agent`), and `frame wt -d` removes
-  them with the frame.
+- Notes live in the frame's session beside its frame-level settings, so they
+  go away with the frame.
 - `frame kv` lists them with FROM `frame (agent)`.
 - They're only looked up for undeclared keys, so a note can never override a
   setting. If you later declare a key an agent had used as a note, the

@@ -1,14 +1,26 @@
 #!/usr/bin/env zsh
 # frame kv — the layered agent-behavior settings, black-box. HOME is sandboxed,
-# so the frame/user layers land in the sandbox; the project layer lands in the
-# scratch repo's gitignored-by-convention .frame/local/.
+# so the user layer lands in the sandbox; the project layer lands in the scratch
+# repo's gitignored-by-convention .frame/local/. The frame layer lives in the
+# frame's session: a planted socket the nvim stub answers FrameKv* for, keeping
+# the table in a <sock>.kv companion.
 source "${${(%):-%x}:A:h:h}/helpers/harness.zsh"
+
+_mksock() { python3 -c 'import socket,sys
+s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$1"; }
+
+live_frame() {
+  # live_frame TOPIC — a running session for $TNAME/TOPIC.
+  _mksock "$FRAME_RUNDIR/$TNAME-$1.nvim"
+}
 
 setup_frame() {
   # repo + topic worktree "feature", cwd inside it — frame_self_identity derives
-  # NAME/TOPIC from the _NAME-TOPIC dir, exactly as inside a real frame.
+  # NAME/TOPIC from the _NAME-TOPIC dir, exactly as inside a real frame — and
+  # its session running.
   make_repo
   make_topic feature
+  live_frame feature
   cd "$SANDBOX/_$TNAME-feature"
 }
 
@@ -28,7 +40,9 @@ test_set_defaults_to_the_frame_layer() {
   run_frame kv set push_on_merge true
   assert_status 0
   assert_contains "$OUT" "push_on_merge=true (frame)"
-  assert_file_exists "$HOME/.local/share/frame/kv/$TNAME/feature"
+  # held by the session, not written anywhere on disk by frame
+  assert_contains "$(<$FRAME_RUNDIR/$TNAME-feature.nvim.kv)" $'s\tpush_on_merge\ttrue'
+  assert_file_absent "$HOME/.local/share/frame/kv"
   run_frame kv get push_on_merge
   assert_eq "$OUT" true
 }
@@ -163,14 +177,57 @@ test_merge_deploy_on_merge_reminds() {
   assert_contains "$OUT" "deploy_on_merge=true (project) — deploy"
 }
 
-test_teardown_reaps_frame_layer() {
+test_stopped_frame_reads_shared_layers_and_refuses_writes() {
+  # The frame layer lives in the session: with the frame down it reads as empty
+  # (lookups fall through) and writes are refused rather than lost.
   setup_frame
   run_frame kv set autocommit true
-  cd "$REPO"
-  git -C "$REPO" merge -q feature
-  run_frame wt -d feature
+  run_frame kv set --user push_on_merge true
+  rm "$FRAME_RUNDIR/$TNAME-feature.nvim"
+  run_frame kv get autocommit
+  assert_eq "$OUT" false
+  run_frame kv get push_on_merge
+  assert_eq "$OUT" true
+  run_frame kv set autocommit true
+  assert_status 1
+  assert_contains "$OUT" "isn't running"
+  CLAUDECODE=1 run_frame kv set ticket X
+  assert_status 1
+  run_frame kv set --user autocommit true     # shared layers still work
   assert_status 0
-  assert_file_absent "$HOME/.local/share/frame/kv/$TNAME/feature"
+}
+
+test_old_layout_without_kv_reads_as_stopped() {
+  setup_frame
+  touch "$FRAME_RUNDIR/$TNAME-feature.nvim.nokv"
+  run_frame kv set autocommit true
+  assert_status 1
+  assert_contains "$OUT" "Reboot it to use its own kv"
+  run_frame kv
+  assert_status 0
+}
+
+test_merge_of_a_stopped_frame_warns_when_shared_layer_pushes() {
+  setup_frame
+  run_frame kv set push_on_merge false          # the frame was told not to push…
+  run_frame kv set --user push_on_merge true
+  rm "$FRAME_RUNDIR/$TNAME-feature.nvim"        # …then quit
+  cd "$REPO"
+  run_frame merge feature
+  assert_status 0
+  assert_contains "$OUT" "feature isn't running, so its own kv settings can't be read — push_on_merge=true comes from user"
+}
+
+test_merge_of_a_live_frame_honors_its_own_setting() {
+  setup_frame
+  run_frame kv set push_on_merge false
+  run_frame kv set --user push_on_merge true
+  cd "$REPO"
+  local before=$(git -C "$SANDBOX/origin.git" rev-parse main)
+  run_frame merge feature
+  assert_status 0
+  assert_not_contains "$OUT" "isn't running"
+  assert_eq "$(git -C "$SANDBOX/origin.git" rev-parse main)" "$before"
 }
 
 test_swarm_block_carries_kv_values() {
@@ -316,7 +373,7 @@ test_agent_keeps_notes_on_its_frame() {
   run_frame kv set ticket ENG-412
   assert_status 0
   assert_contains "$OUT" "ticket=ENG-412 (frame, agent note)"
-  assert_file_exists "$HOME/.local/share/frame/kv/$TNAME/feature.agent"
+  assert_contains "$(<$FRAME_RUNDIR/$TNAME-feature.nvim.kv)" $'n\tticket\tENG-412'
   run_frame kv get ticket
   assert_eq "$OUT" ENG-412
   run_frame kv
@@ -360,7 +417,7 @@ test_agent_notes_cannot_touch_declared_keys() {
   assert_status 1
   run_frame kv set review_lang de
   assert_status 1
-  assert_file_absent "$HOME/.local/share/frame/kv/$TNAME/feature.agent"
+  assert_file_absent "$FRAME_RUNDIR/$TNAME-feature.nvim.kv"
 }
 
 test_agent_note_key_must_be_a_name() {
@@ -397,16 +454,6 @@ test_human_can_edit_and_drop_notes_but_not_invent_them() {
   assert_status 0
 }
 
-test_teardown_reaps_agent_notes() {
-  setup_frame
-  CLAUDECODE=1 run_frame kv set ticket ENG-412
-  cd "$REPO"
-  git -C "$REPO" merge -q feature
-  run_frame wt -d feature
-  assert_status 0
-  assert_file_absent "$HOME/.local/share/frame/kv/$TNAME/feature.agent"
-}
-
 test_swarm_block_carries_agent_notes() {
   setup_frame
   run_frame swarm 1
@@ -421,15 +468,12 @@ test_swarm_block_carries_agent_notes() {
 
 # ── reading another frame: frame kv --of ──────────────────────────────────────
 
-_mksock() { python3 -c 'import socket,sys
-s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$1"; }
-
 plant_sibling() {
   # A live "other" frame of this project: socket + FrameDebug answer naming the
   # primary checkout. Its agent writes a note from inside it.
   make_topic other
   local sock="$FRAME_RUNDIR/$TNAME-other.nvim"
-  _mksock "$sock"
+  live_frame other
   print -r -- "main_wt	$REPO" > "$sock.debug"
   ( cd "$SANDBOX/_$TNAME-other" && CLAUDECODE=1 "$FRAME_BIN" kv set ticket ENG-9 >/dev/null )
 }

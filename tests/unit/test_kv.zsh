@@ -41,6 +41,13 @@ test_kvfile_unset_keeps_other_lines() {
 
 # ── layers ────────────────────────────────────────────────────────────────────
 
+_live() {
+  # _live NAME TOPIC — a running session for NAME/TOPIC (the nvim stub answers
+  # FrameKv* from a <sock>.kv companion).
+  python3 -c 'import socket,sys
+s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$FRAME_RUNDIR/$1-$2.nvim"
+}
+
 test_defaults_file_lists_the_known_keys() {
   assert_eq "${(j:,:)${(f)"$(frame_kv_keys)"}}" \
     "autocommit,merge_on_commit,push_on_merge,deploy_on_merge,spawn_frames"
@@ -61,41 +68,67 @@ test_spawn_frames_defaults_to_true() {
 }
 
 test_precedence_frame_over_project_over_user() {
+  _live proj topic
   frame_kv_scope proj topic "$SANDBOX/main"
   frame_kvfile_set "$FRAME_KV_FILE[user]" push_on_merge true
   frame_kv_lookup push_on_merge;  assert_eq "$KV_LAYER" user
   frame_kvfile_set "$FRAME_KV_FILE[project]" push_on_merge false
   frame_kv_lookup push_on_merge;  assert_eq "$KV_LAYER" project
   assert_eq "$KV_VALUE" false
-  frame_kvfile_set "$FRAME_KV_FILE[frame]" push_on_merge true
+  frame_kv_frame_write s push_on_merge true
   frame_kv_lookup push_on_merge;  assert_eq "$KV_LAYER" frame
   assert_eq "$KV_VALUE" true
 }
 
 test_frame_layer_is_per_topic() {
+  _live proj one; _live proj two
   frame_kv_scope proj one ""
-  frame_kvfile_set "$FRAME_KV_FILE[frame]" autocommit true
+  frame_kv_frame_write s autocommit true
   frame_kv_scope proj two ""
   assert_eq "$(frame_kv_get autocommit)" false
 }
 
-test_slashed_topic_stays_one_file() {
-  frame_kv_scope proj feature/x ""
-  assert_eq "${FRAME_KV_FILE[frame]:t}" "feature%x"
+test_frame_layer_is_fetched_from_the_session() {
+  _live proj topic
+  frame_kv_scope proj topic ""
+  assert_eq "$FRAME_KV_FRAME_STATE" live
+  frame_kv_frame_write s autocommit true
+  frame_kv_frame_write n ticket "ENG 1"
+  frame_kv_scope proj topic ""               # a fresh scope re-reads the session
+  assert_eq "$(frame_kv_get autocommit)" true
+  assert_eq "$(frame_kv_get ticket)" "ENG 1"
+}
+
+test_stopped_frame_has_an_empty_frame_layer() {
+  frame_kv_scope proj gone ""
+  assert_eq "$FRAME_KV_FRAME_STATE" down
+  assert_eq "$(frame_kv_get autocommit)" false
+  local rc=0
+  frame_kv_frame_write s autocommit true 2>/dev/null || rc=$?
+  assert_eq "$rc" 1
+}
+
+test_frame_write_unset_reports_absent() {
+  _live proj topic
+  frame_kv_scope proj topic ""
+  local rc=0
+  frame_kv_frame_write n nope || rc=$?
+  assert_eq "$rc" 2
 }
 
 test_empty_scope_drops_frame_and_project_layers() {
   frame_kv_scope "" "" ""
-  assert_eq "$FRAME_KV_FILE[frame]" ""
+  assert_eq "$FRAME_KV_FRAME_STATE" none
   assert_eq "$FRAME_KV_FILE[project]" ""
   assert_eq "$(frame_kv_get autocommit)" false
 }
 
 test_is_true_fails_safe_on_junk() {
+  _live proj topic
   frame_kv_scope proj topic ""
-  frame_kvfile_set "$FRAME_KV_FILE[frame]" push_on_merge yes
+  frame_kv_frame_write s push_on_merge yes
   frame_kv_is_true push_on_merge && fail "junk value read as true"
-  frame_kvfile_set "$FRAME_KV_FILE[frame]" push_on_merge true
+  frame_kv_frame_write s push_on_merge true
   frame_kv_is_true push_on_merge || fail "true not read as true"
 }
 
@@ -125,12 +158,13 @@ test_project_and_user_keys_follow_builtins_in_order() {
 }
 
 test_custom_default_answers_with_its_origin() {
+  _live proj topic
   _decl "$SANDBOX/main/.frame/kv.defaults" "review_lang=en"
   frame_kv_scope proj topic "$SANDBOX/main"
   frame_kv_lookup review_lang
   assert_eq "$KV_VALUE" en
   assert_eq "$KV_LAYER" "default (project)"
-  frame_kvfile_set "$FRAME_KV_FILE[frame]" review_lang de
+  frame_kv_frame_write s review_lang de
   frame_kv_lookup review_lang
   assert_eq "$KV_VALUE/$KV_LAYER" de/frame
 }
@@ -198,9 +232,10 @@ test_undeclared_key_has_no_value_even_if_set_in_a_layer() {
 }
 
 test_agent_note_answers_only_for_undeclared_keys() {
+  _live proj topic
   frame_kv_scope proj topic "$SANDBOX/main"
-  frame_kvfile_set "$FRAME_KV_AGENT_FILE" ticket ENG-1
-  frame_kvfile_set "$FRAME_KV_AGENT_FILE" autocommit true
+  frame_kv_frame_write n ticket ENG-1
+  frame_kv_frame_write n autocommit true
   frame_kv_lookup ticket
   assert_eq "$KV_VALUE/$KV_LAYER" "ENG-1/frame (agent)"
   frame_kv_lookup autocommit
@@ -211,7 +246,7 @@ test_agent_note_answers_only_for_undeclared_keys() {
 
 test_no_frame_means_no_agent_notes() {
   frame_kv_scope "" "" ""
-  assert_eq "$FRAME_KV_AGENT_FILE" ""
+  assert_eq "$FRAME_KV_SOCKET" ""
   assert_eq "$(frame_kv_agent_keys)" ""
 }
 
