@@ -574,6 +574,8 @@ frame kv get ticket              # anyone, from that frame
   an undeclared key from you is still treated as a typo.
 - The swarm block tells the agent it may keep notes, and shows the current ones
   at session start, so a resumed session picks its state back up.
+- `frame view [TOPIC]` shows a frame's notes and any settings that differ from
+  their defaults.
 - Any frame can read another live frame's kv, notes included, with
   `frame kv --of TOPIC` (or `NAME/TOPIC`; resolved like `frame req`). It works
   with `get KEY` and `describe` too, and it's read-only: `set` and `unset` are
