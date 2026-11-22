@@ -18,6 +18,10 @@
 #     broker     #7 in-flight · queued #8, #9
 #     inbox      2 pending (from pactduo, remote)
 #
+#     kv         merge_on_commit=true (project)
+#                push_on_merge=true (user)
+#     notes      ticket=ENG-412
+#
 # The debug companion to `frame ls`: ls is the one-line-per-frame dashboard,
 # view is everything about a single frame. No arg dumps the frame you're in;
 # a TOPIC (or NAME/TOPIC) targets another, resolved exactly like `frame req` /
@@ -115,3 +119,28 @@ printf '  %-10s %s\n' buffers "$(_commas "${A[buffers]}")"
 print
 printf '  %-10s %s\n' broker  "$_broker"
 printf '  %-10s %s\n' inbox   "$_inbox"
+
+# kv: only the settings that differ from their declared default (the full list
+# is `frame kv --of`), then the agent's notes. Read from files, scoped to the
+# frame's own identity + primary checkout as the session reported them.
+frame_kv_scope "${A[name]}" "${A[topic]}" "${A[main_wt]}"
+typeset -a _kv_set _kv_notes
+for _k in $FRAME_KV_KEYS; do
+  frame_kv_lookup "$_k" || continue
+  [[ "$KV_LAYER" == default* ]] || _kv_set+=("$_k=$KV_VALUE ($KV_LAYER)")
+done
+for _k in ${(f)"$(frame_kv_agent_keys)"}; do
+  frame_kv_lookup "$_k" && _kv_notes+=("$_k=$KV_VALUE")
+done
+_view_list() {
+  # _view_list LABEL EMPTY ITEMS… — first item beside the label, the rest
+  # aligned under it.
+  local _label=$1 _empty=$2; shift 2
+  if (( ! $# )); then printf '  %-10s %s\n' "$_label" "$_empty"; return; fi
+  printf '  %-10s %s\n' "$_label" "$1"; shift
+  local _i
+  for _i in "$@"; do printf '  %-10s %s\n' '' "$_i"; done
+}
+print
+_view_list kv    "all defaults" "${_kv_set[@]}"
+_view_list notes none           "${_kv_notes[@]}"

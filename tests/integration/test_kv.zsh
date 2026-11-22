@@ -490,4 +490,42 @@ test_of_without_debug_still_reads_frame_layers() {
   assert_contains "$OUT" "project layer isn't shown"
 }
 
+# ── frame view shows a frame's kv ─────────────────────────────────────────────
+
+debug_answer() {
+  # A full FrameDebug answer (every field the layout reports) for TOPIC.
+  local f
+  for f in cwd wt status ready notify ephemeral prefix api_port vite_port hmr_port \
+           server buffers broker_inflight broker_queue inbox_count inbox_from; do
+    printf '%s\t\n' $f
+  done
+  printf 'name\t%s\ntopic\t%s\nmain_wt\t%s\n' "$TNAME" "$1" "$REPO"
+}
+
+test_view_shows_non_default_settings_and_notes() {
+  setup_frame
+  plant_sibling
+  debug_answer other > "$FRAME_RUNDIR/$TNAME-other.nvim.debug"
+  ( cd "$SANDBOX/_$TNAME-other" && "$FRAME_BIN" kv set merge_on_commit true >/dev/null )
+  run_frame kv set --project push_on_merge true
+  run_frame view other
+  assert_status 0
+  assert_contains "$OUT" "merge_on_commit=true (frame)"
+  assert_contains "$OUT" "push_on_merge=true (project)"
+  assert_contains "$OUT" "ticket=ENG-9"
+  assert_not_contains "$OUT" "autocommit"       # defaults stay out
+}
+
+test_view_with_nothing_set() {
+  setup_frame
+  make_topic other
+  local sock="$FRAME_RUNDIR/$TNAME-other.nvim"
+  _mksock "$sock"
+  debug_answer other > "$sock.debug"
+  run_frame view other
+  assert_status 0
+  assert_contains "$OUT" "all defaults"
+  assert_contains "$OUT" "none"
+}
+
 run_tests "$0"

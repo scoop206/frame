@@ -65,7 +65,8 @@ Usage:
     frame ls                          list frames
 
     frame view [TOPIC|NAME/TOPIC]     dump one frame's full state (default:
-                                      the frame you're in)
+                                      the frame you're in), incl. its kv
+                                      settings off their default + notes
 
     frame merge [TOPIC] [--push|--no-push|--ff|-n]
                                       merge TOPIC into the primary branch
