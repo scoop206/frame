@@ -156,6 +156,31 @@ test_resumable_filters_rows_by_last_cwd() {
   assert_contains "$(print -r -- "$out" | grep k-moved | cut -f3)" "$HOME/r/plain"
 }
 
+test_resume_dir_maps_gone_worktree_to_main() {
+  _repo_dirs
+  mkdir -p "$HOME/r/common-goal-fitness/.git" "$HOME/r/common-goal/.git"
+  assert_eq "$(frame_session_resume_dir "$HOME/r/repo/sub")" "${HOME:A}/r/repo/sub"
+  # removed worktree (and a subdir of one) → the primary checkout, longest name first
+  assert_eq "$(frame_gone_worktree_main "$HOME/r/_repo-gone")" "${HOME:A}/r/repo"
+  assert_eq "$(frame_session_resume_dir "$HOME/r/_repo-gone/web/src")" "${HOME:A}/r/repo"
+  assert_eq "$(frame_session_resume_dir "$HOME/r/_common-goal-fitness-88")" "${HOME:A}/r/common-goal-fitness"
+  # no such checkout, not a worktree name, or a live worktree → not resumable
+  frame_session_resume_dir "$HOME/r/_nope-topic" && fail "no checkout to map to"
+  frame_session_resume_dir "$HOME/r/gone"        && fail "gone non-worktree dir"
+  frame_session_resume_dir "$HOME/r/_repo-topic" && fail "live worktree"
+  return 0
+}
+
+test_resumable_lists_torn_down_worktree_session() {
+  _repo_dirs
+  local f=$(_t k-down x)
+  _typed "$f" "$HOME/r/_repo-done" "dns switchover email"
+  local out=$(frame_session_search dns | frame_session_resumable)
+  assert_contains "$out" "k-down"
+  assert_eq "$(print -r -- "$out" | cut -f3)" "${HOME:A}/r/repo"
+  assert_eq "$(frame_session_recent --resumable 5 | cut -f2,3)" "k-down"$'\t'"${HOME:A}/r/repo"
+}
+
 test_recent_resumable_skips_worktrees() {
   _repo_dirs
   local i f

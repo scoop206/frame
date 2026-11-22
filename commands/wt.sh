@@ -201,6 +201,12 @@ if [[ "${1:-}" == "-d" ]]; then
   # project/user defaults, not whatever the last frame by that name was told.
   frame_kv_scope "$NAME" "$TOPIC" ""
   rm -f "$FRAME_KV_FILE[frame]"
+  # The worktree is gone but its claude transcript isn't: name the way back.
+  # frame shell maps the removed worktree to the primary checkout on its own
+  # (frame_gone_worktree_main), and --find/--recent list it too.
+  if _sid=$(frame_session_id_for_dir "$WT_DIR"); then
+    echo "  its claude session can be reopened later: frame shell --resume $_sid"
+  fi
   # :FrameDown's watcher matches this line to know teardown finished without
   # reaching the session — keep the wording in sync with layouts/session.lua.
   echo "$OK_MARK removed worktree and branch $TOPIC"
