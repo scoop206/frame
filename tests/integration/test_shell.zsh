@@ -438,6 +438,69 @@ test_shell_resume_torn_down_worktree_boots_in_main_checkout() {
   assert_file_exists "$HOME/.claude/projects/${main//[^A-Za-z0-9]/-}/wt-done.jsonl"
 }
 
+test_shell_resume_live_worktree_reboots_its_frame() {
+  # A worktree that's still there (its frame not running): the branch and work
+  # live in it, so the session comes back as that worktree's frame — frame wt
+  # booted in the worktree with --resume — not a shell beside it.
+  make_repo
+  write_config <<'EOF'
+BUFFERS=()
+EOF
+  make_topic dns
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  local wt="${${:-$SANDBOX/_$TNAME-dns}:A}"
+  _session wt-live "$wt" "draft the dns email"
+  cd "$SANDBOX"
+  run_frame shell --resume wt-live
+  assert_status 0
+  assert_contains "$OUT" "rebooting its frame"
+  local log=$(<$FAKE_NVIM_LOG)
+  assert_contains "$log" "FRAME_TOPIC=dns"
+  assert_contains "$log" "--resume wt-live"
+}
+
+test_shell_recent_is_scoped_to_the_repo_youre_in() {
+  # Inside a repo (here: one of its worktrees), --recent lists only that repo's
+  # sessions — main checkout, live and torn-down worktrees — labelled by where
+  # they ran; -g lists everything.
+  make_repo
+  make_topic live
+  local main="${REPO:A}" sb="${SANDBOX:A}"
+  mkdir -p "$SANDBOX/elsewhere"
+  _session r-main "$main" "main checkout chat"
+  _session r-live "$sb/_$TNAME-live" "live worktree chat"
+  _session r-gone "$sb/_$TNAME-old" "retired frame chat"
+  _session r-else "$sb/elsewhere" "unrelated chat"
+  cd "$SANDBOX/_$TNAME-live"
+  run_frame shell --recent < /dev/null
+  assert_status 1     # no tty: lists and stops
+  assert_contains "$OUT" "r-main"
+  assert_contains "$OUT" "r-live"
+  assert_contains "$OUT" "r-gone"
+  assert_not_contains "$OUT" "r-else"
+  assert_contains "$OUT" "$TNAME · wt old (gone)"
+  assert_contains "$OUT" "$TNAME · wt live"
+  assert_contains "$OUT" "-g for all"
+  run_frame shell --recent -g < /dev/null
+  assert_contains "$OUT" "r-else"
+  assert_contains "$OUT" "r-gone"
+  # --find takes the same scope
+  run_frame shell --find chat < /dev/null
+  assert_not_contains "$OUT" "r-else"
+  assert_contains "$OUT" "r-gone"
+}
+
+test_shell_recent_outside_a_repo_is_global() {
+  make_repo
+  mkdir -p "$SANDBOX/elsewhere"
+  _session o-main "${REPO:A}" "repo chat"
+  _session o-else "${${:-$SANDBOX/elsewhere}:A}" "unrelated chat"
+  cd "$SANDBOX/elsewhere"
+  run_frame shell --recent < /dev/null
+  assert_contains "$OUT" "o-main"
+  assert_contains "$OUT" "o-else"
+}
+
 test_shell_resume_refuses_unknown_bad_or_gone() {
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
   run_frame shell taxes --resume nope-000

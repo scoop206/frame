@@ -25,21 +25,22 @@
 #                                       nothing is written into the dir (refuses ~)
 #     frame shell -C DIR TOPIC          …in DIR instead (either form opens the
 #                                       dir's .frame/config.sh BUFFERS, if any)
-#     frame shell [TOPIC] --find "WORDS"
+#     frame shell [TOPIC] --find "WORDS" [-g]
 #                                       find a past claude session by what YOU
 #                                       typed in it (every word; tool output and
-#                                       replies don't count), pick one, resume
-#                                       it in the dir it ran in
-#     frame shell [TOPIC] --recent      browse your most recent sessions (first
-#                                       message of each) and resume the one you pick
-#                                       (both lists leave out sessions that ran in
-#                                       a live worktree, a gone dir or ~ — but a
-#                                       torn-down frame wt frame's session IS
-#                                       listed, and resumes in the main checkout;
-#                                       ● marks one open now — picking it
-#                                       switches to it)
-#     frame shell [TOPIC] --resume ID   …resume a known session id the same way
-#                                       (-C DIR resumes it in DIR instead).
+#                                       replies don't count), pick one, resume it
+#     frame shell [TOPIC] --recent [-g]
+#                                       browse your most recent sessions (first
+#                                       message of each) and resume the one you pick.
+#                                       Both lists cover the repo you're in: its
+#                                       main checkout and its worktrees, live or
+#                                       torn down (outside a repo, or -g: every
+#                                       session). ● marks one open now — picking
+#                                       it switches to it
+#     frame shell [TOPIC] --resume ID   …resume a known session id in the dir
+#                                       it ran in (-C DIR: in DIR instead). A
+#                                       torn-down frame wt worktree resumes in the
+#                                       main checkout; a live one reboots its frame.
 #                                       Resuming, TOPIC defaults to the dir's
 #                                       name (-2, -3… if a live frame has it)
 #     frame shell -d [TOPIC]            tear down a shell frame (default: current)

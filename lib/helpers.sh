@@ -620,14 +620,30 @@ frame_session_pick() {
   emulate -L zsh
   zmodload -F zsh/datetime b:strftime
   local _rows=$1 _mt _id _cwd _f _snip _when _where _i _mark _k _v
-  local -a _ids _lines _menu
+  local -a _ids _lines _menu _rfiles
   # ● marks a session that's open right now (picking it switches to it).
   local -A _running
   while IFS=$'\t' read -r _k _v; do _running[$_k]=$_v; done < <(frame_session_running)
+  # Label each row by where it RAN ("repo", "repo · wt 88 (gone)"), from the
+  # transcript's last cwd — the CWD column is where it resumes, which for a
+  # torn-down worktree's session is just the main checkout.
+  local -A _ran _label
+  while IFS=$'\t' read -r _mt _id _cwd _f _snip; do
+    [[ -n "$_f" ]] && _rfiles+=("$_f")
+  done <<< "$_rows"
+  while IFS=$'\t' read -r _f _v; do _ran[$_f]=$_v; done \
+    < <(frame_session_last_cwds "${_rfiles[@]}")
   while IFS=$'\t' read -r _mt _id _cwd _f _snip; do
     [[ -n "$_id" ]] || continue
     strftime -s _when '%Y-%m-%d %H:%M' "$_mt"
-    _where=${_cwd/#$HOME/\~}
+    _v=${_ran[$_f]:-$_cwd}
+    if [[ -z "${_label[$_v]+x}" ]]; then
+      _label[$_v]=${_cwd/#$HOME/\~}
+      if _k=$(frame_session_place "$_v"); then
+        _label[$_v]="${${(@ps:\t:)_k}[4]}"
+      fi
+    fi
+    _where=${_label[$_v]}
     [[ -n "${_running[$_id]:-}" ]] && _mark='● ' || _mark='  '
     _ids+=("$_id")
     _lines+=("$_mark$_when  $_where  $_snip")
@@ -782,13 +798,20 @@ frame_session_recent() {
   # where the last one was typed. Same filters as the search: headless
   # (sdk-cli) runs and sessions with nothing typed are dropped, and bridged
   # copies of one session collapse to the newest. Returns 1 when there are none.
-  # With --resumable, only sessions frame shell can resume are listed, with
-  # CWD the dir it resumes them in (see frame_session_resume_dir) — checked from each transcript's tail BEFORE
-  # the full parse, so skipped worktree sessions cost next to nothing.
+  # With --resumable, only sessions frame shell can resume are listed, CWD the
+  # dir the pick resumes in (see frame_session_place); --repo MAIN (implies
+  # --resumable) keeps only that repo's sessions. Both are checked from each
+  # transcript's tail BEFORE the full parse, so skipped ones cost next to nothing.
   emulate -L zsh
   setopt pipefail
-  local _resumable=0
-  [[ "${1:-}" == --resumable ]] && { _resumable=1; shift; }
+  local _resumable=0 _repo=""
+  while [[ "${1:-}" == --* ]]; do
+    case $1 in
+      --resumable) _resumable=1; shift ;;
+      --repo)      _resumable=1; _repo=$2; shift 2 ;;
+      *)           break ;;
+    esac
+  done
   local _max=${1:-100}
   zmodload -F zsh/stat b:zstat
   # Newest transcripts first, one per session id; read a few extra since some
@@ -796,6 +819,7 @@ frame_session_recent() {
   local -a _all _files _st
   local -A _seen
   local _f _id _lcwd
+  local -a _pf
   _all=( "$HOME/.claude/projects"/*/*.jsonl(N.om) )
   local -A _okdir _lastcwd
   local _chunk=$(( _max * 4 )) _i=1
@@ -816,10 +840,14 @@ frame_session_recent() {
         _lcwd=${_lc[$_f]:-}
         [[ -n "$_lcwd" ]] || continue
         if [[ -z "${_okdir[$_lcwd]+x}" ]]; then
-          _okdir[$_lcwd]=$(frame_session_resume_dir "$_lcwd") || _okdir[$_lcwd]=""
+          _okdir[$_lcwd]=$(frame_session_place "$_lcwd") || _okdir[$_lcwd]=""
         fi
         [[ -n "${_okdir[$_lcwd]}" ]] || continue
-        _lastcwd[$_f]=${_okdir[$_lcwd]}
+        # split, not `read`: IFS tab is whitespace, so read would fold a
+        # plain dir's empty MAIN field and shift the columns
+        _pf=( "${(@ps:\t:)_okdir[$_lcwd]}" )
+        [[ -z "$_repo" || "$_pf[2]" == "$_repo" ]] || continue
+        _lastcwd[$_f]=$_pf[3]
       fi
       _files+=("$_f")
       (( $#_files >= _max * 2 )) && break
@@ -921,51 +949,61 @@ frame_session_last_cwds() {
       }' -- "$@"
 }
 
-frame_session_dir_resumable() {
-  # frame_session_dir_resumable DIR — can `frame shell` resume a session that
-  # last ran in DIR? Not when DIR:
-  #   - is gone (resuming there would just error — frame_session_resume_dir
-  #     maps a gone `frame wt` worktree to its primary checkout instead), or
-  #   - is your home dir (frame shell won't boot there), or
-  #   - sits in a git linked worktree (a `frame wt` frame, `_REPO-TOPIC`):
-  #     those belong to their worktree frame — `frame wt --from` hands them on.
-  emulate -L zsh
-  local _d=$1
-  [[ "$_d" == /* && -d "$_d" ]] || return 1
-  _d=${_d:A}
-  [[ "$_d" != "${HOME:A}" ]] || return 1
-  # Walk up to the nearest .git: a FILE pointing into some repo's
-  # .git/worktrees/ marks a linked worktree (a submodule's points into
-  # .git/modules/, and a plain checkout has a .git dir).
-  while :; do
-    [[ -d "$_d/.git" ]] && return 0
-    if [[ -f "$_d/.git" ]]; then
-      [[ "$(<"$_d/.git")" == *"/worktrees/"* ]] && return 1
-      return 0
-    fi
-    [[ "$_d" == / ]] && return 0
-    _d=${_d:h}
-  done
-}
-
-frame_session_resume_dir() {
-  # frame_session_resume_dir DIR — echo the dir `frame shell` resumes a session
-  # in when it last ran in DIR, or return 1 if it can't be resumed there:
-  #   - DIR still exists and frame_session_dir_resumable accepts it → DIR.
-  #   - DIR is gone but sat in a torn-down `frame wt` worktree
-  #     (…/_<REPO>-<TOPIC>[/sub]) → that repo's primary checkout,
-  #     …/<REPO>. A frame's worktree dies at teardown but its transcript
-  #     doesn't, so this is how a closed frame's conversation comes back.
-  #   - anything else (a live worktree, ~, a gone non-worktree dir) → 1.
+frame_session_place() {
+  # frame_session_place DIR — where does a session that last ran in DIR belong,
+  # and where would `frame shell` resume it? Prints one tab-separated line:
+  #   KIND  MAIN  RESUME  LABEL
+  #   KIND    main   DIR is in a primary checkout (or a submodule of one)
+  #           plain  DIR exists and isn't in any git repo
+  #           wt     DIR is in a live linked worktree (a `frame wt` frame's)
+  #           gone   DIR is gone, but was a `frame wt` worktree
+  #                  (…/_<REPO>-<TOPIC>[/sub]) of a checkout that still exists
+  #   MAIN    the repo's primary checkout ("" for plain) — the anchor that
+  #           `frame shell --recent/--find` scope a repo's sessions by
+  #   RESUME  the dir to resume in: DIR itself (main, plain), the worktree's
+  #           root (wt — rebooted as its frame), or MAIN (gone — the worktree
+  #           died at teardown, its transcript didn't)
+  #   LABEL   for the picker: "repo[/sub]", "repo · wt TOPIC[ (gone)]", "~/dir"
+  # Returns 1 (prints nothing) when it can't be resumed: ~, a relative path,
+  # or a gone dir that wasn't a worktree. No git spawns — the walk up to the
+  # nearest .git is all it takes: a .git DIR is a checkout, a .git FILE pointing
+  # into some repo's .git/worktrees/ is a linked worktree of that repo.
   emulate -L zsh
   local _d=$1
   [[ "$_d" == /* ]] || return 1
-  if [[ -d "$_d" ]]; then
-    frame_session_dir_resumable "$_d" || return 1
-    print -r -- "${_d:A}"
+  local _home=${HOME:A} _main _rel _top _g
+  if [[ ! -d "$_d" ]]; then
+    _main=$(frame_gone_worktree_main "$_d") || return 1
+    _top=$_d
+    while [[ ! -d "${_top:h}" ]]; do _top=${_top:h}; done
+    print -r -- "gone"$'\t'"$_main"$'\t'"$_main"$'\t'"${_main:t} · wt ${${_top:t}#_${_main:t}-} (gone)"
     return 0
   fi
-  frame_gone_worktree_main "$_d"
+  _d=${_d:A}
+  [[ "$_d" != "$_home" ]] || return 1
+  _top=$_d
+  while :; do
+    if [[ -d "$_top/.git" ]]; then
+      _rel=${_d#$_top}
+      print -r -- "main"$'\t'"$_top"$'\t'"$_d"$'\t'"${_top:t}$_rel"
+      return 0
+    fi
+    if [[ -f "$_top/.git" ]]; then
+      _g=$(<"$_top/.git"); _g=${_g#gitdir: }
+      [[ "$_g" == /* ]] || _g="$_top/$_g"
+      if [[ "$_g" == */.git/worktrees/* ]]; then
+        _main=${${_g%%/.git/worktrees/*}:A}
+        print -r -- "wt"$'\t'"$_main"$'\t'"$_top"$'\t'"${_main:t} · wt ${${_top:t}#_${_main:t}-}"
+      else    # a submodule (gitdir into .git/modules/): its own checkout
+        _rel=${_d#$_top}
+        print -r -- "main"$'\t'"$_top"$'\t'"$_d"$'\t'"${_top:t}$_rel"
+      fi
+      return 0
+    fi
+    [[ "$_top" == / ]] && break
+    _top=${_top:h}
+  done
+  print -r -- "plain"$'\t\t'"$_d"$'\t'"${_d/#$_home/~}"
 }
 
 frame_gone_worktree_main() {
@@ -996,22 +1034,38 @@ frame_gone_worktree_main() {
   return 1
 }
 
-frame_session_resumable() {
-  # frame_session_resumable [N] — filter frame_session_search / _recent rows
-  # (stdin) down to the sessions `frame shell` can actually resume (see
-  # frame_session_resume_dir), at most N (default all). The CWD column is
-  # rewritten to the dir --resume boots in: where the session LAST ran, or the
-  # primary checkout when that was a since-removed `frame wt` worktree.
+frame_repo_main() {
+  # frame_repo_main [DIR] — echo the primary checkout of the repo DIR (default
+  # the cwd) sits in, a linked worktree's included, or return 1 outside a repo.
+  # This is the scope `frame shell --recent/--find` default to.
   emulate -L zsh
+  local _p _m
+  _p=$(frame_session_place "${1:-$PWD}") || return 1
+  _m="${${(@ps:\t:)_p}[2]}"     # split, not read: see frame_session_recent
+  [[ -n "$_m" ]] || return 1
+  print -r -- "$_m"
+}
+
+frame_session_resumable() {
+  # frame_session_resumable [--repo MAIN] [N] — filter frame_session_search /
+  # _recent rows (stdin) down to the sessions `frame shell` can resume (see
+  # frame_session_place), at most N (default all). --repo keeps only the
+  # sessions of the repo whose primary checkout is MAIN: ones run in it, in its
+  # subdirs, and in its worktrees, live or torn down. The CWD column is
+  # rewritten to the dir the pick resumes in (frame_session_place's RESUME).
+  emulate -L zsh
+  local _repo=""
+  [[ "${1:-}" == --repo ]] && { _repo=$2; shift 2; }
   local _max=${1:-0} _rows
   _rows=$(cat)
   [[ -n "$_rows" ]] || return 1
   local -a _files
   local _mt _id _cwd _f _snip
+  local -a _pf
   while IFS=$'\t' read -r _mt _id _cwd _f _snip; do
     [[ -n "$_f" ]] && _files+=("$_f")
   done <<< "$_rows"
-  local -A _last _rdir
+  local -A _last _place
   while IFS=$'\t' read -r _f _cwd; do
     _last[$_f]=$_cwd
   done < <(frame_session_last_cwds "${_files[@]}")
@@ -1020,12 +1074,13 @@ frame_session_resumable() {
   while IFS=$'\t' read -r _mt _id _cwd _f _snip; do
     [[ -n "$_id" ]] || continue
     _cwd=${_last[$_f]:-$_cwd}
-    if [[ -z "${_rdir[$_cwd]+x}" ]]; then
-      _rdir[$_cwd]=$(frame_session_resume_dir "$_cwd") || _rdir[$_cwd]=""
+    if [[ -z "${_place[$_cwd]+x}" ]]; then
+      _place[$_cwd]=$(frame_session_place "$_cwd") || _place[$_cwd]=""
     fi
-    _cwd=${_rdir[$_cwd]}
-    [[ -n "$_cwd" ]] || continue
-    print -r -- "$_mt"$'\t'"$_id"$'\t'"$_cwd"$'\t'"$_f"$'\t'"$_snip"
+    [[ -n "${_place[$_cwd]}" ]] || continue
+    _pf=( "${(@ps:\t:)_place[$_cwd]}" )   # split, not read: see frame_session_recent
+    [[ -z "$_repo" || "$_pf[2]" == "$_repo" ]] || continue
+    print -r -- "$_mt"$'\t'"$_id"$'\t'"$_pf[3]"$'\t'"$_f"$'\t'"$_snip"
     (( ++_n == _max )) && break
   done <<< "$_rows"
   (( _n ))

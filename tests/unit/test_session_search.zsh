@@ -128,63 +128,89 @@ _repo_dirs() {  # a plain checkout and one linked worktree of it, under $HOME/r
   print -r -- "gitdir: $HOME/r/repo/.git/worktrees/_repo-topic" > "$HOME/r/_repo-topic/.git"
 }
 
-test_dir_resumable() {
+_place_kind() { local p; p=$(frame_session_place "$1") || { print none; return; }; print -r -- "${p%%$'\t'*}"; }
+_place_col() { local p; p=$(frame_session_place "$1") || return 1; print -r -- "$(print -r -- "$p" | cut -f$2)"; }
+
+test_place_kinds() {
   _repo_dirs
-  frame_session_dir_resumable "$HOME/r/repo/sub" || fail "checkout subdir should be resumable"
-  frame_session_dir_resumable "$HOME/r/plain"    || fail "plain dir should be resumable"
-  frame_session_dir_resumable "$HOME/r/_repo-topic"     && fail "worktree should not be resumable"
-  frame_session_dir_resumable "$HOME/r/_repo-topic/sub" && fail "worktree subdir should not be resumable"
-  frame_session_dir_resumable "$HOME/r/gone"            && fail "gone dir should not be resumable"
-  frame_session_dir_resumable "$HOME"                   && fail "home should not be resumable"
+  local R=${HOME:A}/r
+  assert_eq "$(_place_kind "$HOME/r/repo/sub")"        "main"
+  assert_eq "$(_place_kind "$HOME/r/plain")"           "plain"
+  assert_eq "$(_place_kind "$HOME/r/_repo-topic/sub")" "wt"
+  assert_eq "$(_place_kind "$HOME/r/_repo-done/web")"  "gone"
+  assert_eq "$(_place_kind "$HOME/r/gone")"            "none"
+  assert_eq "$(_place_kind "$HOME")"                   "none"
+  # MAIN: the anchor every kind of a repo's dirs share
+  assert_eq "$(_place_col "$HOME/r/repo/sub" 2)"        "$R/repo"
+  assert_eq "$(_place_col "$HOME/r/_repo-topic/sub" 2)" "$R/repo"
+  assert_eq "$(_place_col "$HOME/r/_repo-done/web" 2)"  "$R/repo"
+  # RESUME: the dir itself, a live worktree's root, or the main checkout
+  assert_eq "$(_place_col "$HOME/r/repo/sub" 3)"        "$R/repo/sub"
+  assert_eq "$(_place_col "$HOME/r/_repo-topic/sub" 3)" "$R/_repo-topic"
+  assert_eq "$(_place_col "$HOME/r/_repo-done/web" 3)"  "$R/repo"
+  # LABEL
+  assert_eq "$(_place_col "$HOME/r/repo/sub" 4)"        "repo/sub"
+  assert_eq "$(_place_col "$HOME/r/_repo-topic/sub" 4)" "repo · wt topic"
+  assert_eq "$(_place_col "$HOME/r/_repo-done/web" 4)"  "repo · wt done (gone)"
+  assert_eq "$(_place_col "$HOME/r/plain" 4)"           "~/r/plain"
+}
+
+test_gone_worktree_main_longest_name_first() {
+  mkdir -p "$HOME/r/common-goal-fitness/.git" "$HOME/r/common-goal/.git"
+  assert_eq "$(frame_gone_worktree_main "$HOME/r/_common-goal-fitness-88")" "${HOME:A}/r/common-goal-fitness"
+  frame_gone_worktree_main "$HOME/r/_nope-topic" && fail "no checkout to map to"
+  return 0
+}
+
+test_repo_main() {
+  _repo_dirs
+  assert_eq "$(frame_repo_main "$HOME/r/_repo-topic/sub")" "${HOME:A}/r/repo"
+  assert_eq "$(frame_repo_main "$HOME/r/repo")"            "${HOME:A}/r/repo"
+  frame_repo_main "$HOME/r/plain" && fail "plain dir has no repo"
   return 0
 }
 
 test_resumable_filters_rows_by_last_cwd() {
   _repo_dirs
-  local a=$(_t k-repo x) b=$(_t k-wt x) c=$(_t k-gone x) d=$(_t k-moved x)
+  local a=$(_t k-repo x) b=$(_t k-wt x) c=$(_t k-gone x) d=$(_t k-moved x) e=$(_t k-down x)
   _typed "$a" "$HOME/r/repo" "tax in repo"
   _typed "$b" "$HOME/r/_repo-topic" "tax in worktree"
   _typed "$c" "$HOME/r/gone" "tax in gone"
   _typed "$d" "$HOME/r/_repo-topic" "tax first"
   _typed "$d" "$HOME/r/plain" "moved out"
+  _typed "$e" "$HOME/r/_repo-done" "tax in torn-down worktree"
   local out=$(frame_session_search tax | frame_session_resumable)
   assert_contains "$out" "k-repo"
   assert_contains "$out" "k-moved"
-  assert_not_contains "$out" "k-wt"
-  assert_not_contains "$out" "k-gone"
-  # CWD column is where the session last ran, the dir --resume boots in
-  assert_contains "$(print -r -- "$out" | grep k-moved | cut -f3)" "$HOME/r/plain"
-}
-
-test_resume_dir_maps_gone_worktree_to_main() {
-  _repo_dirs
-  mkdir -p "$HOME/r/common-goal-fitness/.git" "$HOME/r/common-goal/.git"
-  assert_eq "$(frame_session_resume_dir "$HOME/r/repo/sub")" "${HOME:A}/r/repo/sub"
-  # removed worktree (and a subdir of one) → the primary checkout, longest name first
-  assert_eq "$(frame_gone_worktree_main "$HOME/r/_repo-gone")" "${HOME:A}/r/repo"
-  assert_eq "$(frame_session_resume_dir "$HOME/r/_repo-gone/web/src")" "${HOME:A}/r/repo"
-  assert_eq "$(frame_session_resume_dir "$HOME/r/_common-goal-fitness-88")" "${HOME:A}/r/common-goal-fitness"
-  # no such checkout, not a worktree name, or a live worktree → not resumable
-  frame_session_resume_dir "$HOME/r/_nope-topic" && fail "no checkout to map to"
-  frame_session_resume_dir "$HOME/r/gone"        && fail "gone non-worktree dir"
-  frame_session_resume_dir "$HOME/r/_repo-topic" && fail "live worktree"
-  return 0
-}
-
-test_resumable_lists_torn_down_worktree_session() {
-  _repo_dirs
-  local f=$(_t k-down x)
-  _typed "$f" "$HOME/r/_repo-done" "dns switchover email"
-  local out=$(frame_session_search dns | frame_session_resumable)
+  assert_contains "$out" "k-wt"
   assert_contains "$out" "k-down"
-  assert_eq "$(print -r -- "$out" | cut -f3)" "${HOME:A}/r/repo"
-  assert_eq "$(frame_session_recent --resumable 5 | cut -f2,3)" "k-down"$'\t'"${HOME:A}/r/repo"
+  assert_not_contains "$out" "k-gone"
+  # CWD column is where the pick resumes
+  assert_eq "$(print -r -- "$out" | grep k-moved | cut -f3)" "${HOME:A}/r/plain"
+  assert_eq "$(print -r -- "$out" | grep k-wt | cut -f3)"    "${HOME:A}/r/_repo-topic"
+  assert_eq "$(print -r -- "$out" | grep k-down | cut -f3)"  "${HOME:A}/r/repo"
 }
 
-test_recent_resumable_skips_worktrees() {
+test_resumable_repo_scope() {
+  _repo_dirs
+  mkdir -p "$HOME/r/other/.git"
+  local a=$(_t s-main x) b=$(_t s-wt x) c=$(_t s-down x) d=$(_t s-other x) e=$(_t s-plain x)
+  _typed "$a" "$HOME/r/repo/sub" "dns main"
+  _typed "$b" "$HOME/r/_repo-topic" "dns wt"
+  _typed "$c" "$HOME/r/_repo-done" "dns down"
+  _typed "$d" "$HOME/r/other" "dns other"
+  _typed "$e" "$HOME/r/plain" "dns plain"
+  local -a ids=( ${(fo)"$(frame_session_search dns | frame_session_resumable --repo "${HOME:A}/r/repo" | cut -f2)"} )
+  assert_eq "${ids[*]}" "s-down s-main s-wt"
+  ids=( ${(fo)"$(frame_session_recent --repo "${HOME:A}/r/repo" 10 | cut -f2)"} )
+  assert_eq "${ids[*]}" "s-down s-main s-wt"
+  assert_eq "$(frame_session_recent --resumable 10 | wc -l | tr -d ' ')" "5"
+}
+
+test_recent_resumable_respects_limit_and_skips_unresumable() {
   _repo_dirs
   local i f
-  for i in 1 2 3; do f=$(_t w-$i x); _typed "$f" "$HOME/r/_repo-topic" "wt $i"; done
+  for i in 1 2 3; do f=$(_t g-$i x); _typed "$f" "$HOME/r/gone" "gone $i"; done
   f=$(_t p-1 x); _typed "$f" "$HOME/r/plain" "plain one"; touch -t 202001010000 "$f"
   f=$(_t p-2 x); _typed "$f" "$HOME/r/repo" "repo one";   touch -t 202001010000 "$f"
   local -a ids=( ${(f)"$(frame_session_recent --resumable 2 | cut -f2)"} )
