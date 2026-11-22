@@ -16,8 +16,8 @@ test_compose_credentials_are_env_overridable() {
   assert_contains "$_y" 'POSTGRES_PASSWORD: ${FRAME_PG_PASSWORD:-devpassword}'
   assert_contains "$_y" 'MINIO_ROOT_USER: ${FRAME_MINIO_USER:-minioadmin}'
   assert_contains "$_y" 'MINIO_ROOT_PASSWORD: ${FRAME_MINIO_PASSWORD:-minioadmin}'
-  # mc's alias is a URL carrying the same pair — it must track the overrides.
-  assert_contains "$_y" 'MC_HOST_local: http://${FRAME_MINIO_USER:-minioadmin}:${FRAME_MINIO_PASSWORD:-minioadmin}@minio:9000'
+  # ensure_minio_bucket execs mc inside minio itself; no tools image to pull.
+  assert_not_contains "$_y" 'minio/mc'
 }
 
 test_compose_ports_bind_loopback_only() {
@@ -44,6 +44,27 @@ test_machine_config_absent_is_a_silent_noop() {
   assert_eq "$_rc" "0"
   assert_eq "$_out" ""
   assert_eq "${FRAME_PG_PASSWORD:-}" ""
+}
+
+test_ensure_minio_bucket_execs_mc_inside_minio() {
+  docker() { print -r -- "docker $*" >> "$HOME/docker.log"; print "Bucket created"; }
+  local _out
+  _out=$(ensure_minio_bucket proj-dev 2>&1); assert_eq "$?" "0"
+  assert_contains "$_out" "bucket proj-dev"
+  local _log="$(<$HOME/docker.log)"
+  assert_contains "$_log" "exec -T minio sh -c"
+  assert_contains "$_log" "proj-dev"
+  assert_not_contains "$_log" "run --rm"
+}
+
+test_ensure_minio_bucket_failure_is_loud_and_nonzero() {
+  docker() { print -r -- "mc: <ERROR> Unable to make bucket"; return 1; }
+  local _out _rc
+  _out=$(ensure_minio_bucket proj-dev 2>&1) && _rc=0 || _rc=$?
+  assert_eq "$_rc" "1"
+  assert_contains "$_out" "couldn't create minio bucket proj-dev"
+  assert_contains "$_out" "Unable to make bucket"
+  assert_not_contains "$_out" "✓"
 }
 
 run_tests "$0"

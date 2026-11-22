@@ -747,7 +747,7 @@ the machine-wide config (`~/.config/frame/config.sh`):
 export FRAME_PG_USER=frame            # postgres superuser
 export FRAME_PG_PASSWORD=…
 export FRAME_MINIO_USER=…             # minio root
-export FRAME_MINIO_PASSWORD=…         # URL-safe characters only (no : / @)
+export FRAME_MINIO_PASSWORD=…
 ```
 
 Compose interpolates these wherever the stack comes up (`frame wt` via

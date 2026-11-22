@@ -33,17 +33,6 @@ services:
     volumes:
       - miniodata:/data
 
-  # Tooling one-shot, not a long-running service. Used by ensure_minio_bucket:
-  #   docker compose -f this-file run --rm mc mb --ignore-existing local/BUCKET
-  # MC_HOST_local preconfigures the `local` alias so no `mc alias set` is needed.
-  mc:
-    image: minio/mc
-    profiles: ["tools"]
-    environment:
-      # Credentials must stay URL-safe (no : / @) — this is a URL.
-      MC_HOST_local: http://${FRAME_MINIO_USER:-minioadmin}:${FRAME_MINIO_PASSWORD:-minioadmin}@minio:9000
-    entrypoint: ["mc"]
-
 volumes:
   pgdata:
   miniodata:
