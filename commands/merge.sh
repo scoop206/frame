@@ -64,8 +64,16 @@ fi
 # The frame layer is keyed by the topic being merged, which from :FrameMerge
 # (cwd = primary checkout) isn't the branch we're standing on.
 frame_kv_scope "$NAME" "$TOPIC" "$MAIN_WT"
+# A frame's own kv lives in its session, so merging a frame that isn't running
+# can't see it: say so whenever that leaves a push or deploy switched on from a
+# shared layer, since the frame may have been told otherwise.
+_kv_unseen() {
+  [[ "$FRAME_KV_FRAME_STATE" == down ]] || return 0
+  echo "$WARN_MARK $TOPIC $FRAME_KV_DOWN_WHY, so its own kv settings can't be read — $1=true comes from $KV_LAYER"
+}
 if ! $PUSH && ! $NO_PUSH && frame_kv_is_true push_on_merge; then
   frame_kv_lookup push_on_merge
+  _kv_unseen push_on_merge
   if git -C "$MAIN_WT" remote get-url origin >/dev/null 2>&1; then
     PUSH=true
     echo "→ push_on_merge=true ($KV_LAYER) — will push after merging (--no-push to skip)"
@@ -179,6 +187,7 @@ fi
 
 if ! $DRY && frame_kv_is_true deploy_on_merge; then
   frame_kv_lookup deploy_on_merge
+  _kv_unseen deploy_on_merge
   echo "→ deploy_on_merge=true ($KV_LAYER) — deploy '$MAIN_BRANCH' now, using this project's deploy step"
 fi
 

@@ -27,6 +27,33 @@ if [[ "${1:-}" == "--server" ]]; then
     # and a FAKE_NVIM_EXPR_LOG expr trace (ordering vs the buffer-stop RPC) still
     # capture the call exactly as before.
     *qa!*) rm -f "$_sock" ;;
+    # The frame layer of `frame kv` lives in the session (FrameKv* in
+    # layouts/session.lua). The stub keeps it in a <sock>.kv companion, in the
+    # dump's own kind<TAB>key<TAB>value format; a <sock>.nokv companion makes the
+    # session answer like an old layout without FrameKv* (RPC error).
+    *FrameKvDump*)
+      [[ -f "$_sock.nokv" ]] && exit 1
+      [[ -f "$_sock.kv" ]] && print -rn -- "$(<$_sock.kv)"
+      exit 0 ;;
+    *FrameKvSet*)
+      [[ -f "$_sock.nokv" ]] && exit 1
+      [[ "$_expr" =~ "FrameKvSet\('([sn])','([a-z0-9_]+)','([0-9a-f]*)'\)" ]] || { print -rn -- bad; exit 0; }
+      _kk=$match[1] _key=$match[2]
+      _val=$(printf '%b' "$(print -rn -- "$match[3]" | sed 's/../\\x&/g')")
+      _lines=()
+      [[ -f "$_sock.kv" ]] && _lines=("${(@f)$(<$_sock.kv)}")
+      _lines=(${_lines:#$_kk$'\t'$_key$'\t'*} "$_kk"$'\t'"$_key"$'\t'"$_val")
+      print -rl -- "${(@o)_lines}" > "$_sock.kv"
+      print -rn -- ok; exit 0 ;;
+    *FrameKvUnset*)
+      [[ -f "$_sock.nokv" ]] && exit 1
+      [[ "$_expr" =~ "FrameKvUnset\('([sn])','([a-z0-9_]+)'\)" ]] || exit 1
+      _lines=()
+      [[ -f "$_sock.kv" ]] && _lines=("${(@f)$(<$_sock.kv)}")
+      _kept=(${_lines:#$match[1]$'\t'$match[2]$'\t'*})
+      if (( $#_kept == $#_lines )); then print -rn -- absent; exit 0; fi
+      print -rl -- "${_kept[@]}" > "$_sock.kv"
+      print -rn -- ok; exit 0 ;;
     # `frame kv --of` asks a session for its primary checkout. A <sock>.debug
     # companion holds the FrameDebug answer (key<TAB>value lines); without one
     # the RPC fails, as an old layout's would.

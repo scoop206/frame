@@ -197,10 +197,7 @@ if [[ "${1:-}" == "-d" ]]; then
   # Reap the recorded session id (frame swarm --context writes it) alongside the
   # worktree — a torn-down frame is no longer a valid `frame wt --from` source.
   rm -f "$FRAME_RUNDIR/$NAME-$TOPIC.session"
-  # …and its frame-layer kv settings: a reused topic name starts from the
-  # project/user defaults, not whatever the last frame by that name was told.
-  frame_kv_scope "$NAME" "$TOPIC" ""
-  rm -f "$FRAME_KV_FILE[frame]" "$FRAME_KV_AGENT_FILE"
+  # (Its frame-layer kv lived in its nvim session, so it's already gone with it.)
   # The worktree is gone but its claude transcript isn't: name the way back.
   # frame shell maps the removed worktree to the primary checkout on its own
   # (frame_gone_worktree_main), and --find/--recent list it too.
@@ -289,6 +286,14 @@ if [[ -n "$FROM_TOPIC" ]]; then
     echo "$X_MARK --from $FROM_TOPIC: no claude session found for that frame" >&2
     echo "  (no $_sess_file, and no transcript under ~/.claude/projects for its worktree)" >&2
     exit 1
+  fi
+
+  # Carry the source's own kv (per-frame settings + agent notes) across: it lives
+  # in the source's session, which is about to go down. Taken now, before the
+  # handoff — notes the source writes while wrapping up don't make it over.
+  if [[ -S "$_src_sock" ]] && _kv_seed=$(frame_rpc_expr "$_src_sock" 'v:lua.FrameKvDump()') \
+      && [[ -n "$_kv_seed" ]]; then
+    export FRAME_KV_SEED="$_kv_seed"
   fi
 
   # Graceful handoff, only when the source's claude is actually live. If it's

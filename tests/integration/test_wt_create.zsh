@@ -295,6 +295,20 @@ test_from_bridges_transcript_into_new_frames_project_dir() {
   assert_contains "$(<$FAKE_NVIM_LOG)" "FRAME_CLAUDE_FLAGS=--settings $HOME/.local/share/frame/claude-hooks.json --resume sid-bridge"
 }
 
+test_from_carries_the_source_frames_kv() {
+  # The source's own kv (settings + agent notes) lives in its session, which is
+  # about to go down: --from takes a dump first and hands it to the new frame's
+  # nvim in FRAME_KV_SEED.
+  setup_project
+  print -r -- "sid-kv" > "$FRAME_RUNDIR/$TNAME-src.session"
+  _plant_src_socket
+  print -r -- $'n\tticket\tENG-7' > "$FRAME_RUNDIR/$TNAME-src.nvim.kv"
+  export FAKE_NVIM_EXPR_RESULT=0        # source claude stopped → straight resume
+  run_frame wt topic --from src
+  assert_status 0
+  assert_contains "$(<$FAKE_NVIM_LOG)" $'FRAME_KV_SEED=n\tticket\tENG-7'
+}
+
 test_from_missing_transcript_warns_but_boots() {
   # If no transcript exists for the resolved id (source never started a session,
   # or it was pruned), warn — don't abort — so a stray .session pointer doesn't

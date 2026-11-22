@@ -248,18 +248,24 @@ frame_kvfile_unset() {
 # the full list, with meanings, is the defaults file), plus any keys a project or
 # user declares for itself (below). Four value layers, first hit wins:
 #
-#   frame    ~/.local/share/frame/kv/<NAME>/<TOPIC>   one frame; reaped by frame wt -d
+#   frame    the frame's own nvim session (in memory)  one frame
 #   project  <primary checkout>/.frame/local/kv        every frame of one project
 #   user     ~/.config/frame/kv                        every project on this machine
 #   default  the declared default (see declarations)
 #
-# Deliberately files, not environment variables: a process's env is frozen at
-# its start, so a value exported at boot (or set later in some other buffer)
-# never reaches the running claude. Files are read at the moment of use, so a
-# change lands mid-session. The project layer lives under the gitignored
-# .frame/local/ so setting it never dirties the primary checkout (which would
-# block frame merge's clean-tree guard). The frame layer is under $HOME rather
-# than $FRAME_RUNDIR because /tmp is reaped after a few idle days.
+# The frame layer lives IN the frame: a table in its nvim (layouts/session.lua,
+# FrameKv*), read and written over RPC. So it's the same for worktree and shell
+# frames, and it can never go stale on disk — it ends with the session. The
+# price: it's only there while the frame runs. A frame that's down (or a layout
+# predating it) reads as an empty frame layer — FRAME_KV_FRAME_STATE says which
+# — so lookups fall through to project/user/default, and writes are refused.
+# One RPC per scope: frame_kv_scope fetches the whole table up front.
+#
+# The shared layers are files, not environment variables: a process's env is
+# frozen at its start, so a value exported at boot never reaches the running
+# claude. Files are read at the moment of use, so a change lands mid-session.
+# The project layer lives under the gitignored .frame/local/ so setting it never
+# dirties the primary checkout (which would block frame merge's clean-tree guard).
 #
 # Declarations — which keys exist, their default, and what they mean — come
 # from up to three files in kv.defaults format (a `key=default` line, its
@@ -278,9 +284,9 @@ frame_kvfile_unset() {
 # scripts read them with `frame kv get`.
 #
 # Agent notes: any key NOT declared anywhere is the agent's own to set, on its
-# own frame only (ticket=ENG-412, blocked_on=…). They live in a file of their
-# own beside the frame layer (<TOPIC>.agent, reaped with it by frame wt -d) and
-# are only ever consulted for undeclared keys — so a note can never shadow a
+# own frame only (ticket=ENG-412, blocked_on=…). They live in the frame's
+# session beside its frame-layer settings, in a table of their own, and are
+# only ever consulted for undeclared keys — so a note can never shadow a
 # setting, even one declared after the note was written. Lookups report them
 # as "frame (agent)".
 #
@@ -309,17 +315,84 @@ frame_kv_scope() {
     project ""
     user    "$_cfg/kv.defaults"
   )
-  typeset -g FRAME_KV_AGENT_FILE=""
-  if [[ -n "$_name" && -n "$_topic" ]]; then
-    # A topic may contain '/' (feature/x) — flatten so it stays one file.
-    FRAME_KV_FILE[frame]="$HOME/.local/share/frame/kv/$_name/${_topic//\//%}"
-    FRAME_KV_AGENT_FILE="${FRAME_KV_FILE[frame]}.agent"
-  fi
+  typeset -g FRAME_KV_SOCKET="" FRAME_KV_FRAME_ID=""
+  [[ -n "$_name" && -n "$_topic" ]] && FRAME_KV_FRAME_ID="$_name/$_topic" \
+    FRAME_KV_SOCKET="$FRAME_RUNDIR/$_name-$_topic.nvim"
   if [[ -n "$_main" ]]; then
     FRAME_KV_FILE[project]="$_main/.frame/local/kv"
     FRAME_KV_DECL_FILE[project]="$_main/.frame/kv.defaults"
   fi
   _frame_kv_load_decls
+  _frame_kv_load_frame
+  return 0
+}
+
+_frame_kv_load_frame() {
+  # Fetch the frame layer from the frame's session into:
+  #   FRAME_KV_FS[k]          per-frame settings
+  #   FRAME_KV_FN[k]          agent notes
+  #   FRAME_KV_FRAME_STATE    none (no frame in scope) | live | down (no
+  #                           socket, or it didn't answer FrameKvDump)
+  typeset -gA FRAME_KV_FS FRAME_KV_FN
+  # FRAME_KV_DOWN_WHY: when down, why ("isn't running" / "didn't answer for its
+  # kv" — a session from before the frame layer moved into it).
+  typeset -g FRAME_KV_FRAME_STATE=none FRAME_KV_DOWN_WHY=""
+  FRAME_KV_FS=() FRAME_KV_FN=()
+  [[ -n "$FRAME_KV_SOCKET" ]] || return 0
+  FRAME_KV_FRAME_STATE=down
+  local _dump _line _kind _rest
+  if [[ ! -S "$FRAME_KV_SOCKET" ]]; then
+    FRAME_KV_DOWN_WHY="isn't running"
+    return 0
+  fi
+  if ! _dump=$(frame_rpc_expr "$FRAME_KV_SOCKET" 'v:lua.FrameKvDump()'); then
+    FRAME_KV_DOWN_WHY="didn't answer for its kv"
+    return 0
+  fi
+  FRAME_KV_FRAME_STATE=live
+  # kind<TAB>key<TAB>value lines; s = setting, n = agent note.
+  for _line in "${(@f)_dump}"; do
+    [[ "$_line" == [sn]$'\t'*$'\t'* ]] || continue
+    _kind=${_line%%$'\t'*} _rest=${_line#*$'\t'}
+    if [[ "$_kind" == s ]]; then
+      FRAME_KV_FS[${_rest%%$'\t'*}]=${_rest#*$'\t'}
+    else
+      FRAME_KV_FN[${_rest%%$'\t'*}]=${_rest#*$'\t'}
+    fi
+  done
+  return 0
+}
+
+frame_kv_frame_write() {
+  # frame_kv_frame_write s|n KEY [VALUE] — set (with VALUE) or unset (without)
+  # KEY in the scoped frame's session: s = setting, n = agent note. Keeps the
+  # fetched copy in step. Returns 1 with a reason on stderr when the frame
+  # isn't reachable; 2 when unsetting a key that isn't there.
+  local _kind=$1 _key=$2 _out
+  case "$FRAME_KV_FRAME_STATE" in
+    none) print -r -- "$X_MARK not inside a frame — use --project or --user" >&2; return 1 ;;
+    down)
+      if [[ "$FRAME_KV_DOWN_WHY" == "isn't running" ]]; then
+        print -r -- "$X_MARK $FRAME_KV_FRAME_ID isn't running — a frame's own kv lives in its session" >&2
+      else
+        print -r -- "$X_MARK $FRAME_KV_FRAME_ID's session didn't answer for its kv — it probably booted" >&2
+        print -r -- "  before frame kept kv in the session. Reboot it to use its own kv." >&2
+      fi
+      return 1 ;;
+  esac
+  if (( $# >= 3 )); then
+    # Hex keeps any value safe inside the vimscript string.
+    _out=$(frame_rpc_expr "$FRAME_KV_SOCKET" \
+      "v:lua.FrameKvSet('$_kind','$_key','$(print -rn -- "$3" | od -An -tx1 | tr -d ' \n')')") \
+      && [[ "$_out" == ok ]] || {
+        print -r -- "$X_MARK couldn't write to $FRAME_KV_FRAME_ID's session" >&2; return 1; }
+    if [[ "$_kind" == s ]]; then FRAME_KV_FS[$_key]=$3; else FRAME_KV_FN[$_key]=$3; fi
+  else
+    _out=$(frame_rpc_expr "$FRAME_KV_SOCKET" "v:lua.FrameKvUnset('$_kind','$_key')") || {
+      print -r -- "$X_MARK couldn't write to $FRAME_KV_FRAME_ID's session" >&2; return 1; }
+    [[ "$_out" == ok ]] || return 2
+    if [[ "$_kind" == s ]]; then unset "FRAME_KV_FS[$_key]"; else unset "FRAME_KV_FN[$_key]"; fi
+  fi
   return 0
 }
 
@@ -396,14 +469,19 @@ frame_kv_lookup() {
   _frame_kv_ensure_scope
   local _layer _file _v
   if ! frame_kv_is_declared "$1"; then
-    if [[ -n "$FRAME_KV_AGENT_FILE" ]] && _v=$(frame_kvfile_get "$FRAME_KV_AGENT_FILE" "$1"); then
-      KV_VALUE=$_v KV_LAYER="frame (agent)"
+    if (( ${+FRAME_KV_FN[$1]} )); then
+      KV_VALUE=${FRAME_KV_FN[$1]} KV_LAYER="frame (agent)"
       return 0
     fi
     KV_VALUE="" KV_LAYER=""
     return 1
   fi
   for _layer in $FRAME_KV_LAYERS; do
+    if [[ "$_layer" == frame ]]; then
+      (( ${+FRAME_KV_FS[$1]} )) || continue
+      KV_VALUE=${FRAME_KV_FS[$1]} KV_LAYER=frame
+      return 0
+    fi
     if [[ "$_layer" == default ]]; then
       (( ${+FRAME_KV_DEF[$1]} )) || continue
       KV_VALUE=${FRAME_KV_DEF[$1]} KV_LAYER=default
@@ -453,14 +531,11 @@ frame_kv_valid_key() {
 }
 
 frame_kv_agent_keys() {
-  # Print this frame's agent notes, one key per line, in file order. With
-  # --shadowed, print instead the notes a declaration now hides (ignored).
+  # Print this frame's agent notes, one key per line, sorted. With --shadowed,
+  # print instead the notes a declaration now hides (ignored).
   _frame_kv_ensure_scope
-  [[ -n "$FRAME_KV_AGENT_FILE" && -f "$FRAME_KV_AGENT_FILE" ]] || return 0
-  local _line _k
-  for _line in "${(@f)$(<$FRAME_KV_AGENT_FILE)}"; do
-    [[ "$_line" == *=* ]] || continue
-    _k=${_line%%=*}
+  local _k
+  for _k in ${(ko)FRAME_KV_FN}; do
     frame_kv_valid_key "$_k" || continue
     if frame_kv_is_declared "$_k"; then
       [[ "${1:-}" == --shadowed ]] && print -r -- "$_k"
