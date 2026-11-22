@@ -374,6 +374,12 @@ for _f in .frame/local/config.sh .frame/config.sh; do
   [[ "$PORT_PREFIX" == [0-9]* ]] && PORT_PREFIX="_$PORT_PREFIX"
   NAME=$_self[1] TOPIC=$_self[2] DIR=$_self[3]
   echo "$OK_MARK using $DIR/$_f — buffers: ${BUFFERS[*]:-(none)}"
+  # A frame project: pre-accept claude's folder-trust dialog here, the same bar
+  # `frame wt` trusts its worktrees on (and this config was just sourced as
+  # trusted code). The primary checkout is where a torn-down worktree frame's
+  # session resumes, and claude trusts per exact path — the worktrees' trust
+  # doesn't cover it. Plain dirs keep claude's own check.
+  frame_trust_dir "$DIR"
   frame_export_ports
   if (( $+functions[app_env] )); then app_env; fi
   break

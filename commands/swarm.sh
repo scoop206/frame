@@ -80,15 +80,42 @@ frame_swarm_context() {
   # Dynamic header (interpolated). No backticks here — this is a double-quoted
   # print, where they'd command-substitute; the static bodies below use quoted
   # heredocs, so their backticks are safe.
+  # A shell frame (frame shell) has no worktree or branch of its own: it works
+  # directly in FRAME_SHELL_DIR, often a repo's primary checkout — where a torn-
+  # down worktree frame's session is resumed. Its header, resume note and the
+  # where-your-work-goes rules differ from a worktree frame's.
+  local _shell=0 _sdir="" _sbranch=""
+  if [[ -n "${FRAME_SHELL_DIR:-}" && -z "${FRAME_WT:-}" ]]; then
+    _shell=1
+    _sdir=${FRAME_SHELL_DIR/#$HOME/\~}
+    _sbranch=$(git -C "$FRAME_SHELL_DIR" branch --show-current 2>/dev/null) || _sbranch=""
+  fi
+
   print -r -- "── frame ─────────────────────────────────────────────"
-  print -r -- "You are the claude inside frame $FRAME_NAME/$FRAME_TOPIC — a git-"
-  print -r -- "worktree-isolated agent workspace under the frame harness."
+  if (( _shell )); then
+    print -r -- "You are the claude inside shell frame $FRAME_NAME/$FRAME_TOPIC,"
+    print -r -- "working directly in $_sdir${_sbranch:+ (on branch $_sbranch)} — no"
+    print -r -- "worktree or topic branch of its own — under the frame harness."
+  else
+    print -r -- "You are the claude inside frame $FRAME_NAME/$FRAME_TOPIC — a git-"
+    print -r -- "worktree-isolated agent workspace under the frame harness."
+  fi
   [[ -n "${FRAME_VITE_PORT:-}" ]] && print -r -- "Your dev server is at http://localhost:$FRAME_VITE_PORT."
   # A resumed session may have been transplanted here from another frame
   # (frame wt --from/--resume). Its replayed history still carries that frame's
   # banner and cwd, which now describe the WRONG worktree — so the freshest word
   # (this line) tells the agent which self-location to trust.
-  if [[ "$_source" == resume ]]; then
+  if [[ "$_source" == resume ]] && (( _shell )); then
+    print -r --
+    print -r -- "⟳ This session was RESUMED into a shell frame. If earlier in"
+    print -r -- "  this transcript you were a worktree frame (a _REPO-TOPIC dir on"
+    print -r -- "  a topic branch), that frame has since been torn down: its"
+    print -r -- "  worktree and branch are gone, its work merged or discarded."
+    print -r -- "  Its banner, cwd and branch are stale. You are $FRAME_NAME/$FRAME_TOPIC"
+    print -r -- "  now, in $_sdir${_sbranch:+ on $_sbranch} — so no commits on a topic branch,"
+    print -r -- "  no frame merge, no frame wt -d from here. Confirm with \`pwd\`"
+    print -r -- "  and \`git branch --show-current\` before acting."
+  elif [[ "$_source" == resume ]]; then
     print -r --
     print -r -- "⟳ This session was RESUMED. If the banner, cwd, or branch"
     print -r -- "  earlier in this transcript name a DIFFERENT frame, that is a"
@@ -110,18 +137,7 @@ What only you can know (not discoverable by grep):
 • Subagents you'll wait on → run FOREGROUND. Backgrounding ends
   your turn early and fires a false "done" banner.
 • @VERIFY@
-• This worktree, on your topic branch, is where your work goes.
-  Never cd into the primary checkout to edit main directly — that
-  bypasses your branch and the frame merge guards below.
-• Merge and teardown go through frame, never raw git:
-    frame merge   → into main (guards clean-primary, ff-to-origin,
-                    conflict-abort; raw git skips them)
-    frame wt -d   → tear down (removes worktree + branch, reaps
-                    state; raw git orphans them)
-  Merging locally is yours; pushing to origin is NOT — never
-  `frame merge --push` or `git push` to origin without the human
-  asking. That's their call. (push_on_merge=true IS that ask: a
-  bare `frame merge` then pushes by itself.)
+@PLACE@
 • How far to carry work on your own is the human's call, set in
   `frame kv`. At session start:
     @KV@
@@ -188,6 +204,37 @@ EOF
     _core=${_core//$'\n'@KV_CUSTOM@/}
   fi
   _core=${_core//@VERIFY@/$_verify}
+  local _place
+  if (( _shell )); then
+    _place=$(cat <<EOF
+• This shell frame has no worktree or topic branch: you work
+  directly in $_sdir${_sbranch:+, on branch $_sbranch}. Edits here land on
+  that branch as-is, with no frame merge guard. For code work that
+  wants its own branch, spawn a worktree frame
+  (\`frame spawn wt TOPIC --cwd REPO\`) instead of editing here.
+• Tear this frame down with \`frame shell -d\` (it only quits; the
+  dir is kept). Never \`git push\` to origin without the human
+  asking.
+EOF
+)
+  else
+    _place=$(cat <<'EOF'
+• This worktree, on your topic branch, is where your work goes.
+  Never cd into the primary checkout to edit main directly — that
+  bypasses your branch and the frame merge guards below.
+• Merge and teardown go through frame, never raw git:
+    frame merge   → into main (guards clean-primary, ff-to-origin,
+                    conflict-abort; raw git skips them)
+    frame wt -d   → tear down (removes worktree + branch, reaps
+                    state; raw git orphans them)
+  Merging locally is yours; pushing to origin is NOT — never
+  `frame merge --push` or `git push` to origin without the human
+  asking. That's their call. (push_on_merge=true IS that ask: a
+  bare `frame merge` then pushes by itself.)
+EOF
+)
+  fi
+  _core=${_core//@PLACE@/$_place}
   print -r -- "${_core//@KV@/$_kv}"
 
   # Level 2+ (ask): the bounded ask-a-sibling recipe. Literal $t / $(…) — this is

@@ -231,6 +231,22 @@ _wire_dir() {
   mkdir -p "$1"
 }
 
+test_shell_trusts_a_frame_project_dir_only() {
+  # A frame project (has .frame/config.sh) gets claude's folder-trust dialog
+  # pre-accepted, as frame wt does for its worktrees; a plain dir doesn't.
+  export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
+  print -r -- '{"projects":{}}' > "$HOME/.claude.json"
+  mkdir -p "$SANDBOX/g/proj/.frame" "$SANDBOX/g/plain"
+  print -r -- 'BUFFERS=(claude local)' > "$SANDBOX/g/proj/.frame/config.sh"
+  local proj="${${:-$SANDBOX/g/proj}:A}" plain="${${:-$SANDBOX/g/plain}:A}"
+  run_frame shell -C "$proj" jam
+  assert_status 0
+  assert_eq "$(jq -r --arg p "$proj" '.projects[$p].hasTrustDialogAccepted' "$HOME/.claude.json")" "true"
+  run_frame shell -C "$plain" jam2
+  assert_status 0
+  assert_eq "$(jq -r --arg p "$plain" '.projects[$p].hasTrustDialogAccepted' "$HOME/.claude.json")" "null"
+}
+
 test_shell_C_explicit_topic_either_order() {
   export FRAME_SHELL_HOME="$SANDBOX/frames"
   export FAKE_NVIM_LOG="$SANDBOX/nvim.log"
