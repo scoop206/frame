@@ -33,7 +33,14 @@ test_process_with_live_parent_is_left_alone() {
   # into the worktree from another tab.
   zsh -fc "cd ${(q)d} && sleep 60" &
   local parent=$!
-  sleep 0.3
+  # Wait until lsof actually sees it cwd'd into d (the reaper's own probe). A
+  # fixed short sleep raced on slow CI runners: the reaper looked before the
+  # child had cd'd, found nothing, and the "not ours" line never printed.
+  local i
+  for (( i = 0; i < 50; i++ )); do
+    [[ -n "$(lsof -w -n -P -a -d cwd -t +D "$d" 2>/dev/null)" ]] && break
+    sleep 0.1
+  done
   local out=$(frame_reap_orphans_in "$d" 2>&1)
   assert_contains "$out" "not ours to stop"
   assert_not_contains "$out" "stopped leftover"
