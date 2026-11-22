@@ -25,33 +25,39 @@
 #                            session last ran in (`claude --resume` only finds a
 #                            session from its own dir), unless -C says
 #                            otherwise; then the transcript is bridged there.
-#                            If that dir was a since-removed `frame wt`
-#                            worktree, it boots in the repo's primary checkout.
+#                            Where that dir was a `frame wt` worktree:
+#                              - torn down → boots in the repo's primary
+#                                checkout (the worktree's gone, the transcript
+#                                isn't)
+#                              - still there → reboots that worktree's frame
+#                                (`frame wt --resume ID`), branch and all
 #
-#   frame shell [TOPIC] --find "WORDS"
+#   frame shell [TOPIC] --find "WORDS" [-g]
 #                            search past sessions for WORDS (every word, at a
 #                            word start, case-insensitive) in what YOU typed:
 #                            tool output and claude's replies don't count. Pick
 #                            one (fzf when installed, else a numbered list) and
 #                            it's resumed as with --resume.
 #
-#   frame shell [TOPIC] --recent
+#   frame shell [TOPIC] --recent [-g]
 #                            list your most recent past sessions (newest first,
 #                            each with the first thing you typed in it) in the
 #                            same picker as --find, to browse and resume one.
 #                            In fzf, typing filters the list.
 #
-#                            Both lists show only sessions you can resume here:
-#                            ones that last ran in a live git worktree (a
-#                            `frame wt` frame's — reboot it, or `frame wt --from`
-#                            hands it on), in a gone dir, or in ~ are left out.
-#                            A torn-down `frame wt` frame's session IS listed:
-#                            its worktree is gone, so it resumes in the repo's
-#                            primary checkout (as a shell frame). A session
-#                            that's open right now is marked ●: picking it (or
-#                            --resume'ing it) switches to the frame it's open in
-#                            — a second claude can't join it — or, if it's open
-#                            outside any frame, says so and stops.
+#                            Both lists are scoped to the repo you're standing
+#                            in (its primary checkout, a subdir, or one of its
+#                            worktrees): sessions run in the primary checkout
+#                            and in its worktrees, live or torn down — the
+#                            primary checkout is the anchor. Outside any repo,
+#                            or with -g/--global, they list every session.
+#                            Each row says where it ran ("repo",
+#                            "repo · wt TOPIC", "… (gone)"). Sessions that ran
+#                            in ~ or in a gone non-worktree dir are left out. A
+#                            session that's open right now is marked ●: picking
+#                            it (or --resume'ing it) switches to the frame it's
+#                            open in — a second claude can't join it — or, if
+#                            it's open outside any frame, says so and stops.
 #
 #   frame shell -d [TOPIC]   tear down: just quit the session. A shell has no
 #                            branch or worktree to reap, so teardown collapses
@@ -129,7 +135,7 @@ fi
 
 _usage() {
   echo "Usage: frame shell [-C DIR] TOPIC" >&2
-  echo "       frame shell [-C DIR] [TOPIC] --resume ID | --find \"WORDS\" | --recent" >&2
+  echo "       frame shell [-C DIR] [TOPIC] --resume ID | --find \"WORDS\" | --recent  [-g]" >&2
   echo "       (boots in DIR, default the current dir — or the session's own dir;" >&2
   echo "        a resumed session's TOPIC defaults to that dir's name)" >&2
   exit 2
@@ -139,7 +145,7 @@ _usage() {
 # TOPIC, like git/make/tar's -C.
 DIR=$PWD
 DIR_GIVEN=0
-RESUME_ID="" FIND="" RECENT=0
+RESUME_ID="" FIND="" RECENT=0 GLOBAL=0
 typeset -a _pos
 while (( $# )); do
   case "$1" in
@@ -158,6 +164,7 @@ while (( $# )); do
       FIND=$1 ;;
     --find=*) FIND=${1#--find=} ;;
     --recent) RECENT=1 ;;
+    -g|--global) GLOBAL=1 ;;
     -*) _usage ;;
     *)  _pos+=("$1") ;;
   esac
@@ -188,15 +195,35 @@ if [[ -n "$TOPIC" ]]; then
   frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
 fi
 
+# Scope for --find / --recent. Run inside a repo (its primary checkout, a
+# subdir, or one of its worktrees), they list only THAT repo's sessions: ones
+# run in the checkout and in its `frame wt` worktrees, live or torn down — the
+# primary checkout is the anchor. -g, or running outside any repo, lists every
+# session. The scope comes from where you stand, not -C (that's where to resume).
+typeset -a _scope=()
+_scope_what="your past claude sessions" _scope_none=""
+if (( ${#FIND} || RECENT )) && (( ! GLOBAL )) && _repo=$(frame_repo_main "$PWD"); then
+  _scope=(--repo "$_repo")
+  _scope_what="${_repo:t}'s past claude sessions (-g for all)"
+  _scope_none=" for ${_repo:t}"
+fi
+_scope_hint() {
+  if (( $#_scope )); then
+    echo "  (only ${_repo:t}'s sessions — run in ${_repo/#$HOME/~} or its worktrees; -g searches all)" >&2
+  else
+    echo "  (sessions that ran in ~ or in a dir that's gone are left out)" >&2
+  fi
+}
+
 # --find WORDS: search past sessions, let the user pick one, resume it.
 if [[ -n "$FIND" ]]; then
   _words=( ${=FIND} )
   (( $#_words )) || { echo "$X_MARK frame shell: --find needs search words" >&2; exit 2; }
   frame_require jq perl
-  echo "$RUN_MARK searching your past claude sessions for: ${_words[*]}…" >&2
-  if ! _rows=$(frame_session_search "${_words[@]}" | frame_session_resumable); then
-    echo "$X_MARK no resumable past session has a message of yours matching: ${_words[*]}" >&2
-    echo "  (sessions in live worktrees, gone non-worktree dirs or ~ are left out)" >&2
+  echo "$RUN_MARK searching ${_scope_what} for: ${_words[*]}…" >&2
+  if ! _rows=$(frame_session_search "${_words[@]}" | frame_session_resumable "${_scope[@]}"); then
+    echo "$X_MARK no resumable past session${_scope_none} has a message of yours matching: ${_words[*]}" >&2
+    _scope_hint
     exit 1
   fi
   RESUME_ID=$(frame_session_pick "$_rows") || exit 1
@@ -205,9 +232,10 @@ fi
 # --recent: the newest past sessions, same picker, no search words.
 if (( RECENT )); then
   frame_require jq perl
-  if ! _rows=$(frame_session_recent --resumable 100); then
-    echo "$X_MARK no resumable past claude sessions under ~/.claude/projects" >&2
-    echo "  (sessions in live worktrees, gone non-worktree dirs or ~ are left out)" >&2
+  echo "$RUN_MARK listing ${_scope_what}…" >&2
+  if ! _rows=$(frame_session_recent --resumable "${_scope[@]}" 100); then
+    echo "$X_MARK no resumable past claude sessions${_scope_none}" >&2
+    _scope_hint
     exit 1
   fi
   RESUME_ID=$(frame_session_pick "$_rows") || exit 1
@@ -275,6 +303,17 @@ if [[ -n "$RESUME_ID" ]]; then
         echo "  pass -C DIR to resume it somewhere else" >&2
         exit 1
       fi
+    fi
+    # A live `frame wt` worktree (its frame not running — a running one was
+    # switched to above): the branch and any uncommitted work are still there,
+    # so bring the conversation back as that worktree's frame, not as a shell
+    # beside it. `frame wt` with no TOPIC boots the worktree it's run from.
+    if _place=$(frame_session_place "$DIR") && [[ "${_place%%$'\t'*}" == wt ]]; then
+      _wtroot="${${(@ps:\t:)_place}[3]}"
+      echo "$OK_MARK session $RESUME_ID ran in worktree ${_wtroot/#$HOME/~} — rebooting its frame"
+      [[ -z "$TOPIC" ]] || echo "  (TOPIC $TOPIC ignored — a worktree frame is named by its worktree)"
+      cd "$_wtroot"
+      exec "$FRAME_ROOT/bin/frame" wt --resume "$RESUME_ID"
     fi
     if [[ "${DIR:A}" == "${HOME:A}" ]]; then
       echo "$X_MARK session $RESUME_ID ran in your home dir (~), where frame shell won't boot —" >&2
