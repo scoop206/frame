@@ -87,12 +87,12 @@
     </ul>
 
     <h2>What frame takes from A2A now</h2>
-    <p>Less than you might expect, because the broker already has the task model. Every <code>frame req</code> becomes a task with an id (the <code>NAME/TOPIC#rN</code> token it prints) and a state: queued, inflight or done. The broker can report status, wait on a task and cancel it. Today only the target frame's own Claude client uses status and cancel, though. Two things are worth taking from A2A:</p>
+    <p>Less than you might expect, because the broker already has the task model. Every <code>frame req</code> becomes a task with an id (the <code>NAME/TOPIC#rN</code> token it prints) and a state: queued, inflight or done. What was missing was the sender's view of it, and that is what we took:</p>
     <ol>
-      <li><strong>Let the sender check and cancel its own requests</strong>, with <code>frame req status TOKEN</code> and <code>frame req cancel TOKEN</code>.</li>
-      <li><strong>Two more states.</strong> <em>blocked</em>, A2A's input-required: the receiving Claude is stuck on a permission prompt or a question. And <em>lost</em>, A2A's failed: the target frame died mid-request, so the sender finds out right away instead of waiting for a timeout.</li>
+      <li><strong>The sender can check its own requests</strong>, with <code>frame req status</code>: everything it has sent and not heard back on, each with its state read live from the target.</li>
+      <li><strong>Two more states.</strong> <em>lost</em>, A2A's failed: the target frame died or finished without a reply, so the sender finds out in seconds instead of at a timeout. And <em>blocked</em>, A2A's input-required: the receiving Claude is waiting on its own human. Blocked is shown, but only as advice (see the updates below).</li>
     </ol>
-    <p>Both make a swarm of frames easier to follow, and both bring the broker's states closer to A2A's, so a future bridge would be mostly renaming.</p>
+    <p>Both make a swarm of frames easier to follow, and both bring the broker's states closer to A2A's, so a future bridge would be mostly renaming. There is no cancel; the updates say why.</p>
 
     <h2>What would change the answer</h2>
     <ul class="ticks">
@@ -101,6 +101,38 @@
       <li>Claude Code shipping A2A itself.</li>
     </ul>
     <p>We're also watching Claude Code's own native cross-session messaging. It overlaps frame's broker more directly than A2A does.</p>
+
+    <h2 id="updates">Updates</h2>
+    <ol class="thread">
+      <li class="entry">
+        <p class="entry-meta"><time datetime="2026-11-24">2026-11-24</time> <span class="label analysis">analysis</span></p>
+        <h3>The broker already had a task model</h3>
+        <p>This page first said frame would take A2A's task model. Reading the broker closely, it already had one: every request is a task with an id (the <code>NAME/TOPIC#rN</code> token), the states queued, inflight and done, and calls to await and cancel it. But only a frame's own client, <code>frame claude</code>, could use them. The frame that <em>sent</em> a <code>frame req</code> couldn't see what happened to it.</p>
+        <p>The worst case: if the target frame died, or finished without any reply text, <code>frame inbox --wait --for</code> ran all the way to its timeout. Slow and dead looked the same.</p>
+      </li>
+      <li class="entry">
+        <p class="entry-meta"><time datetime="2026-11-24">2026-11-24</time> <span class="label response">response</span> <span class="label shipped">shipped</span></p>
+        <h3>The sender's view: <code>frame req status</code></h3>
+        <p><code>frame req status</code> lists everything this frame has sent and not heard back on: queued #N, working 7m, blocked, reply on its way, in your inbox, or lost. The target's broker stays the source of truth; the sender only keeps a small outbox of what it sent.</p>
+        <p><code>frame inbox --wait --for</code> now notices a lost request within about five seconds and exits 5, and a timeout says what the target was doing. Agents learn all this from hint lines in the output (<code>check later: frame req status &lt;token&gt;</code>), not from more text loaded into every session.</p>
+        <p>Found on the way: the "ask a sibling" recipe that frames get at session start saved all of <code>frame req</code>'s output instead of just the token, so its wait never matched a reply and always ran to the timeout. Fixed.</p>
+      </li>
+      <li class="entry">
+        <p class="entry-meta"><time datetime="2026-11-24">2026-11-24</time> <span class="label decision">decision</span></p>
+        <h3>No cancel</h3>
+        <p>A request already in flight can't be stopped. Its answer can only be sent somewhere else, while the target keeps working. A cancel command would promise more than it does.</p>
+      </li>
+      <li class="entry">
+        <p class="entry-meta"><time datetime="2026-11-24">2026-11-24</time> <span class="label decision">decision</span></p>
+        <h3>"Blocked" is advice, not a stop</h3>
+        <p>We first made blocked end the wait early too. But the blocked status can linger after the human approves a prompt, so an agent could give up on a frame that is already working again. Clearing it properly needs a hook on every tool call, about 9ms each for a call into the frame's Neovim. With permission prompts off in practice, that cost buys little. So the wait reports blocked once and keeps waiting.</p>
+      </li>
+      <li class="entry">
+        <p class="entry-meta"><time datetime="2026-11-24">2026-11-24</time> <span class="label open">open</span></p>
+        <h3>What is it doing right now?</h3>
+        <p>For a frame watching a sibling, the most useful next step may be a line showing what the target is doing at this moment, such as its latest tool call. Not built yet.</p>
+      </li>
+    </ol>
 
     <h2>Sources</h2>
     <ul class="ticks sources">

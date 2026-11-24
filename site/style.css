@@ -198,4 +198,16 @@ footer a:hover { color: var(--fg); }
 .entries b { display: block; font: 600 18px var(--mono); color: var(--fg); margin-bottom: 6px; }
 .entries span:not(.verdict) { display: block; color: var(--fg-dim); font-size: 15.5px; }
 .entries .verdict { display: inline-block; color: var(--bg); margin: 0 0 10px; font-size: 11px; padding: 2px 8px; }
+/* Updates: an issue-thread style log, newest last */
+.prose ol.thread { list-style: none; padding: 0 0 0 22px; margin: 8px 0 0; border-left: 2px solid var(--line); }
+.thread .entry { position: relative; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px 6px; margin: 0 0 20px; max-width: 72ch; }
+.thread .entry::before { content: ""; position: absolute; left: -30px; top: 22px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--accent); }
+.thread .entry h3 { margin: 0 0 10px; }
+.thread .entry-meta { font: 12px var(--mono); color: var(--fg-mute); margin: 0 0 8px; }
+.thread .label { display: inline-block; font: 600 11px var(--mono); color: var(--bg); padding: 1px 7px; border-radius: 4px; margin-left: 6px; letter-spacing: .04em; background: var(--fg-mute); }
+.thread .label.analysis { background: var(--blue); }
+.thread .label.response { background: var(--accent); }
+.thread .label.shipped { background: var(--green); }
+.thread .label.decision { background: var(--gold); }
+.thread .label.open { background: var(--bg-3); color: var(--fg-dim); border: 1px solid var(--line); }
 @media (max-width: 560px) { .prose table.kv, .prose table.kv tbody, .prose table.kv tr, .prose table.kv td, .prose table.kv td:first-child { display: block; width: 100%; } .prose table.kv td + td { border-top: 0; padding-top: 0; } .prose table.kv thead { display: none; } }
