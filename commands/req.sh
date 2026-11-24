@@ -12,10 +12,81 @@
 # So `frame req` must be run from inside a frame — that frame is the reply's
 # return address. NAME/TOPIC reaches any project; a bare TOPIC pairs with the
 # current frame's own NAME.
+#
+# frame req status [TOKEN…] — what became of requests THIS frame sent. No
+# TOKEN: every request sent and not yet drained from the inbox (the outbox in
+# this frame's FrameState, recorded by `frame req`, cleared by `frame inbox`).
+# One line each: token, age, state, first line of the text. The state comes
+# live from the TARGET's broker (FrameBrokerState): queued #N, working <age>,
+# blocked (paused on its human), reply on its way, in your inbox, or lost (the
+# frame died or rebooted, or it finished without reply text). A lost request
+# is reported once, then dropped from the list.
+#   `frame req status` is never a send: a request needs TEXT, and status's
+#   arguments must all be tokens (NAME/TOPIC#rN). So `frame req status run the
+#   tests` still sends "run the tests" to a frame whose topic is status.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
+# ── frame req status ──────────────────────────────────────────────────────────
+_is_status=0
+if [[ "${1:-}" == status ]]; then
+  _is_status=1
+  for _a in "${@:2}"; do
+    [[ "$_a" == */*\#r<-> ]] || { _is_status=0; break; }
+  done
+fi
+if (( _is_status )); then
+  shift
+  if ! frame_self_identity; then
+    echo "$X_MARK frame req status must be run from inside a frame (it reads that frame's outbox)" >&2
+    exit 1
+  fi
+  FROM="$SELF_NAME/$SELF_TOPIC"
+  _own="$FRAME_RUNDIR/$SELF_NAME-$SELF_TOPIC.nvim"
+  if [[ ! -S "$_own" ]]; then
+    echo "$X_MARK no frame session for $FROM (no socket at $_own)" >&2
+    frame_session_down_hint "$SELF_NAME" "$SELF_TOPIC"
+    exit 1
+  fi
+  _q=${(j:\t:)@}
+  if ! _rows=$(frame_rpc_expr "$_own" "v:lua.FrameOutboxQuery('${_q//\'/\'\'}')"); then
+    echo "$X_MARK session at $_own didn't answer — layout may predate req status;" >&2
+    echo "  reboot the frame (:FrameQuit, then frame wt $SELF_TOPIC)" >&2
+    exit 1
+  fi
+  if [[ -z "$_rows" ]]; then
+    echo "$OK_MARK nothing outstanding — every request you sent has been answered and read"
+    exit 0
+  fi
+  typeset -a _lines; _lines=()
+  for _row in "${(@f)_rows}"; do
+    _f=("${(@ps:\t:)_row}")
+    _tok=${_f[1]} _age=${_f[2]:-} _here=${_f[3]:-0} _line=${_f[4]:-}
+    [[ -n "$_age" ]] && _age=$(frame_fmt_age "$_age") || _age=-
+    if [[ "$_here" == 1 ]]; then
+      REQ_STATE=here REQ_DESC="in your inbox"
+    else
+      frame_req_probe "$_tok" "$FROM"
+    fi
+    # lost/unknown carry a long reason; keep the STATE column short and put
+    # the reason after the request text.
+    _st=$REQ_DESC _why=""
+    if [[ "$REQ_DESC" == (lost|unknown|blocked)\ \(*\) ]]; then
+      _st=${REQ_DESC%% *} _why="  (${${REQ_DESC#* \(}%\)})"
+    fi
+    _lines+=("$(printf '%-28s %5s  %-18s %s%s' "$_tok" "$_age" "$_st" "$_line" "$_why")")
+    # A lost request is reported once, then dropped, so the list doesn't fill
+    # with the dead.
+    if [[ "$REQ_STATE" == lost && "$_age" != - ]]; then
+      frame_rpc_expr "$_own" "v:lua.FrameOutboxForget('${_tok//\'/\'\'}')" >/dev/null || true
+    fi
+  done
+  printf '%-28s %5s  %-18s %s\n' TOKEN AGE STATE REQUEST
+  print -rl -- "${_lines[@]}"
+  exit 0
+fi
+
 if (( $# < 1 )); then
-  echo "$X_MARK usage: frame req <topic|name/topic> TEXT…" >&2
+  echo "$X_MARK usage: frame req <topic|name/topic> TEXT…   |   frame req status [TOKEN…]" >&2
   exit 2
 fi
 
@@ -68,7 +139,17 @@ case "$_result" in
     # Correlation token: the reply lands tagged `from#id` (from = the target we
     # resolved, id = the broker id it just returned). Emit it machine-parseably so
     # a fan-out caller can `frame inbox --wait --for $token` for exactly this reply.
-    echo "token: $NAME/$TOPIC#$_result" ;;
+    echo "token: $NAME/$TOPIC#$_result"
+    echo "check later: frame req status $NAME/$TOPIC#$_result"
+    # Record it in our own outbox (best-effort — a send from a bare shell has
+    # no session to record into). First line of the text, tabs flattened.
+    if [[ -S "$FRAME_RUNDIR/$SELF_NAME-$SELF_TOPIC.nvim" ]]; then
+      _first=${${TEXT%%$'\n'*}//$'\t'/ }
+      (( ${#_first} > 60 )) && _first="${_first[1,57]}..."
+      _tk="$NAME/$TOPIC#$_result"
+      frame_rpc_expr "$FRAME_RUNDIR/$SELF_NAME-$SELF_TOPIC.nvim" \
+        "v:lua.FrameOutboxAdd('${_tk//\'/\'\'}','${_first//\'/\'\'}')" >/dev/null || true
+    fi ;;
   no-claude-buffer)
     echo "$X_MARK $NAME/$TOPIC has no 'claude' buffer to message" >&2
     exit 1 ;;

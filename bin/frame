@@ -79,9 +79,15 @@
 #                                       (types TEXT into its prompt); arms a
 #                                       one-shot reply to your inbox
 #
-#     frame inbox [--wait [--timeout N] [--count K]]
+#     frame req status [TOKEN…]         what became of requests you sent and
+#                                       haven't read the reply to: queued #N,
+#                                       working, blocked, in your inbox, lost
+#
+#     frame inbox [--wait [--timeout N] [--count K | --for TOKEN…]]
 #                                       show + clear this frame's inbox;
-#                                       --wait blocks until a message arrives
+#                                       --wait blocks until a message arrives;
+#                                       --for exits 5 if a reply is lost, 6 if
+#                                       its frame is blocked on its human
 #
 #     frame reply [TEXT…]               frames use to reply to last req
 #

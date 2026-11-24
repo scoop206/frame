@@ -105,6 +105,27 @@ if [[ "${1:-}" == "--server" ]]; then
     *FrameBrokerStatus*)
       [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
       print -rn -- "${FAKE_BROKER_STATUS:-}"; exit 0 ;;
+    # `frame req status` / `inbox --wait --for` ask a TARGET what became of a
+    # request: a <sock>.state companion holds FrameBrokerState's answer (e.g.
+    # $'inflight\t420\tworking', 'gone'); without one the RPC fails, as an old
+    # layout's would.
+    *FrameBrokerState*)
+      [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
+      [[ -f "$_sock.state" ]] && { print -rn -- "$(<$_sock.state)"; exit 0; }; exit 1 ;;
+    # The sender's own outbox. Query: a <sock>.outbox companion holds the rows
+    # (token<TAB>age<TAB>in_inbox<TAB>line); without one, each asked-for token
+    # comes back untracked and not here. Add/Forget just log and say ok.
+    *FrameOutboxQuery*)
+      [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
+      [[ -f "$_sock.nooutbox" ]] && exit 1
+      [[ -f "$_sock.outbox" ]] && { print -rn -- "$(<$_sock.outbox)"; exit 0; }
+      _q=${${_expr#*FrameOutboxQuery\(\'}%\'\)*}
+      _rows=()
+      for _t in "${(@ps:\t:)_q}"; do [[ -n "$_t" ]] && _rows+=("$_t"$'\t\t0\t'); done
+      print -rn -- "${(pj:\n:)_rows}"; exit 0 ;;
+    *FrameOutboxAdd*|*FrameOutboxForget*)
+      [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
+      print -rn -- ok; exit 0 ;;
     # bin/buf-preview.sh probes a buffer's type, then a terminal's line tail.
     # FAKE_NVIM_BUFTYPE answers the type probe ('' when unset — a normal file
     # buffer, exactly what getbufvar returns for one); FAKE_NVIM_BUFLINES_FILE's

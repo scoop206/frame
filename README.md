@@ -422,6 +422,23 @@ unrelated mail landing mid-wait is left behind, not counted:
 frame inbox --wait --for $t1 --for $t2   # blocks until both r1 and r2 arrive
 ```
 
+The wait also checks on each request at its target every few seconds, so a reply
+that can't come doesn't run out the clock: it exits **5** (`lost:`) when the target
+frame is gone or rebooted, or finished its turn without reply text, and **6**
+(`blocked:`) when the target's claude is on your request but waiting for its own
+human. On a timeout (exit 3) it says what each target was doing.
+
+To see everything you've sent and not yet read the reply to:
+
+```bash
+frame req status                         # or: frame req status <token>…
+```
+
+One line per request with its state, read live from the target: `queued #N`,
+`working 7m`, `blocked`, `reply on its way`, `in your inbox`, or `lost` (with why).
+A lost request is listed once, then dropped. Sending also prints the hint
+`check later: frame req status <token>`.
+
 ## Swarm: telling agents they're in a frame
 
 By default a frame's Claude doesn't know it's in a frame. `frame swarm` changes that
