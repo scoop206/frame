@@ -55,13 +55,15 @@ vim.o.titlestring = base_title
 --                read claude's rendered screen
 --   inbox        reports routed home here (frame deliver / remote broker replies)
 --   broker       the request queue in front of claude
+--   outbox       requests THIS frame sent with `frame req` whose reply hasn't
+--                been drained yet: { token, sent, line } (frame req status)
 -- The notify mute switch is deliberately NOT a field here: it stays
 -- vim.g.frame_notify_muted because `frame notify` reads it over RPC as
 -- get(g:, 'frame_notify_muted', 0), so sessions predating it degrade to
 -- unmuted. Keeping it a g: var preserves that cheap, backward-compatible read.
-local FrameState = { status = '', chan = {}, buf = {}, inbox = {},
+local FrameState = { status = '', chan = {}, buf = {}, inbox = {}, outbox = {},
   broker = { seq = 0, queue = {}, inflight = nil, inflight_since = nil,
-    reqs = {}, pump_scheduled = false } }
+    reqs = {}, pump_scheduled = false, done = {}, done_order = {} } }
 
 -- Status suffix: appends " - TEXT" to the base title (which never changes).
 -- Global so `frame status` can call it over the socket from any terminal
@@ -332,6 +334,19 @@ end
 -- removed. An empty answer (a tool-only final turn) skips inbox/remote delivery
 -- — nothing to report — but still completes the request, keeping the queue
 -- aligned.
+-- remember_done(req, how) — keep a small record of how a request finished, so a
+-- sender asking FrameBrokerState after the fact hears 'done delivered' (reply in
+-- transit / arrived) or 'done empty' (a tool-only last turn: no reply will ever
+-- come) instead of an ambiguous 'gone'. Bounded: the oldest records age out.
+local function remember_done(req, how)
+  local b = FrameState.broker
+  if not b.done[req.id] then table.insert(b.done_order, req.id) end
+  b.done[req.id] = { how = how, addr = req.ret and req.ret.addr or '' }
+  while #b.done_order > 64 do
+    b.done[table.remove(b.done_order, 1)] = nil
+  end
+end
+
 local function route(req, text)
   local k = req.ret.kind
   if k == 'local' then
@@ -358,6 +373,7 @@ local function route(req, text)
       job = vim.fn.jobstart({ frame_bin, 'deliver', req.ret.addr, '--from', from, '--id', req.id, text })
     end
   end -- 'drop': nothing
+  remember_done(req, k == 'drop' and 'dropped' or (text == '' and 'empty' or 'delivered'))
   FrameState.broker.reqs[req.id] = nil
   return job
 end
@@ -468,6 +484,7 @@ _G.FrameBrokerCancel = function(id, mode)
     for i, q in ipairs(b.queue) do
       if q == id then table.remove(b.queue, i) break end
     end
+    remember_done(req, 'dropped')
     b.reqs[id] = nil
   elseif req.status == 'inflight' then
     req.ret = (mode == 'inbox') and { kind = 'inbox' } or { kind = 'drop' }
@@ -487,6 +504,39 @@ _G.FrameBrokerStatus = function()
     table.insert(out, id .. '\tqueued#' .. i)
   end
   return table.concat(out, '\n')
+end
+
+-- _G.FrameBrokerState(id, addr) — one request's state, for a SENDER asking from
+-- another frame (`frame req status`, `frame inbox --wait --for`). One RPC, one
+-- tab-separated line:
+--   queued<TAB>N                      Nth in line behind the in-flight turn
+--   inflight<TAB>AGE<TAB>STATUS       running for AGE seconds; STATUS is this
+--                                     frame's title status ('blocked' = claude
+--                                     is waiting on its human mid-turn)
+--   done<TAB>delivered|empty|dropped  finished (see remember_done)
+--   gone                              never heard of it (rebooted, or aged out)
+-- addr (the sender's NAME/TOPIC, '' to skip) guards against id reuse: ids
+-- restart at r1 when a frame reboots, so a request with our id but another
+-- sender's return address is not ours.
+_G.FrameBrokerState = function(id, addr)
+  local b = FrameState.broker
+  addr = addr or ''
+  local req = b.reqs[id]
+  if req and (addr == '' or (req.ret and req.ret.addr) == addr) then
+    if req.status == 'inflight' then
+      local age = b.inflight_since and (os.time() - b.inflight_since) or 0
+      return 'inflight\t' .. age .. '\t' .. FrameState.status
+    end
+    if req.status == 'queued' then
+      for i, q in ipairs(b.queue) do
+        if q == id then return 'queued\t' .. i end
+      end
+    end
+    return 'done\tdelivered'
+  end
+  local d = b.done[id]
+  if d and (addr == '' or d.addr == addr) then return 'done\t' .. d.how end
+  return 'gone'
 end
 
 -- _G.FrameBrokerOnTurnEnd(text) — the pump, driven by the Stop hook: route the
@@ -610,6 +660,70 @@ end
 -- FrameInboxDrainFor matches on.
 -- _G.FrameInboxDrain() — `frame inbox` reads AND clears the inbox, returning it
 -- as human-readable text ('' when empty).
+-- The outbox — the SENDER's half of `frame req status`. `frame req` records each
+-- request it sends here (token NAME/TOPIC#rN, first line of the text, send
+-- time); draining its reply from the inbox clears it. State of a request is
+-- never kept here — the target's broker owns that (FrameBrokerState). Bounded.
+local function outbox_clear(msgs)
+  if #FrameState.outbox == 0 then return end
+  local gone = {}
+  for _, m in ipairs(msgs) do
+    if (m.id or '') ~= '' then gone[(m.from or '') .. '#' .. m.id] = true end
+  end
+  local keep = {}
+  for _, e in ipairs(FrameState.outbox) do
+    if not gone[e.token] then table.insert(keep, e) end
+  end
+  FrameState.outbox = keep
+end
+
+-- _G.FrameOutboxAdd(token, line) — record a sent request; replaces any older
+-- entry with the same token (the target rebooted and reused the id).
+_G.FrameOutboxAdd = function(token, line)
+  _G.FrameOutboxForget(token)
+  table.insert(FrameState.outbox, { token = token, sent = os.time(), line = line or '' })
+  while #FrameState.outbox > 64 do table.remove(FrameState.outbox, 1) end
+  return #FrameState.outbox
+end
+
+-- _G.FrameOutboxForget(token) — drop an entry (`frame req status` does this
+-- once it has reported the request lost, so it isn't listed forever).
+_G.FrameOutboxForget = function(token)
+  local keep = {}
+  for _, e in ipairs(FrameState.outbox) do
+    if e.token ~= token then table.insert(keep, e) end
+  end
+  FrameState.outbox = keep
+  return 'ok'
+end
+
+-- _G.FrameOutboxQuery(tokens) — TAB-separated tokens ('' = the whole outbox),
+-- one line per token: token<TAB>age<TAB>in_inbox<TAB>line. age is seconds since
+-- sent ('' for a token we never recorded); in_inbox is 1 when its reply is
+-- sitting undrained in this frame's inbox. Non-destructive.
+_G.FrameOutboxQuery = function(tokens)
+  local here = {}
+  for _, m in ipairs(FrameState.inbox) do
+    if (m.id or '') ~= '' then here[(m.from or '') .. '#' .. m.id] = true end
+  end
+  local byTok = {}
+  for _, e in ipairs(FrameState.outbox) do byTok[e.token] = e end
+  local list = {}
+  tokens = tostring(tokens or '')
+  if tokens == '' then
+    for _, e in ipairs(FrameState.outbox) do table.insert(list, e.token) end
+  else
+    for t in tokens:gmatch('[^\t]+') do table.insert(list, t) end
+  end
+  local out = {}
+  for _, t in ipairs(list) do
+    local e = byTok[t]
+    table.insert(out, table.concat({ t, e and (os.time() - e.sent) or '',
+      here[t] and 1 or 0, e and e.line or '' }, '\t'))
+  end
+  return table.concat(out, '\n')
+end
+
 _G.FrameInboxAdd = function(from, text, id)
   table.insert(FrameState.inbox, { from = from or '', text = text or '', id = id or '' })
   return #FrameState.inbox
@@ -621,6 +735,7 @@ _G.FrameInboxDrain = function()
   for _, m in ipairs(box) do
     table.insert(out, (m.from ~= '' and ('from ' .. m.from .. ':\n') or '') .. m.text)
   end
+  outbox_clear(box)
   FrameState.inbox = {}
   return table.concat(out, '\n\n──\n\n')
 end
@@ -660,15 +775,17 @@ _G.FrameInboxDrainFor = function(tokens)
     if not present[tok] then return '' end -- not all arrived yet
   end
   -- all present: partition the box, keeping non-matching messages
-  local out, keep = {}, {}
+  local out, keep, taken = {}, {}, {}
   for _, m in ipairs(FrameState.inbox) do
     local tok = (m.from or '') .. '#' .. (m.id or '')
     if want[tok] then
       table.insert(out, (m.from ~= '' and ('from ' .. m.from .. ':\n') or '') .. m.text)
+      table.insert(taken, m)
     else
       table.insert(keep, m)
     end
   end
+  outbox_clear(taken)
   FrameState.inbox = keep
   return table.concat(out, '\n\n──\n\n')
 end

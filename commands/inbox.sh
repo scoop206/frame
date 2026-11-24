@@ -16,6 +16,17 @@
 # tokens (printed by `frame req`) have all arrived, then drains ONLY those,
 # leaving unrelated mail — so a fan-out caller collects exactly its own answers.
 # --for and --count are two ways to say "how many", so they're mutually exclusive.
+#
+# While --wait --for waits, every few polls it also asks each awaited reply's
+# TARGET what became of the request (frame_req_probe → FrameBrokerState), so a
+# reply that can't come doesn't run out the clock:
+#   exit 5  lost     the target frame is gone or rebooted, or it finished the
+#                    turn without reply text — no reply is coming
+#   exit 6  blocked  the target's claude is on our request but paused waiting
+#                    for ITS human — we can't fix that; tell our own human
+# Nothing is drained on 5/6. On timeout (3) --for says what each target was
+# doing ("working 7m", "queued #2"). Exit codes in full: 0 delivered, 1 error,
+# 2 usage, 3 timeout, 5 lost, 6 blocked.
 # Run from inside a frame — the inbox is that frame's, read over its own socket.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
@@ -112,6 +123,32 @@ else
   # RPCs — never a vim.wait in the server, which would freeze the editor the
   # operator is sitting in for the length of the wait.
   DEADLINE=$(( SECONDS + TIMEOUT ))
+  _from="$SELF_NAME/$SELF_TOPIC"
+  _polls=0
+  # _check_targets — for --for: probe each awaited reply that isn't already in
+  # our inbox. Sets _lost / _blocked / _report (one line per token). Returns 1
+  # when our own session can't say which replies are here (old layout): then
+  # we don't judge, we just keep waiting.
+  _check_targets() {
+    _lost=() _blocked=() _report=()
+    local _rows _row _t _here
+    local -a _f
+    _rows=$(frame_rpc_expr "$SOCKET" "v:lua.FrameOutboxQuery('$_tok')") || return 1
+    for _row in "${(@f)_rows}"; do
+      _f=("${(@ps:\t:)_row}")
+      _t=${_f[1]} _here=${_f[3]:-0}
+      [[ -n "$_t" ]] || continue
+      if [[ "$_here" == 1 ]]; then _report+=("$_t: in your inbox"); continue; fi
+      frame_req_probe "$_t" "$_from"
+      _report+=("$_t: $REQ_DESC")
+      case "$REQ_STATE" in
+        lost)    _lost+=("$_t ${REQ_DESC#lost }") ;;
+        blocked) _blocked+=("$_t") ;;
+      esac
+    done
+    return 0
+  }
+  typeset -a _lost _blocked _report
   while :; do
     if [[ ! -S "$SOCKET" ]]; then
       echo "$X_MARK frame session for $SELF_NAME/$SELF_TOPIC went away mid-wait" >&2
@@ -126,8 +163,26 @@ else
       print -r -- "$_out"
       break
     fi
+    _polls=$(( _polls + 1 ))
+    # Every 5th poll (~5s), not every second: one RPC per awaited target.
+    if (( ${#FORS} )) && (( _polls % 5 == 0 )) && _check_targets; then
+      if (( ${#_lost} )); then
+        for _l in "${_lost[@]}"; do echo "lost: $_l" >&2; done
+        echo "  no reply is coming for that; nothing was drained (frame req status for the rest)" >&2
+        exit 5
+      fi
+      if (( ${#_blocked} )); then
+        for _b in "${_blocked[@]}"; do echo "blocked: $_b (waiting on its human)" >&2; done
+        echo "  it can't go on until someone answers it there — tell your human" >&2
+        exit 6
+      fi
+    fi
     if (( SECONDS >= DEADLINE )); then
       echo "$X_MARK inbox --wait: no mail after ${TIMEOUT}s" >&2
+      if (( ${#FORS} )) && _check_targets; then
+        for _r in "${_report[@]}"; do echo "  $_r" >&2; done
+      fi
+      echo "  check later: frame req status" >&2
       exit 3
     fi
     sleep 1

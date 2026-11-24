@@ -1875,3 +1875,59 @@ find_free_port() {
   done
   echo $_p
 }
+
+frame_fmt_age() {
+  # frame_fmt_age SECONDS — a short human age: 45s, 7m, 2h.
+  local s=${1:-0}
+  if (( s < 90 )); then print -rn -- "${s}s"
+  elif (( s < 5400 )); then print -rn -- "$(( s / 60 ))m"
+  else print -rn -- "$(( s / 3600 ))h"; fi
+}
+
+frame_req_probe() {
+  # frame_req_probe TOKEN FROM — ask the TARGET's broker what became of the
+  # request TOKEN (NAME/TOPIC#rN, as `frame req` printed it) that FROM (our own
+  # NAME/TOPIC, its return address) sent. One RPC (FrameBrokerState in
+  # layouts/session.lua). Sets REQ_STATE to one word and REQ_DESC to a phrase:
+  #   queued   "queued #N"            waiting behind the target's in-flight turn
+  #   working  "working 7m"           the target's claude is on it
+  #   blocked  "blocked"              on it, but paused waiting for ITS human
+  #   done     "reply on its way"     finished; the reply is being delivered
+  #   lost     "lost (<reason>)"      no reply is coming (frame gone, rebooted,
+  #                                   finished without reply text, cancelled)
+  #   unknown  "unknown (<reason>)"   target didn't answer / predates this
+  # Does not look at our own inbox — callers check "already here" first.
+  local tok=$1 from=$2
+  local addr=${tok%\#*} id=${tok##*\#}
+  local sock="$FRAME_RUNDIR/${addr/\//-}.nvim"
+  if [[ "$tok" != */*\#* ]]; then
+    REQ_STATE=unknown REQ_DESC="unknown (not a NAME/TOPIC#rN token)"; return 0
+  fi
+  if [[ ! -S "$sock" ]]; then
+    REQ_STATE=lost REQ_DESC="lost ($addr is no longer running)"; return 0
+  fi
+  local _out
+  if ! _out=$(frame_rpc_expr "$sock" \
+      "v:lua.FrameBrokerState('${id//\'/\'\'}','${from//\'/\'\'}')"); then
+    REQ_STATE=unknown REQ_DESC="unknown ($addr didn't answer, or predates req status)"; return 0
+  fi
+  local -a f; f=("${(@ps:\t:)_out}")
+  case "${f[1]}" in
+    queued)   REQ_STATE=queued REQ_DESC="queued #${f[2]}" ;;
+    inflight)
+      if [[ "${f[3]:-}" == blocked ]]; then
+        REQ_STATE=blocked REQ_DESC="blocked (waiting on its human)"
+      else
+        REQ_STATE=working REQ_DESC="working $(frame_fmt_age "${f[2]:-0}")"
+      fi ;;
+    done)
+      case "${f[2]:-}" in
+        empty)   REQ_STATE=lost REQ_DESC="lost (it finished without reply text)" ;;
+        dropped) REQ_STATE=lost REQ_DESC="lost (cancelled at $addr)" ;;
+        *)       REQ_STATE=done REQ_DESC="reply on its way" ;;
+      esac ;;
+    gone)     REQ_STATE=lost REQ_DESC="lost ($addr no longer knows it; rebooted?)" ;;
+    *)        REQ_STATE=unknown REQ_DESC="unknown ($addr answered '$_out')" ;;
+  esac
+  return 0
+}

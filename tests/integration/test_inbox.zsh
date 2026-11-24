@@ -194,4 +194,62 @@ test_for_needs_a_token() {
   assert_contains "$OUT" "--for needs a TOKEN"
 }
 
+# ── --for early exits (target probes every ~5 polls) ─────────────────────────
+
+test_for_lost_target_exits_5_without_draining() {
+  in_hub
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
+  export FAKE_NVIM_EXPR_RESULT=""            # the reply never arrives
+  export FAKE_NVIM_EXPR_LOG="$SANDBOX/exprs"
+  run_frame inbox --wait --for "$TNAME/ghost#r2" --timeout 30   # no ghost socket
+  assert_status 5
+  assert_contains "$OUT" "lost: $TNAME/ghost#r2 ($TNAME/ghost is no longer running)"
+  assert_not_contains "$(<$FAKE_NVIM_EXPR_LOG)" "FrameInboxDrain()"
+}
+
+test_for_empty_reply_is_lost() {
+  in_hub
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-calc.nvim"
+  print -rn -- $'done\tempty' > "$FRAME_RUNDIR/$TNAME-calc.nvim.state"
+  export FAKE_NVIM_EXPR_RESULT=""
+  run_frame inbox --wait --for "$TNAME/calc#r2" --timeout 30
+  assert_status 5
+  assert_contains "$OUT" "finished without reply text"
+}
+
+test_for_blocked_target_exits_6() {
+  in_hub
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-calc.nvim"
+  print -rn -- $'inflight\t90\tblocked' > "$FRAME_RUNDIR/$TNAME-calc.nvim.state"
+  export FAKE_NVIM_EXPR_RESULT=""
+  run_frame inbox --wait --for "$TNAME/calc#r2" --timeout 30
+  assert_status 6
+  assert_contains "$OUT" "blocked: $TNAME/calc#r2 (waiting on its human)"
+  assert_contains "$OUT" "tell your human"
+}
+
+test_for_working_target_keeps_waiting_then_says_what_it_was_doing() {
+  in_hub
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
+  _mksock "$FRAME_RUNDIR/$TNAME-calc.nvim"
+  print -rn -- $'inflight\t420\tworking' > "$FRAME_RUNDIR/$TNAME-calc.nvim.state"
+  export FAKE_NVIM_EXPR_RESULT=""
+  run_frame inbox --wait --for "$TNAME/calc#r2" --timeout 6
+  assert_status 3
+  assert_contains "$OUT" "no mail after 6s"
+  assert_contains "$OUT" "$TNAME/calc#r2: working 7m"
+  assert_contains "$OUT" "check later: frame req status"
+}
+
+test_plain_wait_timeout_points_at_req_status() {
+  in_hub
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
+  export FAKE_NVIM_EXPR_RESULT=""
+  run_frame inbox --wait --timeout 1
+  assert_status 3
+  assert_contains "$OUT" "frame req status"
+}
+
 run_tests "$0"
