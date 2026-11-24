@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A2A and frame: should frames speak Agent2Agent?</title>
+<link rel="canonical" href="https://scoop206.github.io/frame/considerations/a2a/">
+<meta name="description" content="How the Agent2Agent (A2A) protocol maps onto frame's broker, why frame isn't adopting it yet, and the task model it takes from A2A now.">
+<meta property="og:title" content="A2A and frame: should frames speak Agent2Agent?">
+<meta property="og:description" content="How the Agent2Agent (A2A) protocol maps onto frame's broker, why frame isn't adopting it yet, and the task model it takes from A2A now.">
+<meta property="og:image" content="https://scoop206.github.io/frame/assets/frame_social.png">
+<meta property="og:url" content="https://scoop206.github.io/frame/considerations/a2a/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../../assets/frame-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../style.css">
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="../../"><img src="../../assets/frame-icon.png" alt="">frame<span>_</span></a>
+    <ul>
+      <li class="hide-sm"><a href="../../">home</a></li>
+      <li><a href="../../considerations/">considerations</a></li>
+      <li class="hide-sm"><a href="https://github.com/scoop206/frame#getting-started">get started</a></li>
+      <li><a href="https://github.com/scoop206/frame">github</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="page-head">
+  <div class="wrap">
+    <p class="crumbs"><a href="../">considerations</a> / a2a</p>
+    <p class="eyebrow">consideration</p>
+    <h1>A2A: should frames speak Agent2Agent?</h1>
+    <span class="verdict">verdict: not yet. we take the task model now.</span>
+    <p class="lede">frame already has agents messaging agents: a coordinator sends work with <code>frame req</code> and replies land in <code>frame inbox</code>. A2A is the open standard for exactly that kind of traffic. So should frame speak it?</p>
+  </div>
+</header>
+
+<section class="prose">
+  <div class="wrap">
+
+    <h2>What A2A is</h2>
+    <p>Google announced the Agent2Agent protocol in April 2025 and gave it to the Linux Foundation that June. The first stable spec, v1.0, shipped in March 2026, and more than 150 organizations back it. The main pieces:</p>
+    <ul class="ticks">
+      <li><strong>Agent Card.</strong> A JSON file an agent publishes describing its skills, its endpoint and the auth it accepts, so other agents can find it.</li>
+      <li><strong>Transport.</strong> JSON-RPC 2.0 over HTTPS, with gRPC and HTTP+JSON bindings too.</li>
+      <li><strong>Tasks.</strong> Every request becomes a task with an id and a lifecycle: submitted, working, input-required, auth-required, completed, failed, canceled, rejected. Results come back as messages and artifacts, streamed over SSE or pushed to a webhook.</li>
+    </ul>
+    <p>The premise is that agents are opaque to each other. They share no memory, tools or files. A2A is built for agents that cross vendor and organization boundaries. MCP is the complementary layer: MCP connects an agent to its tools, A2A connects an agent to other agents.</p>
+
+    <h2>How it maps onto frame</h2>
+    <p>Most of A2A has a frame counterpart already.</p>
+    <table class="kv">
+      <thead><tr><th>A2A</th><th>frame</th></tr></thead>
+      <tbody>
+        <tr><td>Agent Card, discovery</td><td><code>frame ls</code> lists live frames; <code>frame kv --of TOPIC</code> shows what one is working on</td></tr>
+        <tr><td>message/send</td><td><code>frame req</code></td></tr>
+        <tr><td>push notification</td><td>the reply landing in <code>frame inbox</code></td></tr>
+        <tr><td>input-required, auth-required</td><td>the Attention and Blocked banners</td></tr>
+        <tr><td>contextId</td><td>the frame's warm Claude session</td></tr>
+        <tr><td><em>no equivalent</em></td><td><code>frame spawn --req</code> (creating an agent), worktrees, merge guards, the <code>frame kv</code> autonomy settings</td></tr>
+      </tbody>
+    </table>
+    <p>That last row is the interesting one. A2A covers how agents talk. It says nothing about how they're created, what codebase they share, or what a human lets them do. Those are most of what frame is.</p>
+
+    <h2>Could frame adopt it?</h2>
+    <p>Yes, as a thin bridge beside the broker: one local HTTP server that publishes an Agent Card for each live frame, turns message/send into a <code>frame req</code>, completes the task when the reply arrives, and reports input-required when the frame is Blocked. All the pieces exist. The new part is a long-lived HTTP server in a codebase that is otherwise zsh.</p>
+
+    <h2>Should it, today?</h2>
+    <p>Not yet, for two reasons.</p>
+    <ol>
+      <li><strong>Nothing on the other end.</strong> Every frame runs Claude Code, and we couldn't confirm any first-party A2A support in Claude Code. A bridge would translate between frames that already understand each other.</li>
+      <li><strong>The opposite premise.</strong> A2A assumes opaque agents that don't trust each other. Frames share a filesystem, git, Neovim and a human, and that sharing is where frame's value comes from.</li>
+    </ol>
+
+    <h2>Security: a requirement, not a blocker</h2>
+    <p>Binding to localhost or a private network keeps network attackers out. The path that remains is your browser. Any web page you visit can make your browser POST to localhost (the browser blocks the response, but the request still lands), or reach it through DNS rebinding. For a dev server that's a minor risk. For an endpoint that types prompts into a Claude running with <code>frame yolo on</code>, it means a web page could run shell commands on your machine.</p>
+    <p>The standard fixes are well known, and any bridge frame ships would have all of them:</p>
+    <ul class="ticks">
+      <li>bind to 127.0.0.1 only;</li>
+      <li>reject requests whose Host or Origin header isn't localhost;</li>
+      <li>require a token read from a file only your user can read.</li>
+    </ul>
+
+    <h2>What frame takes from A2A now</h2>
+    <p>The task model. Today <code>frame req</code> is fire and forget, with one reply. Giving each req a task id, a state you can query using A2A's state names, and a way to cancel it would make a swarm of frames easier to follow. It would also turn a future A2A bridge into mostly renaming.</p>
+
+    <h2>What would change the answer</h2>
+    <ul class="ticks">
+      <li>Non-Claude agents, such as Gemini CLI or Codex, running as frame types.</li>
+      <li>Frames spread over several machines, which Linux support makes more likely.</li>
+      <li>Claude Code shipping A2A itself.</li>
+    </ul>
+    <p>We're also watching Claude Code's own native cross-session messaging. It overlaps frame's broker more directly than A2A does.</p>
+
+    <h2>Sources</h2>
+    <ul class="ticks sources">
+      <li><a href="https://a2a-protocol.org/latest/specification/">A2A protocol specification</a></li>
+      <li><a href="https://www.linuxfoundation.org/press/a2a-protocol-surpasses-150-organizations-lands-in-major-cloud-platforms-and-sees-enterprise-production-use-in-first-year">Linux Foundation: A2A surpasses 150 organizations in its first year</a></li>
+      <li><a href="https://opensource.googleblog.com/2026/04/a-year-of-open-collaboration-celebrating-the-anniversary-of-a2a.html">Google Open Source Blog: a year of open collaboration on A2A</a></li>
+    </ul>
+    <p><a href="../">← all considerations</a></p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <a href="https://github.com/scoop206/frame">GitHub</a>
+      <a href="https://github.com/scoop206/frame#readme">Docs</a>
+      <a href="../../considerations/">Considerations</a>
+      <a href="https://www.youtube.com/watch?v=lrQ5PwYlJXU">Demo video</a>
+      <a href="https://github.com/scoop206/frame/blob/main/LICENSE">License</a>
+    </div>
+    <div>frame<span style="color:var(--accent)">_</span></div>
+  </div>
+</footer>
+
+<!-- Cloudflare Web Analytics: cookieless; site managed in cf-tf (scoop206_github_io_web_analytics) -->
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "726a3ee34b224ccc82669e7453e5495e"}'></script>
+</body>
+</html>
