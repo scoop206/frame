@@ -250,8 +250,11 @@ EOF
 You may ask sibling frames read-only questions — who owns what, a
 contract's shape, a second opinion on a diff. Ask and block for the
 answer, with a timeout so a busy or dead sibling can't hang you:
-    t=$(frame req NAME/TOPIC "from $(frame name): your question — when done, reply with your status")
+    t=$(frame req NAME/TOPIC "from $(frame name): your question — when done, reply with your status" | sed -n 's/^token: //p')
     frame inbox --wait --for "$t" --timeout 60
+Exit 5 means no reply is coming (the frame is gone, or it ended its
+turn without text); exit 6 means it's blocked on its own human, so
+tell yours.
 When you initiate, always do both of those things in the message:
 state your own ID (`frame name` prints it) and ask for a status
 reply when the work is done. The target's claude sees only your

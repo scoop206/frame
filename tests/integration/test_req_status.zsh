@@ -114,4 +114,23 @@ test_status_refuses_outside_a_frame() {
   assert_contains "$OUT" "must be run from inside a frame"
 }
 
+test_swarm_recipe_captures_just_the_token() {
+  # The level-2 ask recipe stores `frame req`'s output in $t and hands it to
+  # `inbox --wait --for`. frame req prints several lines, so the recipe must
+  # extract only the token. Run the recipe's own line, as the agent would.
+  in_hub
+  _mksock "$FRAME_RUNDIR/$TNAME-alpha.nvim"
+  export FAKE_BROKER_SUBMIT=r5
+  "$FRAME_BIN" swarm 2 >/dev/null
+  local line
+  line=$("$FRAME_BIN" swarm --context | grep -m1 '^ *t=\$(frame req')
+  assert_contains "$line" "frame req NAME/TOPIC"
+  line=${line/NAME\/TOPIC/$TNAME/alpha}
+  local t
+  export PATH="$FRAME_CHECKOUT/bin:$PATH"   # the recipe calls `frame` by name
+  eval "$line"
+  assert_eq "$t" "$TNAME/alpha#r5"
+  assert_contains "$("$FRAME_BIN" swarm --context)" "Exit 5 means no reply is coming"
+}
+
 run_tests "$0"
