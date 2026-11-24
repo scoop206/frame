@@ -169,7 +169,6 @@ footer a:hover { color: var(--fg); }
 }
 @media (max-width: 560px) {
   .wrap { padding: 0 16px; }
-  nav ul li.hide-sm { display: none; }
   nav ul { gap: 16px; }
   .lede { font-size: 18px; }
   .term pre { font-size: 12px; padding: 14px; }
