@@ -83,6 +83,6 @@ if _title=$(nvim --headless --server "$SOCKET" --remote-expr "v:lua.FrameSetStat
   echo "$OK_MARK title: $_title"
 else
   echo "$X_MARK session at $SOCKET didn't accept the update — layout predates" >&2
-  echo "  FrameSetStatus? Reboot the frame (:FrameQuit, then frame wt $TOPIC)" >&2
+  echo "  FrameSetStatus? Reboot the frame (:FrameQuit, then $(frame_boot_cmd "$NAME" "$TOPIC"))" >&2
   exit 1
 fi

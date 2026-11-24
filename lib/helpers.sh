@@ -145,6 +145,14 @@ frame_self_identity() {
   return 0
 }
 
+frame_boot_cmd() {
+  # frame_boot_cmd NAME TOPIC — the command that (re)boots that frame: shell
+  # frames are always NAME=shell (shell.sh) and boot with `frame shell TOPIC`;
+  # every other frame is a worktree frame, `frame wt TOPIC`.
+  if [[ "$1" == shell ]]; then print -rn -- "frame shell $2"
+  else print -rn -- "frame wt $2"; fi
+}
+
 frame_session_down_hint() {
   # frame_session_down_hint NAME TOPIC — print a diagnostic second line (stderr)
   # after a "no socket at …" error, naming the LIKELY CAUSE and its fix. A
@@ -167,7 +175,7 @@ frame_session_down_hint() {
     echo "  branchless home frame to command from (frame shell <topic>), then run" >&2
     echo "  this from inside it." >&2
   else
-    echo "  This frame's session isn't running — reboot it (frame wt $_topic)." >&2
+    echo "  This frame's session isn't running — reboot it ($(frame_boot_cmd "$_name" "$_topic"))." >&2
   fi
 }
 

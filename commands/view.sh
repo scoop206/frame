@@ -54,7 +54,7 @@ fi
 # ── one round-trip: the session dumps its own attributes ──────────────────────
 if ! _dump=$(frame_rpc_expr "$SOCKET" 'v:lua.FrameDebug()'); then
   echo "$X_MARK session at $SOCKET didn't answer FrameDebug — the layout predates" >&2
-  echo "  it. Reboot the frame for the full view (:FrameQuit, then frame wt $TOPIC)." >&2
+  echo "  it. Reboot the frame for the full view (:FrameQuit, then $(frame_boot_cmd "$NAME" "$TOPIC"))." >&2
   exit 1
 fi
 

@@ -218,16 +218,19 @@ test_for_empty_reply_is_lost() {
   assert_contains "$OUT" "finished without reply text"
 }
 
-test_for_blocked_target_exits_6() {
+test_for_blocked_target_warns_once_and_keeps_waiting() {
+  # Blocked is advisory: one warning line per token, then the wait goes on to
+  # the reply or the timeout (no early exit; the status can linger).
   in_hub
   _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"
   _mksock "$FRAME_RUNDIR/$TNAME-calc.nvim"
   print -rn -- $'inflight\t90\tblocked' > "$FRAME_RUNDIR/$TNAME-calc.nvim.state"
   export FAKE_NVIM_EXPR_RESULT=""
-  run_frame inbox --wait --for "$TNAME/calc#r2" --timeout 30
-  assert_status 6
-  assert_contains "$OUT" "blocked: $TNAME/calc#r2 (waiting on its human)"
-  assert_contains "$OUT" "tell your human"
+  run_frame inbox --wait --for "$TNAME/calc#r2" --timeout 12   # two probe rounds
+  assert_status 3
+  assert_contains "$OUT" "$TNAME/calc is waiting on its human ($TNAME/calc#r2); still waiting"
+  assert_eq "$(print -r -- "$OUT" | grep -c 'waiting on its human (')" 1
+  assert_contains "$OUT" "$TNAME/calc#r2: blocked (waiting on its human)"   # the timeout report
 }
 
 test_for_working_target_keeps_waiting_then_says_what_it_was_doing() {

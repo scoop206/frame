@@ -52,6 +52,6 @@ if _n=$(nvim --headless --server "$SOCKET" \
   echo "$OK_MARK delivered to $NAME/$TOPIC inbox ($_n waiting)"
 else
   echo "$X_MARK session at $SOCKET didn't accept the delivery — layout may predate" >&2
-  echo "  FrameInboxAdd; reboot the frame (:FrameQuit, then frame wt $TOPIC)" >&2
+  echo "  FrameInboxAdd; reboot the frame (:FrameQuit, then $(frame_boot_cmd "$NAME" "$TOPIC"))" >&2
   exit 1
 fi

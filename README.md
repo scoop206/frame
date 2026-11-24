@@ -424,9 +424,10 @@ frame inbox --wait --for $t1 --for $t2   # blocks until both r1 and r2 arrive
 
 The wait also checks on each request at its target every few seconds, so a reply
 that can't come doesn't run out the clock: it exits **5** (`lost:`) when the target
-frame is gone or rebooted, or finished its turn without reply text, and **6**
-(`blocked:`) when the target's claude is on your request but waiting for its own
-human. On a timeout (exit 3) it says what each target was doing.
+frame is gone or rebooted, or finished its turn without reply text. If the
+target's claude is on your request but waiting for its own human, the wait warns
+once and keeps waiting: that status can linger after the human answers, so it's
+not a reason to give up. On a timeout (exit 3) it says what each target was doing.
 
 To see everything you've sent and not yet read the reply to:
 

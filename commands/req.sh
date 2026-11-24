@@ -50,7 +50,7 @@ if (( _is_status )); then
   _q=${(j:\t:)@}
   if ! _rows=$(frame_rpc_expr "$_own" "v:lua.FrameOutboxQuery('${_q//\'/\'\'}')"); then
     echo "$X_MARK session at $_own didn't answer — layout may predate req status;" >&2
-    echo "  reboot the frame (:FrameQuit, then frame wt $SELF_TOPIC)" >&2
+    echo "  reboot the frame (:FrameQuit, then $(frame_boot_cmd "$SELF_NAME" "$SELF_TOPIC"))" >&2
     exit 1
   fi
   if [[ -z "$_rows" ]]; then
@@ -130,7 +130,7 @@ _ret=${_ret//\'/\'\'}
 if ! _result=$(nvim --headless --server "$SOCKET" \
     --remote-expr "v:lua.FrameBrokerSubmit('$_esc', '$_ret')"); then
   echo "$X_MARK session at $SOCKET didn't accept the request — layout may predate" >&2
-  echo "  the broker; reboot the frame (:FrameQuit, then frame wt $TOPIC)" >&2
+  echo "  the broker; reboot the frame (:FrameQuit, then $(frame_boot_cmd "$NAME" "$TOPIC"))" >&2
   exit 1
 fi
 case "$_result" in

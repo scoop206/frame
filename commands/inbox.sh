@@ -22,11 +22,13 @@
 # reply that can't come doesn't run out the clock:
 #   exit 5  lost     the target frame is gone or rebooted, or it finished the
 #                    turn without reply text — no reply is coming
-#   exit 6  blocked  the target's claude is on our request but paused waiting
-#                    for ITS human — we can't fix that; tell our own human
-# Nothing is drained on 5/6. On timeout (3) --for says what each target was
-# doing ("working 7m", "queued #2"). Exit codes in full: 0 delivered, 1 error,
-# 2 usage, 3 timeout, 5 lost, 6 blocked.
+# Nothing is drained on 5. A target that is on our request but paused waiting
+# for ITS human (status "blocked") is only a warning, printed once per token:
+# the wait goes on. Not an exit, because that status can linger after the human
+# answers (until the turn's Stop or the next prompt), and an exit would make the
+# caller give up on a frame that is already working again. On timeout (3) --for
+# says what each target was doing ("working 7m", "queued #2", "blocked").
+# Exit codes in full: 0 delivered, 1 error, 2 usage, 3 timeout, 5 lost.
 # Run from inside a frame — the inbox is that frame's, read over its own socket.
 # Sourced by bin/frame; helpers + set -euo pipefail already active.
 
@@ -149,6 +151,7 @@ else
     return 0
   }
   typeset -a _lost _blocked _report
+  typeset -A _warned      # tokens we've already said are blocked
   while :; do
     if [[ ! -S "$SOCKET" ]]; then
       echo "$X_MARK frame session for $SELF_NAME/$SELF_TOPIC went away mid-wait" >&2
@@ -156,7 +159,7 @@ else
     fi
     if ! _out=$(nvim --headless --server "$SOCKET" --remote-expr "$DRAIN_EXPR"); then
       echo "$X_MARK session at $SOCKET didn't answer — layout may predate" >&2
-      echo "  $DRAIN_FN; reboot the frame (:FrameQuit, then frame wt $SELF_TOPIC)" >&2
+      echo "  $DRAIN_FN; reboot the frame (:FrameQuit, then $(frame_boot_cmd "$SELF_NAME" "$SELF_TOPIC"))" >&2
       exit 1
     fi
     if [[ -n "$_out" ]]; then
@@ -171,11 +174,11 @@ else
         echo "  no reply is coming for that; nothing was drained (frame req status for the rest)" >&2
         exit 5
       fi
-      if (( ${#_blocked} )); then
-        for _b in "${_blocked[@]}"; do echo "blocked: $_b (waiting on its human)" >&2; done
-        echo "  it can't go on until someone answers it there — tell your human" >&2
-        exit 6
-      fi
+      for _b in "${_blocked[@]}"; do
+        (( ${+_warned[$_b]} )) && continue
+        _warned[$_b]=1
+        echo "$WARN_MARK ${_b%\#*} is waiting on its human ($_b); still waiting" >&2
+      done
     fi
     if (( SECONDS >= DEADLINE )); then
       echo "$X_MARK inbox --wait: no mail after ${TIMEOUT}s" >&2

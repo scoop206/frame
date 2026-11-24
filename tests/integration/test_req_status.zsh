@@ -133,4 +133,19 @@ test_swarm_recipe_captures_just_the_token() {
   assert_contains "$("$FRAME_BIN" swarm --context)" "Exit 5 means no reply is coming"
 }
 
+test_old_layout_hint_names_the_right_boot_command() {
+  # A shell frame reboots with `frame shell TOPIC`, a worktree frame with
+  # `frame wt TOPIC`; the "layout may predate" hint must say which.
+  export FRAME_NAME=shell FRAME_TOPIC=$TNAME
+  _mksock "$FRAME_RUNDIR/shell-$TNAME.nvim"; touch "$FRAME_RUNDIR/shell-$TNAME.nvim.nooutbox"
+  run_frame req status
+  assert_status 1
+  assert_contains "$OUT" "(:FrameQuit, then frame shell $TNAME)"
+  export FRAME_NAME=$TNAME FRAME_TOPIC=hub
+  _mksock "$FRAME_RUNDIR/$TNAME-hub.nvim"; touch "$FRAME_RUNDIR/$TNAME-hub.nvim.nooutbox"
+  run_frame req status
+  assert_status 1
+  assert_contains "$OUT" "(:FrameQuit, then frame wt hub)"
+}
+
 run_tests "$0"
