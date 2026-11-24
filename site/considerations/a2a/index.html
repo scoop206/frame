@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>A2A and frame: should frames speak Agent2Agent?</title>
 <link rel="canonical" href="https://scoop206.github.io/frame/considerations/a2a/">
-<meta name="description" content="How the Agent2Agent (A2A) protocol maps onto frame's broker, why frame isn't adopting it yet, and the task model it takes from A2A now.">
+<meta name="description" content="How the Agent2Agent (A2A) protocol maps onto frame's broker, why frame isn't adopting it yet, and what it takes from A2A's task model now.">
 <meta property="og:title" content="A2A and frame: should frames speak Agent2Agent?">
-<meta property="og:description" content="How the Agent2Agent (A2A) protocol maps onto frame's broker, why frame isn't adopting it yet, and the task model it takes from A2A now.">
+<meta property="og:description" content="How the Agent2Agent (A2A) protocol maps onto frame's broker, why frame isn't adopting it yet, and what it takes from A2A's task model now.">
 <meta property="og:image" content="https://scoop206.github.io/frame/assets/frame_social.png">
 <meta property="og:url" content="https://scoop206.github.io/frame/considerations/a2a/">
 <meta name="twitter:card" content="summary_large_image">
@@ -60,6 +60,7 @@
       <tbody>
         <tr><td>Agent Card, discovery</td><td><code>frame ls</code> lists live frames; <code>frame kv --of TOPIC</code> shows what one is working on</td></tr>
         <tr><td>message/send</td><td><code>frame req</code></td></tr>
+        <tr><td>Task: id, state, cancel</td><td>every request is a broker task: an id (the <code>NAME/TOPIC#rN</code> token <code>frame req</code> prints), states queued, inflight and done, and status, await and cancel calls</td></tr>
         <tr><td>push notification</td><td>the reply landing in <code>frame inbox</code></td></tr>
         <tr><td>input-required, auth-required</td><td>the Attention and Blocked banners</td></tr>
         <tr><td>contextId</td><td>the frame's warm Claude session</td></tr>
@@ -88,7 +89,12 @@
     </ul>
 
     <h2>What frame takes from A2A now</h2>
-    <p>The task model. Today <code>frame req</code> is fire and forget, with one reply. Giving each req a task id, a state you can query using A2A's state names, and a way to cancel it would make a swarm of frames easier to follow. It would also turn a future A2A bridge into mostly renaming.</p>
+    <p>Less than you might expect, because the broker already has the task model. Every <code>frame req</code> becomes a task with an id (the <code>NAME/TOPIC#rN</code> token it prints) and a state: queued, inflight or done. The broker can report status, wait on a task and cancel it. Today only the target frame's own Claude client uses status and cancel, though. Two things are worth taking from A2A:</p>
+    <ol>
+      <li><strong>Let the sender check and cancel its own requests</strong>, with <code>frame req status TOKEN</code> and <code>frame req cancel TOKEN</code>.</li>
+      <li><strong>Two more states.</strong> <em>blocked</em>, A2A's input-required: the receiving Claude is stuck on a permission prompt or a question. And <em>lost</em>, A2A's failed: the target frame died mid-request, so the sender finds out right away instead of waiting for a timeout.</li>
+    </ol>
+    <p>Both make a swarm of frames easier to follow, and both bring the broker's states closer to A2A's, so a future bridge would be mostly renaming.</p>
 
     <h2>What would change the answer</h2>
     <ul class="ticks">
