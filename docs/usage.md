@@ -93,8 +93,7 @@ Usage:
     frame inbox [--wait [--timeout N] [--count K | --for TOKEN…]]
                                       show + clear this frame's inbox;
                                       --wait blocks until a message arrives;
-                                      --for exits 5 if a reply is lost, 6 if
-                                      its frame is blocked on its human
+                                      --for exits 5 if a reply is lost
 
     frame reply [TEXT…]               frames use to reply to last req
 

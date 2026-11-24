@@ -76,7 +76,7 @@ _esc=${TEXT//\'/\'\'}
 if ! ID=$(nvim --headless --server "$SOCKET" \
     --remote-expr "v:lua.FrameBrokerSubmit('$_esc', 'local')"); then
   echo "$X_MARK session at $SOCKET didn't accept the request — layout may predate" >&2
-  echo "  the broker; reboot the frame (:FrameQuit, then frame wt $SELF_TOPIC)" >&2
+  echo "  the broker; reboot the frame (:FrameQuit, then $(frame_boot_cmd "$SELF_NAME" "$SELF_TOPIC"))" >&2
   exit 1
 fi
 case "$ID" in

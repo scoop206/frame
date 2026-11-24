@@ -253,8 +253,7 @@ answer, with a timeout so a busy or dead sibling can't hang you:
     t=$(frame req NAME/TOPIC "from $(frame name): your question — when done, reply with your status" | sed -n 's/^token: //p')
     frame inbox --wait --for "$t" --timeout 60
 Exit 5 means no reply is coming (the frame is gone, or it ended its
-turn without text); exit 6 means it's blocked on its own human, so
-tell yours.
+turn without text).
 When you initiate, always do both of those things in the message:
 state your own ID (`frame name` prints it) and ask for a status
 reply when the work is done. The target's claude sees only your
