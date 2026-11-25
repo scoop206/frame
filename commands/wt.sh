@@ -194,9 +194,10 @@ if [[ "${1:-}" == "-d" ]]; then
     echo "⚠ worktree dir lingered after removal (a dev server was still writing) — cleaned it up"
   fi
   git -C "$MAIN_WT" branch -D "$TOPIC"
-  # Reap the recorded session id (frame swarm --context writes it) alongside the
-  # worktree — a torn-down frame is no longer a valid `frame wt --from` source.
-  rm -f "$FRAME_RUNDIR/$NAME-$TOPIC.session"
+  # Drop the frame's durable record (and the legacy rundir .session pointer)
+  # with the worktree — a torn-down frame is neither restorable by
+  # `frame restore` nor a valid `frame wt --from` source.
+  frame_record_drop "$NAME" "$TOPIC"
   # (Its frame-layer kv lived in its nvim session, so it's already gone with it.)
   # The worktree is gone but its claude transcript isn't: name the way back.
   # frame shell maps the removed worktree to the primary checkout on its own
@@ -258,13 +259,15 @@ fi
 # unspoofable A-OK; we never force-kill.
 #
 # Resolve the id BEFORE any of this: prefer the one the source recorded at its
-# last SessionStart ($FRAME_RUNDIR/<name>-<topic>.session, written by `frame
-# swarm --context`) — authoritative, and correct even when the source was ITSELF
-# resumed (its transcript keeps the origin frame's project key, so a path-scan
-# finds nothing under its own worktree). Fall back to scanning the worktree's
-# transcripts for frames that predate the recorder. Reading it up front means a
-# source that retires itself (reaping its own .session) has already handed us the
-# id, and we never retire a source only to find it had no session to carry.
+# last SessionStart — the `session` field of its durable record
+# ($FRAME_STATEDIR/<name>-<topic>.json, rewritten by `frame swarm --context`) —
+# authoritative, and correct even when the source was ITSELF resumed (its
+# transcript keeps the origin frame's project key, so a path-scan finds nothing
+# under its own worktree). Then the rundir .session pointer that frames booted
+# before records wrote, then a scan of the worktree's transcripts. Reading it up
+# front means a source that retires itself (dropping its own record) has already
+# handed us the id, and we never retire a source only to find it had no session
+# to carry.
 if [[ -n "$FROM_TOPIC" ]]; then
   # Split the handle: NAME/TOPIC picks a source project explicitly; a bare topic
   # defaults to this project's NAME. TOPIC keeps any further slashes (branch-like
@@ -276,15 +279,19 @@ if [[ -n "$FROM_TOPIC" ]]; then
     _from_name="$NAME" _from_topic="$FROM_TOPIC"
   fi
   _src_sock="$FRAME_RUNDIR/$_from_name-$_from_topic.nvim"
+  _rec_file=$(frame_record_file "$_from_name" "$_from_topic")
   _sess_file="$FRAME_RUNDIR/$_from_name-$_from_topic.session"
-  if [[ -r "$_sess_file" ]]; then
-    RESUME_ID=$(<"$_sess_file")
-  else
+  typeset -A REC
+  RESUME_ID=""
+  if frame_record_read "$_rec_file"; then RESUME_ID=${REC[session]:-}; fi
+  if [[ -z "$RESUME_ID" && -r "$_sess_file" ]]; then RESUME_ID=$(<"$_sess_file"); fi
+  if [[ -z "$RESUME_ID" ]]; then
     RESUME_ID=$(frame_session_id_for_dir "${MAIN_WT:h}/_$_from_name-$_from_topic") || RESUME_ID=""
   fi
   if [[ -z "$RESUME_ID" ]]; then
     echo "$X_MARK --from $FROM_TOPIC: no claude session found for that frame" >&2
-    echo "  (no $_sess_file, and no transcript under ~/.claude/projects for its worktree)" >&2
+    echo "  (no session in its record $_rec_file, and no transcript under" >&2
+    echo "  ~/.claude/projects for its worktree)" >&2
     exit 1
   fi
 
@@ -377,9 +384,11 @@ else
     # at teardown — `frame wt -d` / :FrameDown find nothing to remove. Confirm it
     # was deliberate. Interactive only: a scripted/agent boot has no TTY to
     # answer, so let it through (booting main harms nothing — it only confuses).
+    # A --resume boot (frame restore reboots a primary-checkout frame this way)
+    # is deliberate, so it skips the question.
     case "$TOPIC" in
       main|master)
-        if [[ -t 0 ]]; then
+        if [[ -t 0 && -z "$RESUME_ID" ]]; then
           _reply=""
           print -n "$WARN_MARK you're opening a frame on '$TOPIC' in the primary checkout with no TOPIC — this frame has no worktree, so there'll be nothing for :FrameDown to tear down. Did you mean \`frame wt <TOPIC>\`? Continue anyway? (y/N) "
           read -r _reply || _reply=""
@@ -514,6 +523,11 @@ if [[ -n "$RESUME_ID" ]]; then
     echo "  started a session, or its transcript was pruned." >&2
   fi
 fi
+
+# Durable record: what `frame restore` reboots this frame from if it dies
+# without a teardown (see frame_record_save). The session id is filled in by
+# claude's SessionStart hook; a --resume boot knows it already.
+frame_record_save boot "$RESUME_ID"
 
 # Refuse before exec if a boot-critical dependency is missing (see frame_require).
 # git/nvim always; claude only when this project's frames actually open a claude

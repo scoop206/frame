@@ -53,6 +53,20 @@ Usage:
     frame shell -d [TOPIC]            tear down a shell frame (default: current)
                                       — just quits the session; the dir is kept
 
+    frame stop [TOPIC|NAME/TOPIC|--all] [-f]
+                                      shut a frame down gracefully and keep it
+                                      restorable: Ctrl-C its terminal buffers,
+                                      wait for them to exit, quit nvim. Refuses
+                                      on unsaved buffers (-f overrides)
+    frame restore [TOPIC|NAME/TOPIC|--all] [--print]
+                                      reboot frames that went down without a
+                                      teardown (crash, reboot, Ghostty quit,
+                                      frame stop), each in its own tab, claude
+                                      resumed and told to wait for you. Bare
+                                      form lists them and asks which
+    frame restore --forget TOPIC|--all
+                                      drop a frame's record instead
+
     frame spawn shell TOPIC [--req TEXT] [--timeout N] [--ephemeral]
                                       boot a shell frame into a tab group
 

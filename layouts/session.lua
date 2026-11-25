@@ -292,6 +292,32 @@ _G.FrameStopBuffers = function()
   return n
 end
 
+-- _G.FrameBusyBuffers() — how many terminal buffers other than claude still
+-- have a job running in them: their shell has a child process. `frame stop`
+-- polls it after FrameStopBuffers so it quits nvim only once the dev servers
+-- have drained (or its timeout runs out). A durable buffer whose command was
+-- interrupted has fallen through to `exec zsh` — an idle shell, no children —
+-- so it counts as done; a bare `local` running something by hand counts until
+-- that job exits.
+_G.FrameBusyBuffers = function()
+  local claude_buf = FrameState.buf['claude']
+  local n = 0
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(buf) and buf ~= claude_buf
+        and vim.bo[buf].buftype == 'terminal' then
+      local ok, chan = pcall(function() return vim.b[buf].terminal_job_id end)
+      if ok and type(chan) == 'number' and chan > 0 then
+        local okp, pid = pcall(vim.fn.jobpid, chan)
+        if okp and type(pid) == 'number' and pid > 0 then
+          local kids = vim.fn.systemlist({ 'pgrep', '-P', tostring(pid) })
+          if vim.v.shell_error == 0 and #kids > 0 then n = n + 1 end
+        end
+      end
+    end
+  end
+  return n
+end
+
 -- frame_paste(chan, text) — write TEXT into a claude terminal as ONE paste.
 -- A macOS pty takes ~1 KB per read, so a longer raw write reaches claude in
 -- pieces, and its paste detection kept only the last piece (the start of a
@@ -1205,6 +1231,12 @@ else
   -- a shell's own claude (a terminal buffer, no way to run :commands) tears
   -- itself down.
   vim.api.nvim_create_user_command('FrameDown', function()
+    -- Teardown is deliberate: drop the durable record so `frame restore`
+    -- doesn't offer this frame back (frame_record_drop in lib/helpers.sh;
+    -- FRAME_STATEDIR is exported by bin/frame before boot).
+    local statedir = vim.env.FRAME_STATEDIR or ''
+    if statedir ~= '' then vim.fn.delete(statedir .. '/' .. name .. '-' .. topic .. '.json') end
+    vim.fn.delete(rundir .. '/' .. name .. '-' .. topic .. '.session')
     vim.cmd('qa!')
   end, { bang = true,
     desc = 'Tear down this casual frame (quit the session; the scratch dir is kept)' })

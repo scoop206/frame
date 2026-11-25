@@ -44,6 +44,10 @@ EOF
   # from each other and from real sessions. Short path (see sandbox note above).
   export FRAME_RUNDIR="/tmp/frame-test.$TNAME"
   mkdir -m 700 -p "$FRAME_RUNDIR"
+  # Durable frame records (frame restore) — private to the test too, never the
+  # real ~/.local/state/frame.
+  export FRAME_STATEDIR="$SANDBOX/state/frame"
+  unset XDG_STATE_HOME
   # Keep frame_open_window's workers-window recording out of the real /tmp —
   # a test run must never clobber (or read) a live session's window id.
   export FRAME_WORKERS_WINDOW="$SANDBOX/frame-workers.window"

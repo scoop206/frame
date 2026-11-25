@@ -26,7 +26,7 @@ if [[ "${1:-}" == "--server" ]]; then
     # to the shared logging below so a FAKE_NVIM_LOG argv trace (frame shell -d)
     # and a FAKE_NVIM_EXPR_LOG expr trace (ordering vs the buffer-stop RPC) still
     # capture the call exactly as before.
-    *qa!*) rm -f "$_sock" ;;
+    *qa!*) rm -f "$_sock"; _qa=1 ;;
     # The frame layer of `frame kv` lives in the session (FrameKv* in
     # layouts/session.lua). The stub keeps it in a <sock>.kv companion, in the
     # dump's own kind<TAB>key<TAB>value format; a <sock>.nokv companion makes the
@@ -59,6 +59,23 @@ if [[ "${1:-}" == "--server" ]]; then
     # the RPC fails, as an old layout's would.
     *FrameDebug*)
       [[ -f "$_sock.debug" ]] && { cat "$_sock.debug"; exit 0; }; exit 1 ;;
+    # `frame stop`: a <sock>.unsaved companion lists the session's unsaved file
+    # buffers (the getbufinfo probe); <sock>.stopbufs holds how many terminal
+    # buffers FrameStopBuffers signalled (default 0); FrameBusyBuffers says
+    # they've all drained (0). All logged when a trace is wanted.
+    *bufmodified*)
+      [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
+      [[ -f "$_sock.unsaved" ]] && print -rn -- "$(<$_sock.unsaved)"
+      exit 0 ;;
+    *FrameStopBuffers*)
+      [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
+      if [[ -f "$_sock.stopbufs" ]]; then print -rn -- "$(<$_sock.stopbufs)"
+      elif [[ -n "${FAKE_NVIM_EXPR_RESULT+x}" ]]; then print -rn -- "$FAKE_NVIM_EXPR_RESULT"
+      else print -rn -- 0; fi
+      exit 0 ;;
+    *FrameBusyBuffers*)
+      [[ -n "${FAKE_NVIM_EXPR_LOG:-}" ]] && print -r -- "$_expr" >> "$FAKE_NVIM_EXPR_LOG"
+      print -rn -- 0; exit 0 ;;
     *FrameInfo*)
       # A <sock>.hang companion stands in for an alive-but-unresponsive nvim:
       # the socket exists but the session never answers the RPC. Sleep well
@@ -197,5 +214,7 @@ if [[ -n "${FAKE_NVIM_LOG:-}" ]]; then
   } > "$FAKE_NVIM_LOG"
   exit 0
 fi
+# A :qa! with nothing else to record is just a quit that worked (frame stop).
+[[ -n "${_qa:-}" ]] && exit 0
 print -r -- "✗ test stub: unexpected nvim invocation: nvim $*" >&2
 exit 97
