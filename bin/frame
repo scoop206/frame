@@ -66,6 +66,12 @@
 #                                       in a new tab; --here uses this terminal.
 #                                       frame restore attaches these too
 #
+#     frame launchd install [--restore] | uninstall | status
+#                                       macOS login agent, the reboot safety net:
+#                                       frame stop on every frame at logout or
+#                                       shutdown; --restore also runs frame
+#                                       restore --all at login
+#
 #     frame spawn shell TOPIC [--req TEXT] [--timeout N] [--ephemeral]
 #                                       boot a shell frame into a tab group
 #
@@ -186,7 +192,7 @@ case "$cmd" in
   ls|list)
     source "$FRAME_ROOT/commands/ls.sh" "$@"
     ;;
-  init|shell|merge|push|services|status|name|notify|notifications|silence|focus|yolo|swarm|kv|claude|req|reply|deliver|inbox|spawn|view|stop|restore|attach)
+  init|shell|merge|push|services|status|name|notify|notifications|silence|focus|yolo|swarm|kv|claude|req|reply|deliver|inbox|spawn|view|stop|restore|attach|launchd)
     source "$FRAME_ROOT/commands/$cmd.sh" "$@"
     ;;
   notifier)

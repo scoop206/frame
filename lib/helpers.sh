@@ -16,7 +16,17 @@ FRAME_SERVICES_COMPOSE="$FRAME_ROOT/services/docker-compose.yml"
 # tmp_cleaner reaps files untouched for ~3 days and can then remove the emptied
 # dir. So writers go through frame_rundir(), which (re)creates it first. 0700
 # both tidies and sidesteps the world-writable-/tmp pre-creation footgun.
-: ${FRAME_RUNDIR:=/tmp/frame}
+#
+# Where: $XDG_RUNTIME_DIR/frame when the OS provides one (Linux: /run/user/UID —
+# per-user, 0700, tmpfs, cleared at logout), else /tmp/frame (macOS, like
+# tmux). The durable frame records are NOT here — see FRAME_STATEDIR below.
+if [[ -z "${FRAME_RUNDIR:-}" ]]; then
+  if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
+    FRAME_RUNDIR="$XDG_RUNTIME_DIR/frame"
+  else
+    FRAME_RUNDIR=/tmp/frame
+  fi
+fi
 export FRAME_RUNDIR
 
 frame_rundir() {
