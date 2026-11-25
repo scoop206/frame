@@ -38,7 +38,8 @@ local vite_port = vim.env.FRAME_VITE_PORT or ''
 -- re-ensures it via vim.fn.mkdir(rundir, 'p') first. Kept in sync with the shell
 -- default in lib/helpers.sh.
 local rundir = (vim.env.FRAME_RUNDIR ~= nil and vim.env.FRAME_RUNDIR ~= '')
-  and vim.env.FRAME_RUNDIR or '/tmp/frame'
+  and vim.env.FRAME_RUNDIR
+  or ((vim.env.XDG_RUNTIME_DIR or '') ~= '' and (vim.env.XDG_RUNTIME_DIR .. '/frame') or '/tmp/frame')
 
 -- Name the terminal window "<name> [ <topic> :<vite port> ]" so parallel
 -- Ghostty windows are tellable apart — bare name, the topic bracketed with the

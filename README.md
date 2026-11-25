@@ -30,6 +30,7 @@
 - [Frame Removal](#frame-removal)
   - [Teardown Safeguards](#teardown-safeguards)
 - [Stop and Restore](#stop-and-restore)
+  - [Surviving a reboot](#surviving-a-reboot)
 - [Notifications](#notifications)
   - [Fixing the banner badge](#fixing-the-banner-badge)
   - [Inbox filtering](#inbox-filtering)
@@ -82,7 +83,7 @@
 | `frame kv [get\|set\|unset …]`      | how far each frame's claude goes on its own (autocommit, merge/push/deploy on merge) plus your own keys; per frame, project, user  |
 
 `worktree` is a synonym for `wt`; `list` for `ls`.  
-Not shown here: `spawn`,
+Not shown here: `spawn`, `launchd`,
 `deliver`, `reply`, `view`, `status`, `name`, `notify`, `notifications`, `silence`, and every
 `--flag` — see `frame --help` ([full usage](docs/usage.md)).
 
@@ -363,7 +364,9 @@ Clear it by merging first (`frame merge`), or force through with
 `frame wt -d -f [TOPIC]` / `:FrameDown!`.
 
 These checks run _before_ nvim is quit, so a refusal never leaves you
-editor-less. Reaper output lands in `/tmp/frame/<name>-<topic>.teardown.log`.
+editor-less. Reaper output lands in `<rundir>/<name>-<topic>.teardown.log`, where the
+rundir is `$XDG_RUNTIME_DIR/frame` when your OS sets one (Linux) and
+`/tmp/frame` otherwise (macOS); `FRAME_RUNDIR` overrides it.
 
 ## Stop and Restore
 
@@ -399,6 +402,24 @@ Ghostty quitting, `:FrameQuit`, or `frame stop`.
   servers were restarted) and to wait for your go-ahead rather than carry on.
   `--print` prints those commands instead of opening tabs (the default off
   macOS); `--forget TOPIC|--all` drops records you don't want back.
+
+### Surviving a reboot
+
+A reboot ends every frame, but the records stay, so `frame restore --all` after
+you log back in reopens them all. To also shut them down cleanly first, install
+the optional login agent (macOS):
+
+```zsh
+frame launchd install            # frame stop on every frame at logout/shutdown
+frame launchd install --restore  # …and frame restore --all at login
+frame launchd status
+frame launchd uninstall
+```
+
+The agent stops every frame at once on launchd's SIGTERM. macOS allows only a
+few seconds for that, so it's best effort: a frame it doesn't reach still has
+its record and comes back as `died`. The first `--restore` asks you to let the
+agent control Ghostty. Its log is `$FRAME_STATEDIR/agent.log`.
 
 ## Notifications
 

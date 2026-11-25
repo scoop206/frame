@@ -73,6 +73,12 @@ Usage:
                                       in a new tab; --here uses this terminal.
                                       frame restore attaches these too
 
+    frame launchd install [--restore] | uninstall | status
+                                      macOS login agent, the reboot safety net:
+                                      frame stop on every frame at logout or
+                                      shutdown; --restore also runs frame
+                                      restore --all at login
+
     frame spawn shell TOPIC [--req TEXT] [--timeout N] [--ephemeral]
                                       boot a shell frame into a tab group
 
