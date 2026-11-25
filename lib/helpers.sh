@@ -27,6 +27,162 @@ frame_rundir() {
   print -r -- "$FRAME_RUNDIR"
 }
 
+# ── durable frame records ─────────────────────────────────────────────────────
+# The runtime dir is ephemera: a reboot (or tmp_cleaner) wipes it, and with it
+# every trace of which frames were open. The state dir is the opposite — one
+# small JSON record per frame that survives a Ghostty quit, a crash and a
+# reboot, so `frame restore` can bring the frame back where it left off:
+#
+#   $FRAME_STATEDIR/NAME-TOPIC.json
+#     name, topic      the frame's handle
+#     type             wt | shell — which command reboots it
+#     dir              the worktree (wt) or the shell frame's dir
+#     main_wt          the primary checkout (wt only)
+#     branch           the dir's branch when it booted ('' outside git)
+#     session          claude's current session id ('' before one started)
+#     booted_at        epoch seconds of the boot
+#     updated_at       epoch seconds of the last write
+#     stopped_at       set by `frame stop` (a deliberate stop); '' otherwise
+#
+# Written at boot (commands/wt.sh, commands/shell.sh) and rewritten at every
+# claude SessionStart (frame swarm --context) so `session` follows /clear and
+# resume chains. Teardown (frame wt -d, frame shell -d, a shell's :FrameDown)
+# deletes it; anything else that ends the session — a crash, a reboot, a
+# Ghostty quit, `frame stop`, :FrameQuit — leaves it behind, and a record
+# with no live frame is exactly what `frame restore` lists.
+#
+# Sockets and stamps stay in $FRAME_RUNDIR; only these records live here.
+# Overridable (like FRAME_RUNDIR) so the test sandbox points it at a private dir.
+: ${FRAME_STATEDIR:=${XDG_STATE_HOME:-$HOME/.local/state}/frame}
+export FRAME_STATEDIR
+zmodload -F zsh/datetime p:EPOCHSECONDS
+
+frame_record_file() {
+  # frame_record_file NAME TOPIC — the record's path (it may not exist).
+  print -r -- "$FRAME_STATEDIR/$1-$2.json"
+}
+
+_frame_json_str() {
+  # Escape $1 as the inside of a JSON string: backslash, quote, and the control
+  # characters a path or branch could conceivably carry.
+  local s=$1
+  s=${s//\\/\\\\}
+  s=${s//\"/\\\"}
+  s=${s//$'\n'/\\n}
+  s=${s//$'\t'/\\t}
+  s=${s//$'\r'/\\r}
+  print -rn -- "$s"
+}
+
+frame_record_read() {
+  # frame_record_read FILE — load FILE's fields into the assoc array REC
+  # (declare `typeset -A REC` first). Reads only the flat one-key-per-line
+  # shape frame_record_save writes, so no jq is needed; returns 1 when FILE is
+  # missing or holds no name/topic.
+  local _file=$1 _line _k _v
+  REC=()
+  [[ -r "$_file" ]] || return 1
+  while IFS= read -r _line; do
+    [[ "$_line" =~ '^ *"([a-z_]+)": *"(.*)",?$' ]] || continue
+    _k=$match[1] _v=$match[2]
+    # Unescape (reverse of _frame_json_str); \\ goes through a NUL placeholder
+    # so "\\n" (a literal backslash + n) isn't read as a newline.
+    _v=${_v//\\\\/$'\0'}
+    _v=${_v//\\\"/\"}
+    _v=${_v//\\n/$'\n'}
+    _v=${_v//\\t/$'\t'}
+    _v=${_v//\\r/$'\r'}
+    _v=${_v//$'\0'/\\}
+    REC[$_k]=$_v
+  done < "$_file"
+  [[ -n "${REC[name]:-}" && -n "${REC[topic]:-}" ]]
+}
+
+frame_record_write() {
+  # frame_record_write FILE KEY VALUE … — write the record atomically (temp
+  # file + rename, so a reader never sees half a record). Fields are written in
+  # the order given.
+  local _file=$1; shift
+  local _tmp="$_file.tmp.$$" _first=1
+  mkdir -p -- "${_file:h}" 2>/dev/null || return 1
+  {
+    print -r -- "{"
+    while (( $# >= 2 )); do
+      (( _first )) || print -r -- ","
+      print -rn -- "  \"$1\": \"$(_frame_json_str "$2")\""
+      _first=0
+      shift 2
+    done
+    print -r -- ""
+    print -r -- "}"
+  } > "$_tmp" 2>/dev/null || { rm -f -- "$_tmp"; return 1; }
+  mv -f -- "$_tmp" "$_file"
+}
+
+frame_record_save() {
+  # frame_record_save boot|session [SESSION_ID] — write this frame's record from
+  # the identity the boot exported (FRAME_NAME, FRAME_TOPIC, FRAME_MAIN_WT,
+  # FRAME_WT, FRAME_SHELL_DIR).
+  #   boot     at boot: a fresh booted_at, stopped_at cleared, session set to
+  #            SESSION_ID ('' for a fresh claude — its SessionStart fills it in)
+  #   session  at claude's SessionStart: session := SESSION_ID, every other
+  #            field refreshed but booted_at kept. Creates the record if it's
+  #            missing (a frame booted before records existed gets one on its
+  #            next SessionStart).
+  # Best-effort: a frame must boot even if the state dir can't be written.
+  local _mode=$1 _sid=${2:-}
+  local _name=${FRAME_NAME:-} _topic=${FRAME_TOPIC:-}
+  [[ -n "$_name" && -n "$_topic" ]] || return 0
+  local _file=$(frame_record_file "$_name" "$_topic")
+  local _type _dir _main=${FRAME_MAIN_WT:-} _branch _now=$EPOCHSECONDS _booted=$EPOCHSECONDS
+  if [[ -n "$_main" ]]; then
+    _type=wt _dir=${FRAME_WT:-$_main}
+  else
+    _type=shell _dir=${FRAME_SHELL_DIR:-}
+  fi
+  _branch=$(git -C "$_dir" rev-parse --abbrev-ref HEAD 2>/dev/null) || _branch=""
+  if [[ "$_mode" == session ]]; then
+    typeset -A REC
+    if frame_record_read "$_file"; then
+      _booted=${REC[booted_at]:-$_now}
+    fi
+  fi
+  frame_record_write "$_file" \
+    name "$_name" topic "$_topic" type "$_type" dir "$_dir" main_wt "$_main" \
+    branch "$_branch" session "$_sid" booted_at "$_booted" updated_at "$_now" \
+    stopped_at "" 2>/dev/null || true
+  return 0
+}
+
+frame_record_set() {
+  # frame_record_set NAME TOPIC KEY VALUE — change one field of an existing
+  # record (no-op when there's none). `frame stop` stamps stopped_at with it.
+  local _file=$(frame_record_file "$1" "$2") _k=$3 _v=$4 _key
+  typeset -A REC
+  frame_record_read "$_file" || return 0
+  REC[$_k]=$_v
+  REC[updated_at]=$EPOCHSECONDS
+  local -a _kv=()
+  for _key in name topic type dir main_wt branch session booted_at updated_at stopped_at; do
+    _kv+=("$_key" "${REC[$_key]:-}")
+  done
+  frame_record_write "$_file" "${_kv[@]}"
+}
+
+frame_record_drop() {
+  # frame_record_drop NAME TOPIC — teardown: the frame is gone on purpose, so
+  # there's nothing to restore. Also reaps the legacy rundir .session pointer.
+  rm -f -- "$(frame_record_file "$1" "$2")" "$FRAME_RUNDIR/$1-$2.session"
+}
+
+frame_session_alive() {
+  # frame_session_alive NAME TOPIC — 0 when that frame's nvim answers on its
+  # socket. A dead socket (crash debris) or no socket is 1.
+  local _sock="$FRAME_RUNDIR/$1-$2.nvim"
+  [[ -S "$_sock" ]] || return 1
+  frame_rpc_expr "$_sock" 'v:lua.FrameInfo()' >/dev/null 2>&1
+}
+
 # ── status markers ────────────────────────────────────────────────────────────
 # Colored only when the stream is a terminal (✗ prints to stderr, ✓/▶/⚠ to
 # stdout) and NO_COLOR is unset — piped output, logs, and the session.lua

@@ -29,6 +29,7 @@
 - [Frame Merge](#frame-merge)
 - [Frame Removal](#frame-removal)
   - [Teardown Safeguards](#teardown-safeguards)
+- [Stop and Restore](#stop-and-restore)
 - [Notifications](#notifications)
   - [Fixing the banner badge](#fixing-the-banner-badge)
   - [Inbox filtering](#inbox-filtering)
@@ -66,6 +67,8 @@
 | `frame shell [TOPIC] --find "WORDS"` | find a past claude session by what you typed in it, pick one, and resume it in the dir it ran in (`--resume ID` for a known id)    |
 | `frame shell [TOPIC] --recent`     | browse your most recent claude sessions (first message of each), pick one, and resume it (worktree sessions are left out)           |
 | `frame ls`                          | list every live frame across projects                                                                                              |
+| `frame stop [TOPIC\|--all]`         | shut a frame down gracefully and keep it restorable (dev servers drained, nvim quit)                                              |
+| `frame restore [TOPIC\|--all]`      | reboot frames that went down without a teardown (crash, reboot, Ghostty quit, `frame stop`), claude resumed                       |
 | `frame merge [TOPIC]`               | merge a topic branch into the primary branch                                                                                       |
 | `frame push`                        | push the primary branch to origin                                                                                                  |
 | `frame claude TEXT…`                | ask this frame's claude, block for the answer                                                                                      |
@@ -360,6 +363,31 @@ Clear it by merging first (`frame merge`), or force through with
 
 These checks run _before_ nvim is quit, so a refusal never leaves you
 editor-less. Reaper output lands in `/tmp/frame/<name>-<topic>.teardown.log`.
+
+## Stop and Restore
+
+Every frame keeps a small durable record —
+`${XDG_STATE_HOME:-~/.local/state}/frame/<name>-<topic>.json` (override with
+`FRAME_STATEDIR`) — holding its type (wt or shell), dir, branch, and claude's
+current session id. It's written at boot and refreshed at every claude
+SessionStart. Teardown (`frame wt -d`, `frame shell -d`, `:FrameDown`) deletes
+it; anything else that ends a frame leaves it behind: a crash, a reboot,
+Ghostty quitting, `:FrameQuit`, or `frame stop`.
+
+- `frame stop [TOPIC|NAME/TOPIC|--all]` — a graceful shutdown that keeps the
+  record. It Ctrl-C's every terminal buffer except claude (the same reap
+  teardown uses), waits for them to exit (`FRAME_STOP_TIMEOUT`, default 10s),
+  then quits nvim. It refuses when a file buffer has unsaved changes; `-f`
+  stops anyway.
+- `frame restore` lists the frames with a record but no live session (STATE is
+  `stopped` or `died`) and, at a terminal, asks which to bring back.
+  `frame restore TOPIC` or `--all` skips the question. Each one reboots in its
+  own Ghostty tab — `frame wt --resume ID` in its worktree, or
+  `frame shell -C DIR TOPIC --resume ID` — and its claude is told at
+  SessionStart that it was interrupted (its last turn may be cut off, dev
+  servers were restarted) and to wait for your go-ahead rather than carry on.
+  `--print` prints those commands instead of opening tabs (the default off
+  macOS); `--forget TOPIC|--all` drops records you don't want back.
 
 ## Notifications
 

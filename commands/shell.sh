@@ -107,6 +107,9 @@ if [[ "${1:-}" == "-d" ]]; then
   fi
 
   SOCKET="$FRAME_RUNDIR/shell-$TOPIC.nvim"
+  # Teardown is deliberate, so the durable record goes too — up or not, this
+  # frame is no longer one `frame restore` should bring back.
+  frame_record_drop shell "$TOPIC"
   if [[ -S "$SOCKET" ]]; then
     echo "$RUN_MARK tearing down shell $TOPIC — quitting the session (:qa! → $SOCKET)…"
     # <Cmd>qa!<CR> runs from any mode — the session sits in terminal-insert,
@@ -412,6 +415,9 @@ if [[ -n "$RESUME_ID" ]]; then
   frame_bridge_transcript "$RESUME_ID" "$DIR" || true
   echo "$OK_MARK resuming session $RESUME_ID in $DIR"
 fi
+
+# Durable record for `frame restore` (see frame_record_save; wt.sh does the same).
+frame_record_save boot "$RESUME_ID"
 
 # Refuse before exec if a boot-critical dependency is missing (see frame_require).
 # A shell frame has no git repo, so git isn't required; claude only when the

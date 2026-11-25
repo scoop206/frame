@@ -278,6 +278,28 @@ EOF
   print -r -- "──────────────────────────────────────────────────────"
 }
 
+# ── after a restore ───────────────────────────────────────────────────────────
+
+frame_restore_note() {
+  # Context for a claude that `frame restore` just resumed: its frame went down
+  # without a teardown (crash, reboot, Ghostty quit, frame stop), so the world
+  # it remembers is stale. Hold for the human rather than pick the work back up.
+  cat <<'EOF'
+── frame restore ─────────────────────────────────────
+This frame was just RESTORED: it went down without a teardown
+(a crash, a reboot, Ghostty quitting, or `frame stop`) and
+`frame restore` rebooted it, resuming this conversation.
+• Your last turn may have been cut off mid-way — a command or
+  edit you think finished may not have. Check before relying on it.
+• Dev servers and other terminal buffers were restarted fresh;
+  anything you had running by hand there is gone.
+• Do NOT continue the earlier work on your own. Wait for the
+  human's go-ahead, then re-check state (git status, running
+  services) before acting.
+──────────────────────────────────────────────────────
+EOF
+}
+
 # ── setting the dial ──────────────────────────────────────────────────────────
 
 _swarm_set() {
@@ -305,13 +327,25 @@ case "${1:-}" in
       if [[ "$_hook_json" =~ '"source"[[:space:]]*:[[:space:]]*"([a-z]+)"' ]]; then _hook_source="${match[1]}"; fi
       if [[ "$_hook_json" =~ '"session_id"[[:space:]]*:[[:space:]]*"([A-Za-z0-9-]+)"' ]]; then _hook_sid="${match[1]}"; fi
     fi
-    # Record this frame's CURRENT session id so `frame wt --from TOPIC` can
-    # resolve a sibling's live session by name. This is the authoritative source
-    # (see commands/wt.sh): it survives resume chains, where the transcript keeps
-    # its origin frame's project key and a path-scan would come up empty. Runs at
-    # EVERY level — recording the id is independent of context injection.
+    # Record this frame's CURRENT session id in its durable record
+    # ($FRAME_STATEDIR/<name>-<topic>.json, see frame_record_save) so `frame wt
+    # --from TOPIC` can resolve a sibling's live session by name and `frame
+    # restore` can resume it after a crash or reboot. This is the authoritative
+    # source (see commands/wt.sh): it survives resume chains, where the
+    # transcript keeps its origin frame's project key and a path-scan would
+    # come up empty. Runs at EVERY level — recording the id is independent of
+    # context injection.
     if [[ -n "$_hook_sid" && -n "${FRAME_NAME:-}" && -n "${FRAME_TOPIC:-}" ]]; then
-      print -r -- "$_hook_sid" > "$FRAME_RUNDIR/$FRAME_NAME-$FRAME_TOPIC.session" 2>/dev/null || true
+      frame_record_save session "$_hook_sid"
+    fi
+    # A frame `frame restore` just rebooted carries a one-shot stamp: tell its
+    # resumed claude what happened, at every level (it's about this session's
+    # own state, not frame-awareness). Consumed here so a later /clear or
+    # compaction doesn't repeat it.
+    _restored="$FRAME_RUNDIR/${FRAME_NAME:-}-${FRAME_TOPIC:-}.restored"
+    if [[ -n "${FRAME_NAME:-}" && -f "$_restored" ]]; then
+      rm -f "$_restored"
+      frame_restore_note
     fi
     # Silent no-op below level 1 (or when the key predates this feature → empty
     # → 0); best-effort like every frame hook — never fail. On a resume the

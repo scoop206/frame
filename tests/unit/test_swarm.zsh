@@ -171,15 +171,48 @@ test_context_records_session_id_even_when_off() {
   export FRAME_NAME=flipnem FRAME_TOPIC=inspect
   run_context_hook '{"session_id":"sid-abc-123","source":"startup","hook_event_name":"SessionStart"}'
   assert_status 0
-  assert_file_exists "$FRAME_RUNDIR/flipnem-inspect.session"
-  assert_eq "$(<$FRAME_RUNDIR/flipnem-inspect.session)" "sid-abc-123"
+  assert_file_exists "$FRAME_STATEDIR/flipnem-inspect.json"
+  assert_contains "$(<$FRAME_STATEDIR/flipnem-inspect.json)" '"session": "sid-abc-123"'
+  assert_file_absent "$FRAME_RUNDIR/flipnem-inspect.session"   # the legacy pointer is gone
 }
 
 test_context_no_session_id_writes_nothing() {
   export FRAME_NAME=flipnem FRAME_TOPIC=inspect
   run_context_hook '{"source":"startup"}'
   assert_status 0
-  assert_file_absent "$FRAME_RUNDIR/flipnem-inspect.session"
+  assert_file_absent "$FRAME_STATEDIR/flipnem-inspect.json"
+}
+
+test_context_updates_record_keeps_booted_at() {
+  # A record written at boot keeps its booted_at and identity; SessionStart
+  # only moves the session id along (a /clear starts a new one).
+  mkdir -p "$SANDBOX/sh"
+  export FRAME_NAME=shell FRAME_TOPIC=notes FRAME_SHELL_DIR="$SANDBOX/sh" FRAME_MAIN_WT=""
+  FRAME_ROOT=$FRAME_CHECKOUT source "$FRAME_CHECKOUT/lib/helpers.sh"
+  typeset -A REC
+  frame_record_write "$FRAME_STATEDIR/shell-notes.json" name shell topic notes type shell \
+    dir "$SANDBOX/sh" main_wt "" branch "" session "" booted_at 1000 updated_at 1000 stopped_at ""
+  run_context_hook '{"session_id":"sid-new","source":"clear"}'
+  assert_status 0
+  frame_record_read "$FRAME_STATEDIR/shell-notes.json"
+  assert_eq "${REC[session]}" sid-new
+  assert_eq "${REC[booted_at]}" 1000
+  assert_eq "${REC[type]}" shell
+  assert_eq "${REC[dir]}" "$SANDBOX/sh"
+}
+
+test_context_restored_stamp_injects_note_once() {
+  # `frame restore` leaves a one-shot stamp; the resumed claude is told it was
+  # interrupted and to wait — even with swarm off — and only once.
+  export FRAME_NAME=flipnem FRAME_TOPIC=inspect
+  : > "$FRAME_RUNDIR/flipnem-inspect.restored"
+  run_context_hook '{"session_id":"sid-1","source":"resume"}'
+  assert_status 0
+  assert_contains "$OUT" "RESTORED"
+  assert_contains "$OUT" "Wait for the"
+  assert_file_absent "$FRAME_RUNDIR/flipnem-inspect.restored"
+  run_context_hook '{"session_id":"sid-1","source":"compact"}'
+  assert_not_contains "$OUT" "RESTORED"
 }
 
 test_context_resume_source_adds_reorientation() {
