@@ -20,6 +20,14 @@
 
 vim.o.hidden = true
 
+-- Booted headless (frame_exec_session), there's no window yet to size the
+-- terminal buffers from — nvim would open them at 80x24 and claude would
+-- redraw when the window attaches. The boot passes its terminal's size along.
+local ui_cols, ui_lines = tonumber(vim.env.FRAME_UI_COLS or ''), tonumber(vim.env.FRAME_UI_LINES or '')
+if #vim.api.nvim_list_uis() == 0 and ui_cols and ui_lines then
+  pcall(function() vim.o.columns = ui_cols; vim.o.lines = ui_lines end)
+end
+
 local name = vim.env.FRAME_NAME or '?'
 local topic = vim.env.FRAME_TOPIC or '?'
 local vite_port = vim.env.FRAME_VITE_PORT or ''
@@ -95,11 +103,18 @@ end
 -- ls just renders a blank COMMS column for them (frame_live_frames tolerates a
 -- missing 5th field). ls owns the display policy (thresholds, formatting); we
 -- ship raw numbers so that stays in the presentation layer.
+--
+-- `uis` (6th, appended the same way) is how many windows are attached. The
+-- session runs as a headless server and each Ghostty tab showing it is a
+-- client (lib/helpers.sh frame_exec_session), so 0 = detached: alive with no
+-- window. `frame ls` marks those, and `frame attach` / `frame restore` give
+-- them a window again.
 _G.FrameInfo = function()
   local b = FrameState.broker
   local age = b.inflight_since and (os.time() - b.inflight_since) or ''
   local health = table.concat({ age, #b.queue, #FrameState.inbox }, ',')
-  return table.concat({ name, topic, vite_port, FrameState.status, health }, '\t')
+  return table.concat({ name, topic, vite_port, FrameState.status, health,
+    #vim.api.nvim_list_uis() }, '\t')
 end
 
 -- _G.FrameReload(path) — the whole editor-reload feature: reload PATH from disk

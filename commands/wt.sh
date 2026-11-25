@@ -409,6 +409,9 @@ fi
 # can't tell them apart. Refuse before creating/booting rather than let the
 # collision exist. (Rebooting this same frame is exempt — see the helper.)
 frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
+# Already running? A detached frame (no window) gets this terminal as its
+# window; one open elsewhere isn't booted twice (see frame_reattach_or_refuse).
+frame_reattach_or_refuse "$NAME" "$TOPIC" || exit 1
 
 # Topic is clear — now materialize the worktree for the `frame wt TOPIC` form.
 if (( $# >= 1 )); then
@@ -537,4 +540,6 @@ _req=(zsh git nvim)
 [[ " $FRAME_BUFFERS " == *" claude "* ]] && _req+=(claude)
 frame_require "$_req[@]"
 
-exec nvim -S "$FRAME_ROOT/layouts/session.lua"
+# nvim runs as a headless server; this terminal becomes its window (a client),
+# so the frame outlives the window (see frame_exec_session).
+frame_exec_session

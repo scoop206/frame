@@ -60,12 +60,18 @@ Usage:
                                       on unsaved buffers (-f overrides)
     frame restore [TOPIC|NAME/TOPIC|--all] [--print]
                                       reboot frames that went down without a
-                                      teardown (crash, reboot, Ghostty quit,
-                                      frame stop), each in its own tab, claude
-                                      resumed and told to wait for you. Bare
-                                      form lists them and asks which
+                                      teardown (crash, reboot, frame stop),
+                                      each in its own tab, claude resumed and
+                                      told to wait for you; attach detached
+                                      ones. Bare form lists them, asks which
     frame restore --forget TOPIC|--all
                                       drop a frame's record instead
+    frame attach [TOPIC|NAME/TOPIC] [--here]
+                                      reopen a window for a detached frame —
+                                      one still running after its tab closed or
+                                      Ghostty quit (frame ls: "detached"). Each
+                                      in a new tab; --here uses this terminal.
+                                      frame restore attaches these too
 
     frame spawn shell TOPIC [--req TEXT] [--timeout N] [--ephemeral]
                                       boot a shell frame into a tab group

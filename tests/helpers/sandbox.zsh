@@ -48,6 +48,12 @@ EOF
   # real ~/.local/state/frame.
   export FRAME_STATEDIR="$SANDBOX/state/frame"
   unset XDG_STATE_HOME
+  # Frames boot as a headless nvim server + a --remote-ui window by default
+  # (frame_exec_session). Most tests assert on the single `nvim -S` launch the
+  # stub records, so they keep the classic in-terminal shape; the headless
+  # path's own tests set FRAME_HEADLESS=1.
+  export FRAME_HEADLESS=0
+  unset FRAME_UI_COLS FRAME_UI_LINES
   # Keep frame_open_window's workers-window recording out of the real /tmp —
   # a test run must never clobber (or read) a live session's window id.
   export FRAME_WORKERS_WINDOW="$SANDBOX/frame-workers.window"

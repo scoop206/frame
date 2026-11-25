@@ -220,7 +220,7 @@ test_restore_opens_a_tab_and_records_it() {
   assert_contains "$OUT" "restoring shell/notes (resuming session sid-n)"
   assert_eq "$(<$FRAME_RUNDIR/shell-notes.nvim.gtab)" "11 22"
   assert_contains "$(<$SANDBOX/osa.log)" "FRAME_SPAWNED=1"
-  assert_contains "$(<$SANDBOX/osa.log)" "spawn close-tab notes"
+  assert_contains "$(<$SANDBOX/osa.log)" "spawn close-tab shell/notes"
 }
 frame_is_macos_here() { [[ "$(uname -s)" == Darwin ]]; }
 
