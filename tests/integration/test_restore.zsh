@@ -244,6 +244,15 @@ test_backfill_records_live_frames_without_one() {
   assert_eq "$(field $FRAME_STATEDIR/shell-has.json session)" sid-h   # untouched
 }
 
+test_restore_warns_about_unrecorded_live_frames() {
+  plant_live shell norec
+  run_frame restore
+  assert_status 0
+  assert_contains "$OUT" "1 running frame(s) have no record"
+  assert_contains "$OUT" "shell/norec"
+  assert_contains "$OUT" "frame restore --backfill"
+}
+
 test_backfill_wt_frame() {
   plant_live proj topic
   export FAKE_NVIM_EXPR_RESULT="$SANDBOX/proj"$'\t'"$SANDBOX/_proj-topic"$'\t'
