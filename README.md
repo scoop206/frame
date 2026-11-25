@@ -402,6 +402,9 @@ Ghostty quitting, `:FrameQuit`, or `frame stop`.
   servers were restarted) and to wait for your go-ahead rather than carry on.
   `--print` prints those commands instead of opening tabs (the default off
   macOS); `--forget TOPIC|--all` drops records you don't want back.
+- `frame restore --backfill` writes a record for every running frame that has
+  none, because it booted before records existed (otherwise it gets one at its
+  claude's next session start).
 
 ### Surviving a reboot
 
