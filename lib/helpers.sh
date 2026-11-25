@@ -175,6 +175,102 @@ frame_record_drop() {
   rm -f -- "$(frame_record_file "$1" "$2")" "$FRAME_RUNDIR/$1-$2.session"
 }
 
+frame_session_uis() {
+  # frame_session_uis NAME TOPIC — print how many windows are attached to that
+  # frame's nvim (0 = detached). Fails when the frame isn't up, or predates the
+  # probe (a session booted before frames ran headless always has its window).
+  local _sock="$FRAME_RUNDIR/$1-$2.nvim" _rec _f
+  [[ -S "$_sock" ]] || return 1
+  _rec=$(frame_rpc_expr "$_sock" 'v:lua.FrameInfo()') || return 1
+  _f=("${(@ps:\t:)_rec}")
+  [[ "${_f[6]:-}" == <-> ]] || return 1
+  print -r -- "$_f[6]"
+}
+
+frame_exec_session() {
+  # frame_exec_session — the last step of frame wt / frame shell: start this
+  # frame's nvim and put its window in this terminal. FRAME_NAME/FRAME_TOPIC
+  # and the rest of the layout's env must be exported already.
+  #
+  # The nvim is a headless SERVER in a session of its own (setsid, via perl —
+  # macOS ships no setsid(1)), so no terminal owns it: closing the Ghostty tab
+  # or quitting Ghostty SIGHUPs only the window. This terminal becomes a CLIENT
+  # (nvim --remote-ui). The frame — claude, dev servers, broker — keeps running
+  # detached, and `frame attach` gives it a window again. Quitting nvim (:qa!,
+  # frame stop, teardown) ends the server, and every client with it.
+  #
+  # FRAME_HEADLESS=0 keeps the old shape — nvim runs IN this terminal and dies
+  # with it — for a terminal or setup where the client/server split misbehaves.
+  local _layout="$FRAME_ROOT/layouts/session.lua"
+  if [[ "${FRAME_HEADLESS:-1}" == 0 ]]; then
+    exec nvim -S "$_layout"
+  fi
+  frame_require perl
+  local _sock="$FRAME_RUNDIR/$FRAME_NAME-$FRAME_TOPIC.nvim"
+  local _log="$(frame_rundir)/$FRAME_NAME-$FRAME_TOPIC.server.log"
+  # Start the terminal buffers at this window's size, so claude doesn't first
+  # render at the headless default (80x24) and redraw when the window attaches.
+  if [[ -t 1 ]]; then
+    export FRAME_UI_COLS=${COLUMNS:-$(tput cols 2>/dev/null || true)}
+    export FRAME_UI_LINES=${LINES:-$(tput lines 2>/dev/null || true)}
+  fi
+  perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV or die "exec $ARGV[0]: $!\n"' \
+    nvim --headless -S "$_layout" </dev/null >"$_log" 2>&1 &
+  local _pid=$! _i
+  for (( _i = 0; _i < ${FRAME_SERVER_TIMEOUT:-15} * 10; _i++ )); do
+    [[ -S "$_sock" ]] && break
+    kill -0 $_pid 2>/dev/null || break
+    sleep 0.1
+  done
+  if [[ ! -S "$_sock" ]]; then
+    echo "$X_MARK frame's nvim didn't come up (no socket at $_sock)" >&2
+    [[ -s "$_log" ]] && sed 's/^/    /' "$_log" | tail -20 >&2
+    echo "  log: $_log  (FRAME_HEADLESS=0 runs nvim in this terminal instead)" >&2
+    exit 1
+  fi
+  exec nvim --remote-ui --server "$_sock"
+}
+
+frame_attach_here() {
+  # frame_attach_here NAME TOPIC — give a detached frame THIS terminal as its
+  # window: re-record the Ghostty tab (focus / the banner click), set the title,
+  # and become its client. Never returns.
+  local _name=$1 _topic=$2
+  set_title "$(frame_base_title "$_name" "$_topic")"
+  frame_record_gtab "$_name" "$_topic"
+  exec nvim --remote-ui --server "$FRAME_RUNDIR/$_name-$_topic.nvim"
+}
+
+frame_open_frame_tab() {
+  # frame_open_frame_tab NAME TOPIC CMD — open a Ghostty tab (the workers
+  # window, as frame spawn does) running CMD for frame NAME/TOPIC, record the
+  # tab's ids for focus/close-tab, and close the tab once CMD exits cleanly.
+  # FRAME_SPAWNED=1 tells the boot not to re-record the front window (this tab
+  # isn't frontmost). Returns 1 when no tab could be opened.
+  local _name=$1 _topic=$2 _cmd=$3 _ids
+  local _boot="FRAME_SPAWNED=1 $_cmd && ${(q)FRAME_ROOT}/bin/frame spawn close-tab ${(q)_name}/${(q)_topic}"
+  _ids=$(frame_open_window "$_boot") || return 1
+  [[ -n "$_ids" ]] && print -r -- "$_ids" > "$(frame_rundir)/$_name-$_topic.nvim.gtab"
+  return 0
+}
+
+frame_reattach_or_refuse() {
+  # frame_reattach_or_refuse NAME TOPIC — at the top of a boot: if that frame
+  # is already running, don't boot a twin. Detached (no window) → attach this
+  # terminal to it. Open in a window → say so and fail. Returns 0 when it's not
+  # running (go ahead and boot).
+  local _name=$1 _topic=$2 _uis
+  frame_session_alive "$_name" "$_topic" || return 0
+  if _uis=$(frame_session_uis "$_name" "$_topic") && (( _uis == 0 )); then
+    frame_guard_nested || return 1
+    echo "$OK_MARK $_name/$_topic is already running, detached — attaching this window to it"
+    frame_attach_here "$_name" "$_topic"
+  fi
+  echo "$X_MARK $_name/$_topic is already running in another window — switch to it" >&2
+  echo "  (frame focus $_name/$_topic), or stop it first: frame stop $_name/$_topic" >&2
+  return 1
+}
+
 frame_session_alive() {
   # frame_session_alive NAME TOPIC — 0 when that frame's nvim answers on its
   # socket. A dead socket (crash debris) or no socket is 1.
@@ -1754,21 +1850,21 @@ frame_live_frames() {
   # it return only 4 fields, so we peel status off as a bounded field and default
   # health to '' when no 5th field is present — never re-emitting status as
   # health (a bare ${_rec#*sep} returns the string unchanged when sep is absent).
-  local _sock _rec _name _topic _port _status _health
+  #
+  # `uis` is FrameInfo's 6th field: how many windows (UIs) are attached. A
+  # frame's nvim runs as a headless server and its Ghostty tab is a client
+  # (frame_exec_session), so 0 means DETACHED — alive, with no window (Ghostty
+  # quit, or the tab closed). '' for a session that predates the field.
+  local _sock _rec _name _topic _port _status _health _uis _f
   for _sock in $FRAME_RUNDIR/*.nvim(N); do
     [[ -S "$_sock" ]] || continue
     _rec=$(frame_rpc_expr "$_sock" 'v:lua.FrameInfo()') || continue
     [[ -n "$_rec" ]] || continue
-    _name=${_rec%%$'\t'*};  _rec=${_rec#*$'\t'}
-    _topic=${_rec%%$'\t'*}; _rec=${_rec#*$'\t'}
-    _port=${_rec%%$'\t'*};  _rec=${_rec#*$'\t'}
-    if [[ "$_rec" == *$'\t'* ]]; then   # 5-field (with health) vs. legacy 4-field
-      _status=${_rec%%$'\t'*}; _health=${_rec#*$'\t'}
-    else
-      _status=$_rec; _health=''
-    fi
+    _f=("${(@ps:\t:)_rec}")   # keeps empty fields, unlike read
+    _name=$_f[1] _topic=${_f[2]:-} _port=${_f[3]:-} _status=${_f[4]:-}
+    _health=${_f[5]:-} _uis=${_f[6]:-}
     [[ -n "$_name" ]] || continue
-    print -r -- "$_name	$_topic	$_port	$_status	$_health"
+    print -r -- "$_name	$_topic	$_port	$_status	$_health	$_uis"
   done
 }
 

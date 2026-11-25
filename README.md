@@ -68,6 +68,7 @@
 | `frame shell [TOPIC] --recent`     | browse your most recent claude sessions (first message of each), pick one, and resume it (worktree sessions are left out)           |
 | `frame ls`                          | list every live frame across projects                                                                                              |
 | `frame stop [TOPIC\|--all]`         | shut a frame down gracefully and keep it restorable (dev servers drained, nvim quit)                                              |
+| `frame attach [TOPIC]`              | reopen a window for a frame still running after its tab closed or Ghostty quit                                                     |
 | `frame restore [TOPIC\|--all]`      | reboot frames that went down without a teardown (crash, reboot, Ghostty quit, `frame stop`), claude resumed                       |
 | `frame merge [TOPIC]`               | merge a topic branch into the primary branch                                                                                       |
 | `frame push`                        | push the primary branch to origin                                                                                                  |
@@ -366,6 +367,15 @@ editor-less. Reaper output lands in `/tmp/frame/<name>-<topic>.teardown.log`.
 
 ## Stop and Restore
 
+A frame outlives its window. Its nvim runs as a headless server in a session of
+its own, and the Ghostty tab is only a client (`nvim --remote-ui`). Closing the
+tab, `:detach`, or quitting Ghostty closes the window and nothing else: claude
+keeps working, the dev servers keep serving, and `frame ls` shows the frame as
+`detached`. `frame attach [TOPIC]` reopens it in a new tab (`--here` uses the
+terminal you're in), and `frame wt TOPIC` / `frame shell TOPIC` on a detached
+frame attach to it instead of booting a second copy. Set `FRAME_HEADLESS=0` to
+run nvim inside the terminal as before, where it dies with the window.
+
 Every frame keeps a small durable record —
 `${XDG_STATE_HOME:-~/.local/state}/frame/<name>-<topic>.json` (override with
 `FRAME_STATEDIR`) — holding its type (wt or shell), dir, branch, and claude's
@@ -380,7 +390,8 @@ Ghostty quitting, `:FrameQuit`, or `frame stop`.
   then quits nvim. It refuses when a file buffer has unsaved changes; `-f`
   stops anyway.
 - `frame restore` lists the frames with a record but no live session (STATE is
-  `stopped` or `died`) and, at a terminal, asks which to bring back.
+  `stopped` or `died`), plus the `detached` ones, and at a terminal asks which
+  to bring back. A detached frame is attached; the rest are rebooted.
   `frame restore TOPIC` or `--all` skips the question. Each one reboots in its
   own Ghostty tab — `frame wt --resume ID` in its worktree, or
   `frame shell -C DIR TOPIC --resume ID` — and its claude is told at

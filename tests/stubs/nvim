@@ -10,7 +10,33 @@
 # terminal-capability probe). Peel a leading --headless so the RPC check
 # below still sees --server as $1; the wt editor launch (`nvim -S …`) never
 # passes it, so this is a no-op there.
-[[ "${1:-}" == "--headless" ]] && shift
+_headless=""
+[[ "${1:-}" == "--headless" ]] && { shift; _headless=1; }
+# The headless SERVER launch (frame_exec_session: `nvim --headless -S LAYOUT`,
+# detached). With FAKE_NVIM_SERVE_LOG set, record its argv/cwd/env there and
+# stand up the frame's socket — a FrameInfo companion with 0 windows — as the
+# real layout's serverstart would. Then exit: the "server" is just the socket.
+if [[ -n "$_headless" && "${1:-}" == -S && -n "${FAKE_NVIM_SERVE_LOG:-}" ]]; then
+  {
+    print -r -- "argv: --headless $*"
+    print -r -- "cwd: $PWD"
+    env | grep -E '^FRAME_' | sort
+  } > "$FAKE_NVIM_SERVE_LOG"
+  _s="$FRAME_RUNDIR/$FRAME_NAME-$FRAME_TOPIC.nvim"
+  python3 -c 'import socket,sys
+s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1]); s.close()' "$_s"
+  printf '%s\t%s\t\t\t\t0\n' "$FRAME_NAME" "$FRAME_TOPIC" > "$_s.info"
+  exit 0
+fi
+# The window: `nvim --remote-ui --server SOCK`. FAKE_NVIM_UI_LOG records it.
+if [[ "${1:-}" == --remote-ui ]]; then
+  if [[ -n "${FAKE_NVIM_UI_LOG:-}" ]]; then
+    print -r -- "argv: $*" >> "$FAKE_NVIM_UI_LOG"
+    exit 0
+  fi
+  print -r -- "✗ test stub: unexpected nvim --remote-ui: nvim $*" >&2
+  exit 97
+fi
 # RPC mode (frame status / notify / ls use `nvim --server SOCK --remote-expr EXPR`).
 if [[ "${1:-}" == "--server" ]]; then
   _sock=$2

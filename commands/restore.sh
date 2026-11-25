@@ -1,4 +1,5 @@
-# frame restore — bring back frames that went down without a teardown.
+# frame restore — bring back frames that went down without a teardown, or
+# that are still running but lost their window.
 #
 #   frame restore                  list them; at a terminal, pick which to reboot
 #   frame restore TOPIC            reboot that one (a topic, or NAME/TOPIC)
@@ -12,7 +13,9 @@
 # frame_record_save in lib/helpers.sh). Teardown deletes it; anything else that
 # ends a frame — a crash, a reboot, Ghostty quitting, `frame stop`, :FrameQuit
 # — leaves it. A record with no live frame behind it is what this lists:
-# STATE is "stopped" (frame stop) or "died" (everything else).
+# STATE is "stopped" (frame stop) or "died" (everything else). A frame that's
+# still running with no window (Ghostty quit, its tab closed) is listed too,
+# as "detached": restoring it just attaches a tab (frame attach), no reboot.
 #
 # Each one reboots in its own Ghostty tab (the workers window, as frame spawn
 # opens them) with the right form:
@@ -53,12 +56,17 @@ fi
 frame_is_macos || PRINT=1
 
 # ── the restorable frames ─────────────────────────────────────────────────────
-# One row per record whose frame isn't live: file<TAB>name<TAB>topic, sorted.
+# One row per record whose frame isn't live — or is live but detached (no
+# window): name<TAB>topic<TAB>file, sorted. DETACHED marks the latter.
 typeset -a DEAD
-typeset -A REC
+typeset -A REC DETACHED
 for _f in $FRAME_STATEDIR/*.json(N); do
   frame_record_read "$_f" || continue
-  frame_session_alive "${REC[name]}" "${REC[topic]}" && continue
+  if frame_session_alive "${REC[name]}" "${REC[topic]}"; then
+    _uis=$(frame_session_uis "${REC[name]}" "${REC[topic]}") || continue
+    (( _uis == 0 )) || continue
+    DETACHED[$_f]=1
+  fi
   DEAD+=("${REC[name]}	${REC[topic]}	$_f")
 done
 DEAD=("${(@f)$(print -rl -- "${DEAD[@]}" | sort -t$'\t' -k1,1 -k2,2)}")
@@ -69,7 +77,7 @@ if (( ! $#DEAD )); then
     echo "$X_MARK nothing to restore matches '$SPEC' — no frame went down without a teardown" >&2
     exit 1
   fi
-  echo "$OK_MARK nothing to restore — every recorded frame is running"
+  echo "$OK_MARK nothing to restore — every recorded frame is running, with a window"
   exit 0
 fi
 
@@ -80,7 +88,9 @@ _list() {
   for _r in "${DEAD[@]}"; do
     (( ++_i ))
     frame_record_read "${_r##*$'\t'}"
-    if [[ -n "${REC[stopped_at]:-}" ]]; then
+    if [[ -n "${DETACHED[${_r##*$'\t'}]:-}" ]]; then
+      _state="detached"
+    elif [[ -n "${REC[stopped_at]:-}" ]]; then
       _state="stopped $(frame_fmt_age $(( _now - REC[stopped_at] ))) ago"
     else
       _state="died"
@@ -115,7 +125,7 @@ elif [[ -n "$SPEC" ]]; then
     exit 1
   fi
 else
-  echo "Frames that went down without a teardown:"
+  echo "Frames to bring back (went down without a teardown, or lost their window):"
   _list
   if [[ ! -t 0 ]]; then
     echo "  restore with: frame restore TOPIC  (or --all; --forget TOPIC drops one)"
@@ -140,6 +150,10 @@ fi
 # ── forget ────────────────────────────────────────────────────────────────────
 if (( FORGET )); then
   for _r in "${PICKED[@]}"; do
+    if [[ -n "${DETACHED[${_r##*$'\t'}]:-}" ]]; then
+      echo "$X_MARK ${_r%%$'\t'*}/${${_r#*$'\t'}%%$'\t'*} is still running (detached) — stop or tear it down instead" >&2
+      continue
+    fi
     rm -f -- "${_r##*$'\t'}"
     echo "$OK_MARK forgot ${_r%%$'\t'*}/${${_r#*$'\t'}%%$'\t'*} — frame restore won't offer it again"
   done
@@ -159,6 +173,17 @@ _rc=0
 for _r in "${PICKED[@]}"; do
   frame_record_read "${_r##*$'\t'}" || continue
   _n=${REC[name]} _t=${REC[topic]} _dir=${REC[dir]} _sid=${REC[session]:-} _h="${REC[name]}/${REC[topic]}"
+  # Still running, just no window: attach, don't reboot.
+  if [[ -n "${DETACHED[${_r##*$'\t'}]:-}" ]]; then
+    _cmd="${(q)FRAME_ROOT}/bin/frame attach --here ${(q)_h}"
+    if (( PRINT )); then print -r -- "$_cmd"; continue; fi
+    if frame_open_frame_tab "$_n" "$_t" "$_cmd"; then
+      echo "$OK_MARK attached $_h (it was still running) in a new tab"
+    else
+      echo "$X_MARK $_h: couldn't open a ghostty tab — run it yourself: $_cmd" >&2; _rc=1
+    fi
+    continue
+  fi
   if [[ -n "$_sid" && ! "$_sid" =~ '^[A-Za-z0-9-]+$' ]]; then
     echo "$X_MARK $_h: its record holds a malformed session id — skipped" >&2; _rc=1; continue
   fi
@@ -182,10 +207,8 @@ for _r in "${PICKED[@]}"; do
     # Topicless `frame wt` boots the worktree it runs in — its topic comes from
     # the dir (_NAME-TOPIC) or, for the primary checkout, the branch.
     _cmd="cd ${(q)_dir} && ${(q)FRAME_ROOT}/bin/frame wt${_sid:+ --resume $_sid}"
-    _close="${(q)FRAME_ROOT}/bin/frame spawn close-tab ${(q)_n}/${(q)_t}"
   else
     _cmd="${(q)FRAME_ROOT}/bin/frame shell -C ${(q)_dir} ${(q)_t}${_sid:+ --resume $_sid}"
-    _close="${(q)FRAME_ROOT}/bin/frame spawn close-tab ${(q)_t}"
   fi
 
   # One-shot stamp: the resumed claude's SessionStart hook tells it it was
@@ -197,14 +220,10 @@ for _r in "${PICKED[@]}"; do
     print -r -- "$_cmd"
     continue
   fi
-  # FRAME_SPAWNED=1: we record the tab's ids ourselves (as frame spawn does);
-  # the boot mustn't re-record the front window, which isn't this tab.
-  _boot="FRAME_SPAWNED=1 $_cmd && $_close"
-  if ! _ids=$(frame_open_window "$_boot"); then
+  if ! frame_open_frame_tab "$_n" "$_t" "$_cmd"; then
     echo "$X_MARK $_h: couldn't open a ghostty tab — run it yourself: $_cmd" >&2
     _rc=1; continue
   fi
-  [[ -n "$_ids" ]] && print -r -- "$_ids" > "$FRAME_RUNDIR/$_n-$_t.nvim.gtab"
   echo "$OK_MARK restoring $_h${_sid:+ (resuming session $_sid)}"
 done
 exit $_rc

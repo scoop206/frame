@@ -196,6 +196,9 @@ NAME=shell
 # frame_assert_topic_free.)
 if [[ -n "$TOPIC" ]]; then
   frame_assert_topic_free "$NAME" "$TOPIC" || exit 1
+  # Already running? A detached frame (no window) gets this terminal as its
+  # window; one open elsewhere isn't booted twice (see frame_reattach_or_refuse).
+  frame_reattach_or_refuse "$NAME" "$TOPIC" || exit 1
 fi
 
 # Scope for --find / --recent. Run inside a repo (its primary checkout, a
@@ -428,4 +431,6 @@ _req=(zsh nvim)
 [[ " $FRAME_BUFFERS " == *" claude "* ]] && _req+=(claude)
 frame_require "$_req[@]"
 
-exec nvim -S "$FRAME_ROOT/layouts/session.lua"
+# nvim runs as a headless server; this terminal becomes its window (a client),
+# so the frame outlives the window (see frame_exec_session).
+frame_exec_session
