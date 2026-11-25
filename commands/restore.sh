@@ -121,6 +121,21 @@ done
 DEAD=("${(@f)$(print -rl -- "${DEAD[@]}" | sort -t$'\t' -k1,1 -k2,2)}")
 DEAD=(${DEAD:#})
 
+# Running frames with no record (booted before records existed, no claude
+# session start since) are invisible to everything below — say so, rather than
+# let "nothing to restore" read as "everything is covered".
+if (( ! FORGET )); then
+  typeset -a _unrec=()
+  while IFS=$'\t' read -r _n _t _; do
+    [[ -n "$_n" && ! -f "$(frame_record_file "$_n" "$_t")" ]] && _unrec+=("$_n/$_t")
+  done < <(frame_live_frames)
+  if (( $#_unrec )); then
+    echo "$WARN_MARK ${#_unrec} running frame(s) have no record, so restore couldn't bring them back:" >&2
+    echo "    ${(j:, :)_unrec}" >&2
+    echo "  record them now: frame restore --backfill" >&2
+  fi
+fi
+
 if (( ! $#DEAD )); then
   if [[ -n "$SPEC" ]]; then
     echo "$X_MARK nothing to restore matches '$SPEC' — no frame went down without a teardown" >&2
@@ -132,8 +147,12 @@ fi
 
 _list() {
   # Numbered table of DEAD.
-  local _i=0 _r _now=$EPOCHSECONDS _state _dir
-  printf '   %-3s %-12s %-20s %-6s %-14s %s\n' '#' NAME TOPIC TYPE STATE DIR
+  local _i=0 _r _now=$EPOCHSECONDS _state _dir _wn=4 _wt=5 _x
+  for _r in "${DEAD[@]}"; do
+    _x=${_r%%$'\t'*};  (( ${#_x} > _wn )) && _wn=${#_x}
+    _x=${${_r#*$'\t'}%%$'\t'*}; (( ${#_x} > _wt )) && _wt=${#_x}
+  done
+  printf '   %-3s %-*s  %-*s  %-6s %-14s %s\n' '#' $_wn NAME $_wt TOPIC TYPE STATE DIR
   for _r in "${DEAD[@]}"; do
     (( ++_i ))
     frame_record_read "${_r##*$'\t'}"
@@ -145,7 +164,7 @@ _list() {
       _state="died"
     fi
     _dir=${REC[dir]/#$HOME/~}
-    printf '   %-3s %-12s %-20s %-6s %-14s %s\n' "$_i" "${REC[name]}" "${REC[topic]}" \
+    printf '   %-3s %-*s  %-*s  %-6s %-14s %s\n' "$_i" $_wn "${REC[name]}" $_wt "${REC[topic]}" \
       "${REC[type]}" "$_state" "$_dir"
   done
 }
