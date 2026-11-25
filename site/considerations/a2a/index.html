@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>A2A and frame: should frames speak Agent2Agent?</title>
 <link rel="canonical" href="https://scoop206.github.io/frame/considerations/a2a/">
-<meta name="description" content="How the Agent2Agent (A2A) protocol maps onto frame's broker, why frame isn't adopting it yet, and what it takes from A2A's task model now.">
+<meta name="description" content="How the Agent2Agent (A2A) protocol maps onto frame's broker, why frame didn't adopt the protocol, and how it shipped A2A's task model into the broker.">
 <meta property="og:title" content="A2A and frame: should frames speak Agent2Agent?">
-<meta property="og:description" content="How the Agent2Agent (A2A) protocol maps onto frame's broker, why frame isn't adopting it yet, and what it takes from A2A's task model now.">
+<meta property="og:description" content="How the Agent2Agent (A2A) protocol maps onto frame's broker, why frame didn't adopt the protocol, and how it shipped A2A's task model into the broker.">
 <meta property="og:image" content="https://scoop206.github.io/frame/assets/frame_social.png">
 <meta property="og:url" content="https://scoop206.github.io/frame/considerations/a2a/">
 <meta name="twitter:card" content="summary_large_image">
@@ -34,7 +34,8 @@
     <p class="crumbs"><a href="../">considerations</a> / a2a</p>
     <p class="eyebrow">consideration</p>
     <h1>A2A: should frames speak Agent2Agent?</h1>
-    <span class="verdict">verdict: not yet. we take the task model now.</span>
+    <span class="verdict done">verdict: done. task model shipped; protocol not adopted.</span>
+    <p class="tracked">Tracked in <a href="https://github.com/scoop206/frame/issues/1">issue #1</a> (closed).</p>
     <p class="lede">frame already has agents messaging agents: a coordinator sends work with <code>frame req</code> and replies land in <code>frame inbox</code>. A2A is the open standard for exactly that kind of traffic. So should frame speak it?</p>
   </div>
 </header>
@@ -131,6 +132,11 @@
         <p class="entry-meta"><time datetime="2026-11-24">2026-11-24</time> <span class="label open">open</span></p>
         <h3>What is it doing right now?</h3>
         <p>For a frame watching a sibling, the most useful next step may be a line showing what the target is doing at this moment, such as its latest tool call. Not built yet.</p>
+      </li>
+      <li class="entry">
+        <p class="entry-meta"><time datetime="2026-11-25">2026-11-25</time> <span class="label closed">closed</span></p>
+        <h3>Spike closed</h3>
+        <p>Closed: spike done, outcome shipped. Tracked in <a href="https://github.com/scoop206/frame/issues/1">issue #1</a>.</p>
       </li>
     </ol>
 

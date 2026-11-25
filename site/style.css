@@ -181,6 +181,8 @@ footer a:hover { color: var(--fg); }
 .crumbs a { color: var(--fg-dim); text-decoration: none; }
 .crumbs a:hover { color: var(--fg); }
 .verdict { display: inline-block; font: 600 13px var(--mono); color: var(--bg); background: var(--gold); padding: 3px 10px; border-radius: 4px; margin: 0 0 18px; letter-spacing: .03em; }
+.verdict.done { background: var(--green); }
+.tracked { font: 13px var(--mono); color: var(--fg-mute); margin: -8px 0 18px; }
 .prose { padding: 56px 0; }
 .prose h2 { font-size: clamp(22px, 3vw, 28px); margin-top: 48px; }
 .prose h2:first-child { margin-top: 0; }
@@ -209,5 +211,6 @@ footer a:hover { color: var(--fg); }
 .thread .label.response { background: var(--accent); }
 .thread .label.shipped { background: var(--green); }
 .thread .label.decision { background: var(--gold); }
+.thread .label.closed { background: var(--green); }
 .thread .label.open { background: var(--bg-3); color: var(--fg-dim); border: 1px solid var(--line); }
 @media (max-width: 560px) { .prose table.kv, .prose table.kv tbody, .prose table.kv tr, .prose table.kv td, .prose table.kv td:first-child { display: block; width: 100%; } .prose table.kv td + td { border-top: 0; padding-top: 0; } .prose table.kv thead { display: none; } }
