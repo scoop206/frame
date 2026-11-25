@@ -8,6 +8,9 @@
 #   frame restore --forget TOPIC|--all
 #                                  drop the record(s) without booting — for a
 #                                  frame you don't want back
+#   frame restore --backfill       write a record for every live frame that
+#                                  lacks one (booted before records existed),
+#                                  so a crash or Ghostty quit is restorable now
 #
 # Every frame leaves a durable record in $FRAME_STATEDIR (see
 # frame_record_save in lib/helpers.sh). Teardown deletes it; anything else that
@@ -33,6 +36,52 @@ _usage() {
   echo "       frame restore --forget TOPIC | NAME/TOPIC | --all" >&2
   exit 2
 }
+
+# --backfill: frames booted before records existed only get one at their
+# claude's next SessionStart. Write them now from what each live session can
+# tell us over its socket (its boot env) plus its claude's current session id:
+# the running claude's own registry first, then the rundir .session pointer
+# those frames wrote. Never overwrites an existing record.
+if [[ "${1:-}" == --backfill ]]; then
+  typeset -A _sid_of
+  if (( $+commands[jq] )); then
+    while IFS=$'\t' read -r _sid _pid; do
+      _n=$(frame_proc_env "$_pid" FRAME_NAME 2>/dev/null) || continue
+      _t=$(frame_proc_env "$_pid" FRAME_TOPIC 2>/dev/null) || continue
+      [[ -n "$_n" && -n "$_t" ]] && _sid_of[$_n/$_t]=$_sid
+    done < <(frame_session_running 2>/dev/null)
+  fi
+  _made=0 _had=0 _failed=0
+  while IFS=$'\t' read -r _n _t _; do
+    [[ -n "$_n" ]] || continue
+    if [[ -f "$(frame_record_file "$_n" "$_t")" ]]; then (( ++_had )); continue; fi
+    _env=$(frame_rpc_expr "$FRAME_RUNDIR/$_n-$_t.nvim" \
+      'join([$FRAME_MAIN_WT, $FRAME_WT, $FRAME_SHELL_DIR], "\t")' 5) || _env=""
+    _e=("${(@ps:\t:)_env}")
+    _sid=${_sid_of[$_n/$_t]:-}
+    if [[ -z "$_sid" && -r "$FRAME_RUNDIR/$_n-$_t.session" ]]; then
+      _sid=$(<"$FRAME_RUNDIR/$_n-$_t.session")
+    fi
+    [[ "$_sid" =~ '^[A-Za-z0-9-]*$' ]] || _sid=""
+    if [[ -z "${_e[1]:-}${_e[3]:-}" ]]; then
+      echo "$X_MARK $_n/$_t: couldn't read where it runs — skipped (it gets a record at its next session start)" >&2
+      (( ++_failed )); continue
+    fi
+    ( FRAME_NAME=$_n FRAME_TOPIC=$_t FRAME_MAIN_WT=${_e[1]:-} FRAME_WT=${_e[2]:-} \
+      FRAME_SHELL_DIR=${_e[3]:-} frame_record_save session "$_sid" )
+    if [[ -n "$_sid" ]]; then
+      echo "$OK_MARK recorded $_n/$_t (session $_sid)"
+    else
+      echo "$OK_MARK recorded $_n/$_t (no claude session found — it would restore fresh)"
+    fi
+    (( ++_made ))
+  done < <(frame_live_frames)
+  _sum="backfill: $_made recorded, $_had already had one"
+  (( _failed )) && _sum+=", $_failed skipped"
+  echo "$_sum"
+  (( _failed == 0 ))
+  exit $?
+fi
 
 ALL=0 PRINT=0 FORGET=0 SPEC=""
 while (( $# )); do

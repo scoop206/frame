@@ -66,6 +66,8 @@ Usage:
                                       ones. Bare form lists them, asks which
     frame restore --forget TOPIC|--all
                                       drop a frame's record instead
+    frame restore --backfill          record every live frame that has no
+                                      record yet (booted before records)
     frame attach [TOPIC|NAME/TOPIC] [--here]
                                       reopen a window for a detached frame —
                                       one still running after its tab closed or
