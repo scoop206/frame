@@ -87,12 +87,12 @@
         <h2>Never re-explain a situation to Claude again.</h2>
         <p>If most of your work with Claude happens in Claude Code sessions, the expensive part isn't the code. It's the context: the decisions, the dead ends, the "we tried that, it broke X".</p>
         <p><code>frame shell --recent</code> lists your latest sessions by their first message. Pick one and it resumes in the directory it ran in. Give Claude the latest update and decide where to go next.</p>
+        <p><strong>Rebooting?</strong> <code>frame stop --all</code> parks every frame first. Afterwards, <code>frame restore --all</code> reopens each one in its own tab, with its worktree, branch and dev servers, and resumes its Claude conversation for you.</p>
       </div>
       <ul class="ticks">
         <li><code>--find "WORDS"</code> searches what <em>you</em> typed, for when you remember what you said but not when.</li>
         <li><code>●</code> marks a session that's already open. Picking it switches to that window instead of forking it.</li>
         <li><code>--resume ID</code> when you already know the session.</li>
-        <li><code>frame stop --all</code> before a reboot or Ghostty restart, then <code>frame restore --all</code> brings every frame back: same worktrees, same sessions, Claude picks up where it left off.</li>
       </ul>
     </div>
     <div class="term clip">
