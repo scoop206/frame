@@ -1,9 +1,0 @@
-#!/usr/bin/env zsh
-# Test stub for launchctl (frame launchd). Never touches the real launchd:
-# appends argv to FAKE_LAUNCHCTL_LOG when set; `print` succeeds only when
-# FAKE_LAUNCHCTL_LOADED=1 (the agent is "loaded").
-[[ -n "${FAKE_LAUNCHCTL_LOG:-}" ]] && print -r -- "argv: $*" >> "$FAKE_LAUNCHCTL_LOG"
-case "${1:-}" in
-  print) [[ "${FAKE_LAUNCHCTL_LOADED:-}" == 1 ]] ;;
-  *) exit 0 ;;
-esac
