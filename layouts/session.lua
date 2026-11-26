@@ -108,8 +108,8 @@ end
 -- `uis` (6th, appended the same way) is how many windows are attached. The
 -- session runs as a headless server and each Ghostty tab showing it is a
 -- client (lib/helpers.sh frame_exec_session), so 0 = detached: alive with no
--- window. `frame ls` marks those, and `frame attach` / `frame restore` give
--- them a window again.
+-- window. `frame ls` marks those, and `frame restore` gives them a window
+-- again.
 _G.FrameInfo = function()
   local b = FrameState.broker
   local age = b.inflight_since and (os.time() - b.inflight_since) or ''

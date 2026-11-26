@@ -181,7 +181,7 @@ test_restore_gone_dir_is_reported() {
   run_frame restore lost --print
   assert_status 1
   assert_contains "$OUT" "dir is gone"
-  assert_contains "$OUT" "frame restore --forget shell/lost"
+  assert_contains "$OUT" "Drop it with: rm $FRAME_STATEDIR/shell-lost.json"
   assert_contains "$OUT" "frame shell --resume sid-l"
 }
 
@@ -199,17 +199,6 @@ test_restore_unknown_and_ambiguous() {
   assert_status 0
 }
 
-test_restore_forget_drops_record() {
-  mkdir -p "$SANDBOX/a"
-  write_record shell gone shell "$SANDBOX/a"
-  run_frame restore --forget gone
-  assert_status 0
-  assert_contains "$OUT" "forgot shell/gone"
-  assert_file_absent "$FRAME_STATEDIR/shell-gone.json"
-  run_frame restore --forget
-  assert_status 2
-}
-
 test_restore_opens_a_tab_and_records_it() {
   frame_is_macos_here || { skip "tabs are macOS-only"; return 0; }
   mkdir -p "$SANDBOX/notes"
@@ -224,44 +213,13 @@ test_restore_opens_a_tab_and_records_it() {
 }
 frame_is_macos_here() { [[ "$(uname -s)" == Darwin ]]; }
 
-test_backfill_records_live_frames_without_one() {
-  # A frame booted before records existed: its env (over RPC) says where it
-  # runs, the legacy .session pointer says which conversation.
-  mkdir -p "$SANDBOX/old"
-  plant_live shell old
-  print -r -- sid-legacy > "$FRAME_RUNDIR/shell-old.session"
-  export FAKE_NVIM_EXPR_RESULT=$'\t\t'"$SANDBOX/old"
-  write_record shell has shell "$SANDBOX/old" sid-h
-  plant_live shell has
+test_restore_rejects_dropped_flags() {
+  run_frame restore --forget x
+  assert_status 2
   run_frame restore --backfill
-  assert_status 0
-  assert_contains "$OUT" "recorded shell/old (session sid-legacy)"
-  assert_contains "$OUT" "1 recorded, 1 already had one"
-  local rec="$FRAME_STATEDIR/shell-old.json"
-  assert_eq "$(field $rec type)" shell
-  assert_eq "$(field $rec dir)" "$SANDBOX/old"
-  assert_eq "$(field $rec session)" sid-legacy
-  assert_eq "$(field $FRAME_STATEDIR/shell-has.json session)" sid-h   # untouched
+  assert_status 2
 }
 
-test_restore_warns_about_unrecorded_live_frames() {
-  plant_live shell norec
-  run_frame restore
-  assert_status 0
-  assert_contains "$OUT" "1 running frame(s) have no record"
-  assert_contains "$OUT" "shell/norec"
-  assert_contains "$OUT" "frame restore --backfill"
-}
-
-test_backfill_wt_frame() {
-  plant_live proj topic
-  export FAKE_NVIM_EXPR_RESULT="$SANDBOX/proj"$'\t'"$SANDBOX/_proj-topic"$'\t'
-  run_frame restore --backfill
-  assert_status 0
-  assert_eq "$(field $FRAME_STATEDIR/proj-topic.json type)" wt
-  assert_eq "$(field $FRAME_STATEDIR/proj-topic.json dir)" "$SANDBOX/_proj-topic"
-  assert_eq "$(field $FRAME_STATEDIR/proj-topic.json main_wt)" "$SANDBOX/proj"
-}
 
 # ── frame stop ───────────────────────────────────────────────────────────────
 

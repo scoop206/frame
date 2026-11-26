@@ -62,18 +62,10 @@ Usage:
                                       reboot frames that went down without a
                                       teardown (crash, reboot, frame stop),
                                       each in its own tab, claude resumed and
-                                      told to wait for you; attach detached
-                                      ones. Bare form lists them, asks which
-    frame restore --forget TOPIC|--all
-                                      drop a frame's record instead
-    frame restore --backfill          record every live frame that has no
-                                      record yet (booted before records)
-    frame attach [TOPIC|NAME/TOPIC] [--here]
-                                      reopen a window for a detached frame —
-                                      one still running after its tab closed or
-                                      Ghostty quit (frame ls: "detached"). Each
-                                      in a new tab; --here uses this terminal.
-                                      frame restore attaches these too
+                                      told to wait for you; reattach ones
+                                      still running after their tab closed or
+                                      Ghostty quit. Bare form lists them, asks
+                                      which
 
     frame launchd install [--restore] | uninstall | status
                                       macOS login agent, the reboot safety net:

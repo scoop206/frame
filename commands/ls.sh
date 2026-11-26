@@ -26,7 +26,7 @@
 # Tune the wedge threshold with FRAME_STUCK_SECS (seconds).
 #
 # A frame whose window is gone but whose nvim is still running (Ghostty quit,
-# the tab closed) shows STATUS "detached · …": `frame attach TOPIC` reopens it.
+# the tab closed) shows STATUS "detached · …": `frame restore TOPIC` reopens it.
 #
 # A dashboard for the shared harness: one row per running frame on this
 # machine, so you can spot one and `frame focus` it. Read-only — it never
@@ -89,7 +89,7 @@ while IFS= read -r _line; do
   _f=("${(@ps:\t:)_line}")
   _name=$_f[1] _topic=$_f[2] _port=$_f[3] _status=$_f[4] _health=$_f[5] _uis=${_f[6]:-}
   [[ -n "$_name" ]] || continue
-  # No window attached (Ghostty quit, tab closed): still running — frame attach
+  # No window attached (Ghostty quit, tab closed): still running — frame restore
   # gives it one back.
   [[ "$_uis" == 0 ]] && _status="detached${_status:+ · $_status}"
   _mark=' '
