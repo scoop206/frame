@@ -82,7 +82,7 @@
 | `frame kv [get\|set\|unset …]`      | how far each frame's claude goes on its own (autocommit, merge/push/deploy on merge) plus your own keys; per frame, project, user  |
 
 `worktree` is a synonym for `wt`; `list` for `ls`.  
-Not shown here: `spawn`, `launchd`,
+Not shown here: `spawn`,
 `deliver`, `reply`, `view`, `status`, `name`, `notify`, `notifications`, `silence`, and every
 `--flag` — see `frame --help` ([full usage](docs/usage.md)).
 
@@ -404,21 +404,10 @@ Ghostty quitting, `:FrameQuit`, or `frame stop`.
 
 ### Surviving a reboot
 
-A reboot ends every frame, but the records stay, so `frame restore --all` after
-you log back in reopens them all. To also shut them down cleanly first, install
-the optional login agent (macOS):
-
-```zsh
-frame launchd install            # frame stop on every frame at logout/shutdown
-frame launchd install --restore  # …and frame restore --all at login
-frame launchd status
-frame launchd uninstall
-```
-
-The agent stops every frame at once on launchd's SIGTERM. macOS allows only a
-few seconds for that, so it's best effort: a frame it doesn't reach still has
-its record and comes back as `died`. The first `--restore` asks you to let the
-agent control Ghostty. Its log is `$FRAME_STATEDIR/agent.log`.
+A reboot ends every frame, but the records stay. Before you restart, stop your
+frames with `frame stop --all`; after you log back in, `frame restore --all`
+reopens them all, each claude resumed. A frame you didn't stop first still has
+its record and comes back the same way, listed as `died`.
 
 ## Notifications
 
