@@ -69,8 +69,7 @@
 | `frame shell [TOPIC] --recent`     | browse your most recent claude sessions (first message of each), pick one, and resume it (worktree sessions are left out)           |
 | `frame ls`                          | list every live frame across projects                                                                                              |
 | `frame stop [TOPIC\|--all]`         | shut a frame down gracefully and keep it restorable (dev servers drained, nvim quit)                                              |
-| `frame attach [TOPIC]`              | reopen a window for a frame still running after its tab closed or Ghostty quit                                                     |
-| `frame restore [TOPIC\|--all]`      | reboot frames that went down without a teardown (crash, reboot, Ghostty quit, `frame stop`), claude resumed                       |
+| `frame restore [TOPIC\|--all]`      | bring frames back: reboot ones that went down without a teardown (claude resumed), reattach ones that lost their window           |
 | `frame merge [TOPIC]`               | merge a topic branch into the primary branch                                                                                       |
 | `frame push`                        | push the primary branch to origin                                                                                                  |
 | `frame claude TEXT…`                | ask this frame's claude, block for the answer                                                                                      |
@@ -374,9 +373,9 @@ A frame outlives its window. Its nvim runs as a headless server in a session of
 its own, and the Ghostty tab is only a client (`nvim --remote-ui`). Closing the
 tab, `:detach`, or quitting Ghostty closes the window and nothing else: claude
 keeps working, the dev servers keep serving, and `frame ls` shows the frame as
-`detached`. `frame attach [TOPIC]` reopens it in a new tab (`--here` uses the
-terminal you're in), and `frame wt TOPIC` / `frame shell TOPIC` on a detached
-frame attach to it instead of booting a second copy. Set `FRAME_HEADLESS=0` to
+`detached`. `frame restore` reopens it in a new tab, and `frame wt TOPIC` /
+`frame shell TOPIC` on a detached frame attach to it instead of booting a
+second copy. Set `FRAME_HEADLESS=0` to
 run nvim inside the terminal as before, where it dies with the window.
 
 Every frame keeps a small durable record —
@@ -401,10 +400,7 @@ Ghostty quitting, `:FrameQuit`, or `frame stop`.
   SessionStart that it was interrupted (its last turn may be cut off, dev
   servers were restarted) and to wait for your go-ahead rather than carry on.
   `--print` prints those commands instead of opening tabs (the default off
-  macOS); `--forget TOPIC|--all` drops records you don't want back.
-- `frame restore --backfill` writes a record for every running frame that has
-  none, because it booted before records existed (otherwise it gets one at its
-  claude's next session start).
+  macOS). To drop a record you don't want back, delete its file.
 
 ### Surviving a reboot
 

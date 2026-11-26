@@ -206,7 +206,7 @@ frame_exec_session() {
   # macOS ships no setsid(1)), so no terminal owns it: closing the Ghostty tab
   # or quitting Ghostty SIGHUPs only the window. This terminal becomes a CLIENT
   # (nvim --remote-ui). The frame — claude, dev servers, broker — keeps running
-  # detached, and `frame attach` gives it a window again. Quitting nvim (:qa!,
+  # detached, and `frame restore` gives it a window again. Quitting nvim (:qa!,
   # frame stop, teardown) ends the server, and every client with it.
   #
   # FRAME_HEADLESS=0 keeps the old shape — nvim runs IN this terminal and dies
